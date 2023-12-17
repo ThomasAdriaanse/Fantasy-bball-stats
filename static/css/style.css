@@ -1,0 +1,93 @@
+/* style.css */
+
+body {
+    /* Gradient from solid blue to transparent in the middle, then from transparent to solid red */
+    background: linear-gradient(to right, 
+                rgba(0, 0, 255, 0.4) 0%, 
+                rgba(0, 0, 255, 0) 50%, 
+                rgba(255, 0, 0, 0) 50%, 
+                rgba(255, 0, 0, 0.4) 100%);
+    min-height: 100vh; /* This ensures that the gradient covers the whole page even if the content is shorter */
+    font-family: Arial, sans-serif;
+}
+
+.table-container {
+    display: flex;
+    flex-wrap: wrap; 
+    gap: 10px;
+}
+
+.table-wrapper {
+    flex: 1 1 auto; /* Grow and shrink equally */
+    max-width: calc(50% - 5px);
+}
+
+.data-table {
+    width: 100%; /* Ensures table uses the full width of its container */
+    max-width: 100%;
+    table-layout: auto; /* Fixed table layout can help prevent overflow */
+    border-collapse: collapse;
+    background-color: white;
+    word-wrap: break-word;
+    box-shadow: 0 2px 1px -1px rgba(0,0,0,0.2), 
+                0 1px 1px 0 rgba(0,0,0,0.14), 
+                0 1px 3px 0 rgba(0,0,0,0.12); /* Material design box shadow for the table */
+}
+.data-table th, .data-table td {
+    border: 1px solid #ddd; /* Lighter border color for the table cells */
+    white-space: normal;
+    text-overflow: ellipsis; 
+    min-width: 20px; /* Minimum width for columns */
+    max-width: 200px; /* Maximum width for columns */    max-width: 200px; /* Maximum width for columns */
+    padding: 4px;
+    text-align: left;
+    width:auto;
+}
+.data-table th {
+    background-color: #f2f2f2; /* Light background for headers for better contrast */
+}
+
+@media (max-width: 768px) {
+    .table-container {
+        flex-direction: column;
+    }
+    .table-wrapper {
+        max-width: none;
+        flex-basis: auto;
+    }
+    .data-table th, .data-table td {
+        font-size: smaller; /* Smaller font size for smaller screens */
+    }
+}
+
+.player-out {
+    color: red;
+}
+.player-dtd {
+    color: orange;
+}
+.team-names {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.team-name-left,
+.team-name-right {
+    font-size: 24px;
+    font-weight: bold;
+    font-family: 'Arial', sans-serif;
+    display: flex;
+    align-items: center;
+}
+
+.team-name-left {
+    justify-content: flex-start; /* Aligns items to the left */
+}
+
+.team-name-right {
+    justify-content: flex-end; /* Aligns items to the right */
+    text-align: right;
+}
+

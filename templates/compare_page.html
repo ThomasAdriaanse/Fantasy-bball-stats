@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BasketaBall Data</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="team-names">
+        <div class="team-name-left">
+            <span>{{ data_team_stats_1[0].team_name }}</span>
+            <span>&nbsp;&nbsp;&nbsp;{{ data_team_stats_1[0].team_current_points }}</span>
+        </div>
+        <div class="team-name-right">
+            <span>{{ data_team_stats_2[0].team_current_points }}&nbsp;&nbsp;&nbsp;</span>
+            <span>{{ data_team_stats_2[0].team_name }}</span>
+        </div>
+    </div>         
+    <div class="table-container">
+        <!-- First Table -->
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Player Name</th>
+                        <th>MIN</th>
+                        <th>FGM</th>
+                        <th>FGA</th>
+                        <th>FTM</th>
+                        <th>FTA</th>
+                        <th>3PTM</th>
+                        <th>REB</th>
+                        <th>AST</th>
+                        <th>STL</th>
+                        <th>BLK</th>
+                        <th>TO</th>
+                        <th>PTS</th>
+                        <th>FPTS</th>
+                        <th>Games Left</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in data_team_players_1 %}
+                    <tr>
+                        <td class="{{ 'player-out' if row.inj == 'OUT' else 'player-dtd' if row.inj == 'DAY_TO_DAY' else '' }}">{{ row.player_name }}</td>
+                        <td>{{ row.min }}</td>
+                        <td>{{ row.fgm }}</td>
+                        <td>{{ row.fga }}</td>
+                        <td>{{ row.ftm }}</td>
+                        <td>{{ row.fta }}</td>
+                        <td>{{ row.threeptm }}</td>
+                        <td>{{ row.reb }}</td>
+                        <td>{{ row.ast }}</td>
+                        <td>{{ row.stl }}</td>
+                        <td>{{ row.blk }}</td>
+                        <td>{{ row.turno }}</td>
+                        <td>{{ row.pts }}</td>
+                        <td>{{ row.fpts }}</td>
+                        <td>{{ row.games }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Team Average FPTS</th>
+                        <th>Expected Total FPTS</th>
+                        <th>% Chance of winning</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!--should be some data here-->
+                    {% for row in data_team_stats_1 %}
+                    <tr>
+                        <td>{{ row.team_avg_fpts }}</td>
+                        <td>{{ row.team_expected_points }}</td>
+                        <td>{{ row.team_chance_of_winning }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Second Table -->
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Player Name</th>
+                        <th>MIN</th>
+                        <th>FGM</th>
+                        <th>FGA</th>
+                        <th>FTM</th>
+                        <th>FTA</th>
+                        <th>3PTM</th>
+                        <th>REB</th>
+                        <th>AST</th>
+                        <th>STL</th>
+                        <th>BLK</th>
+                        <th>TO</th>
+                        <th>PTS</th>
+                        <th>FPTS</th>
+                        <th>Games Left</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in data_team_players_2 %}
+                    <tr>
+                        <td class="{{ 'player-out' if row.inj == 'OUT' else 'player-dtd' if row.inj == 'DAY_TO_DAY' else '' }}">{{ row.player_name }}</td>
+                        <td>{{ row.min }}</td>
+                        <td>{{ row.fgm }}</td>
+                        <td>{{ row.fga }}</td>
+                        <td>{{ row.ftm }}</td>
+                        <td>{{ row.fta }}</td>
+                        <td>{{ row.threeptm }}</td>
+                        <td>{{ row.reb }}</td>
+                        <td>{{ row.ast }}</td>
+                        <td>{{ row.stl }}</td>
+                        <td>{{ row.blk }}</td>
+                        <td>{{ row.turno }}</td>
+                        <td>{{ row.pts }}</td>
+                        <td>{{ row.fpts }}</td>
+                        <td>{{ row.games }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Team Average FPTS</th>
+                        <th>Expected Total FPTS</th>
+                        <th>% Chance of winning</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!--should be some data here-->
+                    {% for row in data_team_stats_2 %}
+                    <tr>
+                        <td>{{ row.team_avg_fpts }}</td>
+                        <td>{{ row.team_expected_points }}</td>
+                        <td>{{ row.team_chance_of_winning }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

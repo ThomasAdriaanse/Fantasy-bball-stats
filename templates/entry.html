@@ -1,0 +1,25 @@
+<!-- templates/entry_page.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Enter Information</title>
+</head>
+<body>
+    <form action="/process" method="post">
+        <label for="league_id">league_id:</label>
+        <input type="text" id="league_id" name="league_id">
+
+        <label for="year">year</label>
+        <input type="text" id="year" name="year">
+
+        <label for="espn_s2">espn_s2:</label>
+        <input type="text" id="espn_s2" name="espn_s2">
+
+        <label for="swid">swid:</label>
+        <input type="text" id="swid" name="swid">
+        
+        <input type="submit" value="Submit">
+    </form>
+</body>
+</html>
