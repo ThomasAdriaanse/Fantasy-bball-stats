@@ -1,7 +1,6 @@
 # db_utils.py
 import psycopg2
 from psycopg2 import sql
-import pandas as pd
 from espn_api.basketball import League
 import os
 from datetime import datetime, timedelta

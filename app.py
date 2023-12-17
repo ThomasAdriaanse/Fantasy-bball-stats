@@ -9,6 +9,7 @@ import compare_page.team_stats_data as tsd
 from scipy.stats import norm
 from espn_api.basketball import League
 import flask
+import pandas as pd
 
 
 
@@ -185,7 +186,7 @@ if __name__ == '__main__':
     cur.close()
     conn.close()'''
 
-
+    print(pd. __version__)
 
     # Start the Flask application
     app.run(debug=True)

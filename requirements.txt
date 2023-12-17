@@ -1,6 +1,6 @@
 Flask
 psycopg2-binary
 python-dotenv
-pandas
+pandas==2.1.1
 scipy
 espn-api
