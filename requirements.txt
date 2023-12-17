@@ -4,5 +4,3 @@ python-dotenv
 pandas
 scipy
 espn-api
-os
-datetime
