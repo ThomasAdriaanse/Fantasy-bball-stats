@@ -1,3 +1,8 @@
 Flask
 psycopg2-binary
 python-dotenv
+pandas
+scipy
+espn-api
+os
+datetime
