@@ -67,60 +67,24 @@ def compare_page():
     team_stats_table_name_1 = 'compare_team_stats_1'
     team_stats_table_name_2 = 'compare_team_stats_2'
 
-    conn = psycopg2.connect(**db_utils.get_connection_parameters())
-    cur = conn.cursor()
 
-    db_utils.drop_table(cur, compare_table_name_1)
-    db_utils.drop_table(cur, compare_table_name_2)
-    db_utils.drop_table(cur, team_stats_table_name_1)
-    db_utils.drop_table(cur, team_stats_table_name_2)
 
-    db_utils.create_table(cur, compare_table_name_1, cpd.get_team_player_data_schema())
-    db_utils.create_table(cur, compare_table_name_2, cpd.get_team_player_data_schema())
-    db_utils.create_table(cur, team_stats_table_name_1, tsd.get_team_stats_data_schema())
-    db_utils.create_table(cur, team_stats_table_name_2, tsd.get_team_stats_data_schema())
-
-    conn.commit()
-    cur.close()
-    conn.close()
 
     player_data_column_names = ['player_name', 'min', 'fgm', 'fga', 'ftm', 'fta', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts', 'inj','fpts', 'games']
 
     team1_player_data = cpd.get_team_player_data(league, team1_index, compare_table_name_1, player_data_column_names)
-    db_utils.insert_data_to_db(team1_player_data, compare_table_name_1, player_data_column_names)
 
     team2_player_data = cpd.get_team_player_data(league, team2_index, compare_table_name_2, player_data_column_names)
-    db_utils.insert_data_to_db(team2_player_data, compare_table_name_2, player_data_column_names)
 
     team_data_column_names = ['team_avg_fpts', 'team_expected_points', 'team_chance_of_winning', 'team_name', 'team_current_points']
 
     team1_data = tsd.get_team_stats(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names)
-    db_utils.insert_data_to_db(team1_data, team_stats_table_name_1, team_data_column_names)
 
     team2_data = tsd.get_team_stats(league, team2_index, team2_player_data, team1_index, team1_player_data, team_data_column_names)
-    db_utils.insert_data_to_db(team2_data, team_stats_table_name_2, team_data_column_names)
 
-
-    conn = db_utils.get_db_connection()
-    cur = conn.cursor(cursor_factory=extras.DictCursor)
-
-    cur.execute('SELECT * FROM compare_team_players_1;')
-    data_team_players_1 = cur.fetchall()
-
-    cur.execute('SELECT * FROM compare_team_players_2;')
-    data_team_players_2 = cur.fetchall()
-
-    cur.execute('SELECT * FROM compare_team_stats_1;')
-    data_team_stats_1 = cur.fetchall()
-
-    cur.execute('SELECT * FROM compare_team_stats_2;')
-    data_team_stats_2 = cur.fetchall()
-
-    cur.close()
-    conn.close()
 
     # Pass both datasets to the template
-    return render_template('compare_page.html', data_team_players_1=data_team_players_1, data_team_players_2=data_team_players_2, data_team_stats_1=data_team_stats_1, data_team_stats_2=data_team_stats_2)
+    return render_template('compare_page.html', data_team_players_1=team1_player_data, data_team_players_2=team2_player_data, data_team_stats_1=team1_data, data_team_stats_2=team2_data)
 
 
 @app.route('/select_teams_page')
