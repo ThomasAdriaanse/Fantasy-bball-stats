@@ -128,27 +128,6 @@ def process_information():
 
 if __name__ == '__main__':
     
-    '''compare_table_name_1 = 'compare_team_players_1'
-    compare_table_name_2 = 'compare_team_players_2'
-    team_stats_table_name_1 = 'compare_team_stats_1'
-    team_stats_table_name_2 = 'compare_team_stats_2'
-
-    conn = psycopg2.connect(**db_utils.get_connection_parameters())
-    cur = conn.cursor()
-
-    db_utils.drop_table(cur, compare_table_name_1)
-    db_utils.drop_table(cur, compare_table_name_2)
-    db_utils.drop_table(cur, team_stats_table_name_1)
-    db_utils.drop_table(cur, team_stats_table_name_2)
-
-    db_utils.create_table(cur, compare_table_name_1, cpd.get_team_player_data_schema())
-    db_utils.create_table(cur, compare_table_name_2, cpd.get_team_player_data_schema())
-    db_utils.create_table(cur, team_stats_table_name_1, tsd.get_team_stats_data_schema())
-    db_utils.create_table(cur, team_stats_table_name_2, tsd.get_team_stats_data_schema())
-
-    conn.commit()
-    cur.close()
-    conn.close()'''
 
     print(pd. __version__)
 
