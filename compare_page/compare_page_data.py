@@ -79,9 +79,6 @@ def get_team_player_data(league, team_num, table, columns):
                 team_data['games'].append(len(games_left_this_week))
 
 
-
-
-
     df = pd.DataFrame(team_data)
     
     return df

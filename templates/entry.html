@@ -10,7 +10,7 @@
         <label for="league_id">league_id:</label>
         <input type="text" id="league_id" name="league_id">
 
-        <label for="year">year</label>
+        <label for="year">year:</label>
         <input type="text" id="year" name="year">
 
         <label for="espn_s2">espn_s2:</label>
@@ -21,5 +21,10 @@
         
         <input type="submit" value="Submit">
     </form>
+    {% if error_message %}
+    <div class="error-message" style="color: red;">
+        {{ error_message }}
+    </div>
+    {% endif %}
 </body>
 </html>
