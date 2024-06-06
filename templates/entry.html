@@ -21,6 +21,16 @@
         
         <input type="submit" value="Submit">
     </form>
+    <div>
+        <p><b>Note:</b> You only need espn_s2 and swid cookies if your league is not publicly viewable.</p>   
+        <p><u>How to find your espn_s2 and swid:</u><br>
+            Log in to your account on ESPN's fantasy basketball website. 
+            Right click anywhere on the website and click inspect option. 
+            From there click Storage on the top bar. Click the Cookies section for http://fantasy.espn.com</a>.
+            From there you should be able to find your swid and espn_s2 values.
+            It remains the same through different sessions.</p>
+        <p> Example League: <br> league_id = 190002826<br> year = 2024<br> espn_s2 = <i>blank </i><br> swid = <i>blank</i></p>
+    </div>
     {% if error_message %}
     <div class="error-message" style="color: red;">
         {{ error_message }}

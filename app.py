@@ -66,6 +66,17 @@ def compare_page():
     team1_data = tsd.get_team_stats(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names)
     team2_data = tsd.get_team_stats(league, team2_index, team2_player_data, team1_index, team1_player_data, team_data_column_names)
 
+    #print(team1_player_data)
+    #print(team2_player_data)
+    #print(team1_data)
+    #print(team2_data)
+
+    # Convert DataFrames to list of dictionaries
+    team1_player_data = team1_player_data.to_dict(orient='records')
+    team2_player_data = team2_player_data.to_dict(orient='records')
+    team1_data = team1_data.to_dict(orient='records')
+    team2_data = team2_data.to_dict(orient='records')
+
     return render_template('compare_page.html', data_team_players_1=team1_player_data, data_team_players_2=team2_player_data, data_team_stats_1=team1_data, data_team_stats_2=team2_data)
 
 @app.route('/select_teams_page')
@@ -73,17 +84,33 @@ def select_teams_page():
     info_string = request.args.get('info', '')
     info_list = info_string.split(',') if info_string else []
 
-    league_details = {
-        'league_id': info_list[0],
-        'year': int(info_list[1]),
-        'espn_s2': info_list[2],
-        'swid': info_list[3]
-    }
-
-    try:
-        league = League(league_id=league_details['league_id'], year=league_details['year'], espn_s2=league_details['espn_s2'], swid=league_details['swid'])
-    except ESPNUnknownError:
-        return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
+    #check if user has input swid and espn_s2 so we can use the right league call (private vs public league)
+    if len(info_list)>2:
+        league_details = {
+            'league_id': info_list[0],
+            'year': int(info_list[1]),
+            'espn_s2': info_list[2],
+            'swid': info_list[3]
+        }
+    else:
+        league_details = {
+            'league_id': info_list[0],
+            'year': int(info_list[1]),
+            'espn_s2': 1,
+            'swid': None
+        }
+    
+    #choose one based on if swid and espn_s2 are given
+    if league_details['espn_s2'] == 1:
+        try:
+            league = League(league_id=league_details['league_id'], year=league_details['year'])
+        except ESPNUnknownError:
+            return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
+    else:
+        try:
+            league = League(league_id=league_details['league_id'], year=league_details['year'], espn_s2=league_details['espn_s2'], swid=league_details['swid'])
+        except ESPNUnknownError:
+            return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
 
     teams_list = [team.team_name for team in league.teams]
 
@@ -104,7 +131,6 @@ def process_information():
     return redirect(url_for('select_teams_page', info=info_string))
 
 if __name__ == '__main__':
-    print(pd.__version__)
 
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=True)

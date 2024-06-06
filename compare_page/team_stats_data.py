@@ -45,8 +45,6 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     if team_boxscore_num ==-1 or opponent_boxscore_num==-1:
         print("error: could not find box scores for a team")
 
-
-
     team = league.teams[team_num]
     team_data = {column: [] for column in columns}
 
@@ -56,7 +54,6 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     else:
         lineup = league.box_scores()[team_boxscore_num].away_lineup
 
-    print(lineup[0].slot_position)
 
     #calculating average fpts of the team
     team_average_fpts = 0
@@ -79,7 +76,6 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     team_average_fpts = round(team_average_fpts, 2)
 
     team_data['team_avg_fpts'].append(team_average_fpts)
-
     
     # Filter the DataFrame to get only players who are not 'out' and select their fantasy points
     team_averages = team_player_data[team_player_data['inj'] != 'OUT']['fpts'].tolist()
@@ -104,6 +100,7 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     for index, player_avg_fpts in enumerate(opponent_averages):
         opponent_expected_points_remaining += player_avg_fpts*opponent_games_left[index]
 
+    # Get current box scores
     if team_home_or_away == "home":
         team_current_points = league.box_scores()[team_boxscore_num].home_score
     else:
@@ -118,23 +115,24 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     team_total_expected = team_expected_points_remaining + team_current_points
     opponent_total_expected = opponent_expected_points_remaining + opponent_current_points
 
-
-    # Calculate the total variance for each team (sum of variances of individual players)
-    total_variance_team_1 = sum([std**2 for std in team_1_stds])
-    total_variance_team_2 = sum([std**2 for std in team_2_stds])
-
-    # Calculate the total standard deviation for each team
+    # Calculate the total variance and standard deviation for each team
+    total_variance_team_1 = sum((std * games_left)**2 for std, games_left in zip(team_1_stds, team_games_left))
+    total_variance_team_2 = sum((std * games_left)**2 for std, games_left in zip(team_2_stds, opponent_games_left))
     total_std_team_1 = total_variance_team_1**0.5
     total_std_team_2 = total_variance_team_2**0.5
 
-    # Calculate the z-score for team 1 relative to team 2's distribution
-    expected_point_difference = team_expected_points_remaining - opponent_expected_points_remaining
-    margin =  opponent_current_points - team_current_points
-    z_score = (expected_point_difference - margin) / (total_std_team_2**2 + total_std_team_1**2)**0.5
+    try:
+        expected_point_difference = team_total_expected - opponent_total_expected
+        z_score = expected_point_difference / ((total_std_team_2**2 + total_std_team_1**2)**0.5)
+        probability_team_wins = norm.cdf(z_score)
+        #probability_opponent_wins = 1 - probability_team_wins
+    except ZeroDivisionError:
+        z_score = float('inf')
+        if expected_point_difference > 0:
+            probability_team_wins = 1.0  
+        else:
+            probability_team_wins = 0.0
 
-    # Calculate each team's chance of winning
-    probability_team_wins = norm.cdf(z_score)
-    probability_opponent_wins = 1 - probability_team_wins
 
     #print(z_score, margin, probability_team_wins)
 
@@ -143,7 +141,7 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     team_data['team_name'].append(team.team_name)
     team_data['team_current_points'].append(team_current_points)
 
-
+    #return team_data
     df = pd.DataFrame(team_data)
     return df
 
