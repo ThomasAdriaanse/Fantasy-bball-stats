@@ -1,40 +1,136 @@
-<!-- templates/entry_page.html -->
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Enter Information</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1c1c1c;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #f5f5f5;
+        }
+
+        .container {
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 500px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            color: #ff4c4c;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #cccccc;
+        }
+
+        input[type="text"] {
+            padding: 10px;
+            margin-top: 5px;
+            margin-bottom: 15px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            font-size: 16px;
+            background-color: #333;
+            color: #f5f5f5;
+        }
+
+        input[type="text"]:focus {
+            border-color: #ff4c4c;
+            outline: none;
+        }
+
+        input[type="submit"] {
+            background-color: #ff4c4c;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+        }
+
+        input[type="submit"]:hover {
+            background-color: #e04343;
+        }
+
+        .note {
+            font-size: 14px;
+            color: #aaaaaa;
+            margin-top: 20px;
+        }
+
+        .note b {
+            color: #f5f5f5;
+        }
+
+        .note u {
+            color: #ff4c4c;
+        }
+
+        .error-message {
+            color: #ff4c4c;
+            margin-top: 15px;
+            text-align: center;
+        }
+    </style>
 </head>
+
 <body>
-    <form action="/process" method="post">
-        <label for="league_id">league_id:</label>
-        <input type="text" id="league_id" name="league_id">
+    <div class="container">
+        <h1>Enter League Information</h1>
+        <form action="/process" method="post">
+            <label for="league_id">League ID:</label>
+            <input type="text" id="league_id" name="league_id" required>
 
-        <label for="year">year:</label>
-        <input type="text" id="year" name="year">
+            <label for="year">Year:</label>
+            <input type="text" id="year" name="year" required>
 
-        <label for="espn_s2">espn_s2:</label>
-        <input type="text" id="espn_s2" name="espn_s2">
+            <label for="espn_s2">ESPN S2:</label>
+            <input type="text" id="espn_s2" name="espn_s2">
 
-        <label for="swid">swid:</label>
-        <input type="text" id="swid" name="swid">
-        
-        <input type="submit" value="Submit">
-    </form>
-    <div>
-        <p><b>Note:</b> You only need espn_s2 and swid cookies if your league is not publicly viewable.</p>   
-        <p><u>How to find your espn_s2 and swid:</u><br>
-            Log in to your account on ESPN's fantasy basketball website. 
-            Right click anywhere on the website and click inspect option. 
-            From there click Storage on the top bar. Click the Cookies section for http://fantasy.espn.com</a>.
-            From there you should be able to find your swid and espn_s2 values.
-            It remains the same through different sessions.</p>
-        <p> Example League: <br> league_id = 190002826<br> year = 2024<br> espn_s2 = <i>blank </i><br> swid = <i>blank</i></p>
+            <label for="swid">SWID:</label>
+            <input type="text" id="swid" name="swid">
+
+            <input type="submit" value="Submit">
+        </form>
+        <div class="note">
+            <p><b>Note:</b> You only need espn_s2 and swid cookies if your league is not publicly viewable.</p>
+            <p><u>How to find your espn_s2 and swid:</u><br>
+                Log in to your account on ESPN's fantasy basketball website. Right-click anywhere on the website and select
+                "Inspect". From there, click on "Storage" in the top bar. Then click the "Cookies" section for
+                http://fantasy.espn.com. You should be able to find your swid and espn_s2 values there. They remain the
+                same through different sessions.
+            </p>
+            <p>If you want to try this tool out, use the example league details below:</p>
+            <p><b>Example League:</b><br> League ID = 190002826<br> Year = 2024<br> ESPN S2 = <i>blank</i><br> SWID = <i>blank</i></p>
+        </div>
+        {% if error_message %}
+        <div class="error-message">
+            {{ error_message }}
+        </div>
+        {% endif %}
     </div>
-    {% if error_message %}
-    <div class="error-message" style="color: red;">
-        {{ error_message }}
-    </div>
-    {% endif %}
 </body>
+
 </html>
