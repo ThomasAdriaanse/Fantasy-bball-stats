@@ -120,19 +120,25 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     total_variance_team_2 = sum((std * games_left)**2 for std, games_left in zip(team_2_stds, opponent_games_left))
     total_std_team_1 = total_variance_team_1**0.5
     total_std_team_2 = total_variance_team_2**0.5
-
+    expected_point_difference = team_total_expected - opponent_total_expected
+    print(expected_point_difference)
     try:
-        expected_point_difference = team_total_expected - opponent_total_expected
         z_score = expected_point_difference / ((total_std_team_2**2 + total_std_team_1**2)**0.5)
         probability_team_wins = norm.cdf(z_score)
+        print(z_score)
+        print(probability_team_wins)
         #probability_opponent_wins = 1 - probability_team_wins
-    except ZeroDivisionError:
+    except ZeroDivisionError:            
         z_score = float('inf')
         if expected_point_difference > 0:
             probability_team_wins = 1.0  
         else:
             probability_team_wins = 0.0
-
+        
+        if expected_point_difference == 0:
+            probability_team_wins = 0.5
+        
+        
 
     #print(z_score, margin, probability_team_wins)
 
