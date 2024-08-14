@@ -1,104 +1,157 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Select Teams</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            text-align: center;
+            background-color: #1c1c1c;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #f5f5f5;
         }
+
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            color: #ff4c4c;
+            margin-top: 20px;
+        }
+
         .teams-container {
             display: flex;
             justify-content: center;
             margin-top: 20px;
         }
+
         .team-column {
             margin: 0 20px;
         }
+
         .team-selector {
-            border-radius: 20px;
-            padding: 10px 20px;
+            background-color: #2a2a2a;
+            border-radius: 10px;
+            padding: 10px;
             margin-bottom: 10px;
-            cursor: pointer;
+            color: white;
+            font-weight: bold;
+            text-align: center;
         }
+
         .my-team {
-            background-color: #007BFF;
-            color: white;
+            background-color: #ff4c4c;
         }
+
         .opponents-team {
-            background-color: #DC3545;
-            color: white;
+            background-color: #ff4c4c;
         }
+
         .team-button {
             display: block;
-            padding: 10px 20px;
+            padding: 10px;
             margin: 10px 0;
-            border: 2px solid #000;
-            border-radius: 10px;
-            background-color: #f8f9fa;
+            border: 1px solid #444;
+            border-radius: 5px;
+            background-color: #333;
+            color: #f5f5f5;
             cursor: pointer;
+            transition: background-color 0.3s, transform 0.3s;
         }
+
+        .team-button:hover {
+            background-color: #555;
+            transform: translateY(-2px);
+        }
+
         .team-selected-my {
-            background-color: #007BFF;
+            background-color: #ff4c4c;
             color: white;
         }
+
         .team-selected-opponent {
-            background-color: #DC3545;
+            background-color: #ff4c4c;
             color: white;
+        }
+
+        button[type="button"] {
+            margin-top: 20px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #ff4c4c;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.3s;
+        }
+
+        button[type="button"]:hover {
+            background-color: #e04343;
+            transform: translateY(-2px);
+        }
+
+        #myTeamDisplay, #opponentsTeamDisplay {
+            margin-top: 10px;
+            font-size: 16px;
+            color: #ff4c4c;
         }
     </style>
-        <script type="text/javascript">
-            var myTeam = '';
-            var opponentsTeam = '';
-    
-            function selectMyTeam(teamName, buttonId) {
+    <script type="text/javascript">
+        var myTeam = '';
+        var opponentsTeam = '';
 
-                console.log(buttonId)
+        function selectMyTeam(teamName, buttonId) {
+            if (myTeam !== '') {
+                document.getElementById(myTeam).classList.remove('team-selected-my');
+            }
+            myTeam = buttonId;
+            document.getElementById(myTeam).classList.add('team-selected-my');
+        }
 
-                if(myTeam !== '') {
-                    document.getElementById(myTeam).classList.remove('team-selected-my');
-                }
-                myTeam = buttonId;
-                document.getElementById('myTeamDisplay').textContent = 'Selected: ' + teamName;
-                document.getElementById(myTeam).classList.add('team-selected-my');
+        function selectOpponentsTeam(teamName, buttonId) {
+            if (opponentsTeam !== '') {
+                document.getElementById(opponentsTeam).classList.remove('team-selected-opponent');
             }
-    
-            function selectOpponentsTeam(teamName, buttonId) {
-                if(opponentsTeam !== '') {
-                    document.getElementById(opponentsTeam).classList.remove('team-selected-opponent');
-                }
-                opponentsTeam = buttonId;
-                document.getElementById('opponentsTeamDisplay').textContent = 'Selected: ' + teamName;
-                document.getElementById(opponentsTeam).classList.add('team-selected-opponent');
+            opponentsTeam = buttonId;
+            document.getElementById(opponentsTeam).classList.add('team-selected-opponent');
+        }
+
+        function compareTeams() {
+            if (myTeam === '' || opponentsTeam === '') {
+                alert('Please select both your team and the opponent\'s team.');
+                return false;
             }
-    
-            function compareTeams() {
-                if (myTeam === '' || opponentsTeam === '') {
-                    alert('Please select both your team and the opponent\'s team.');
-                    return false;
-                }
-                var myTeamName = document.getElementById(myTeam).textContent;
-                var opponentsTeamName = document.getElementById(opponentsTeam).textContent;
-                document.getElementById('myTeamInput').value = myTeamName;
-                document.getElementById('opponentsTeamInput').value = opponentsTeamName;
-                document.getElementById('compareForm').submit();
-            }
-        </script>
+            var myTeamName = document.getElementById(myTeam).textContent;
+            var opponentsTeamName = document.getElementById(opponentsTeam).textContent;
+            document.getElementById('myTeamInput').value = myTeamName;
+            document.getElementById('opponentsTeamInput').value = opponentsTeamName;
+            document.getElementById('compareForm').submit();
+        }
+    </script>
 </head>
+
 <body>
+    <h1>Select Teams to Compare</h1>
     <div class="teams-container">
         <div class="team-column">
             <div class="team-selector my-team">My Team</div>
             {% for team in info_list %}
-                <button id="myTeam{{ loop.index }}" class="team-button" data-team-name="{{ team }}" onclick="selectMyTeam(this.getAttribute('data-team-name'), 'myTeam{{ loop.index }}')">{{ team }}</button>
+            <button id="myTeam{{ loop.index }}" class="team-button" data-team-name="{{ team }}"
+                onclick="selectMyTeam(this.getAttribute('data-team-name'), 'myTeam{{ loop.index }}')">{{ team }}</button>
             {% endfor %}
         </div>
-        
+
         <div class="team-column">
             <div class="team-selector opponents-team">Opponent's Team</div>
             {% for team in info_list %}
-                <button id="opponentsTeam{{ loop.index }}" class="team-button" data-team-name="{{ team }}" onclick="selectOpponentsTeam(this.getAttribute('data-team-name'), 'opponentsTeam{{ loop.index }}')">{{ team }}</button>
+            <button id="opponentsTeam{{ loop.index }}" class="team-button" data-team-name="{{ team }}"
+                onclick="selectOpponentsTeam(this.getAttribute('data-team-name'), 'opponentsTeam{{ loop.index }}')">{{ team }}</button>
             {% endfor %}
         </div>
     </div>
@@ -108,15 +161,16 @@
         <input type="hidden" name="year" value="{{ year }}">
         <input type="hidden" name="espn_s2" value="{{ espn_s2 }}">
         <input type="hidden" name="swid" value="{{ swid }}">
-    
+
         <!-- Hidden inputs for selected teams -->
         <input type="hidden" id="myTeamInput" name="myTeam" value="">
         <input type="hidden" id="opponentsTeamInput" name="opponentsTeam" value="">
-    
+
         <!-- Submit button -->
         <button type="button" onclick="compareTeams()">Compare Teams</button>
     </form>
     <div id="myTeamDisplay"></div>
     <div id="opponentsTeamDisplay"></div>
 </body>
+
 </html>
