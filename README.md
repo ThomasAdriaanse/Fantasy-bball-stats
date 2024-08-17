@@ -1,8 +1,8 @@
 ## Usage
 
-    Entry Page: Enter your league ID, year, ESPN S2, and SWID values. Only ESPN S2 and SWID are required for private leagues.
+    Entry Page: Enter your league ID, year, ESPN S2, and SWID values. ESPN S2 and SWID are only required for private leagues.
     Select Teams Page: Choose your team and your opponent’s team from the list.
-    Compare Teams Page: View detailed statistics and comparisons between the selected teams.
+    Compare Teams Page: View statistics and comparisons between the selected teams.
 
 ## Example League Details
 
