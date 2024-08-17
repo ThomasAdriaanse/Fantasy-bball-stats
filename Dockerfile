@@ -16,8 +16,6 @@ COPY . .
 # Make port 5000 available to the world outside this container
 EXPOSE 5000
 
-# Copy and set up the environment variables
-COPY .env .env
 
 # Define environment variable for production
 ENV FLASK_ENV=production
