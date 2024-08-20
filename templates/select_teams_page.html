@@ -101,11 +101,44 @@
             font-size: 16px;
             color: #ff4c4c;
         }
+
+        /* Loading overlay style */
+        #loading {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 9999;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            font-family: Arial, sans-serif;
+            color: #ff4c4c;
+        }
+
+        #loading:before {
+            content: "";
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid #ff4c4c;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
     <script type="text/javascript">
         var myTeam = '';
         var opponentsTeam = '';
-
+    
         function selectMyTeam(teamName, buttonId) {
             if (myTeam !== '') {
                 document.getElementById(myTeam).classList.remove('team-selected-my');
@@ -113,7 +146,7 @@
             myTeam = buttonId;
             document.getElementById(myTeam).classList.add('team-selected-my');
         }
-
+    
         function selectOpponentsTeam(teamName, buttonId) {
             if (opponentsTeam !== '') {
                 document.getElementById(opponentsTeam).classList.remove('team-selected-opponent');
@@ -121,7 +154,7 @@
             opponentsTeam = buttonId;
             document.getElementById(opponentsTeam).classList.add('team-selected-opponent');
         }
-
+    
         function compareTeams() {
             if (myTeam === '' || opponentsTeam === '') {
                 alert('Please select both your team and the opponent\'s team.');
@@ -131,10 +164,42 @@
             var opponentsTeamName = document.getElementById(opponentsTeam).textContent;
             document.getElementById('myTeamInput').value = myTeamName;
             document.getElementById('opponentsTeamInput').value = opponentsTeamName;
+    
+            // Show the loading overlay
+            document.getElementById('loading').style.display = 'flex';
+    
+            // Submit the form
             document.getElementById('compareForm').submit();
         }
+    
+        // Hide the loading overlay when the page is loaded or revisited
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+    
+        window.onload = hideLoading;
+    
+        // This handles when the page is loaded from the cache (e.g., back button)
+        window.onpageshow = function(event) {
+            if (event.persisted) {
+                hideLoading();
+            } else {
+                hideLoading();
+            }
+        };
     </script>
+    
 </head>
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-EZ4LV1SKJ1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-EZ4LV1SKJ1');
+</script>
 
 <body>
     <h1>Select Teams to Compare</h1>
@@ -171,6 +236,10 @@
     </form>
     <div id="myTeamDisplay"></div>
     <div id="opponentsTeamDisplay"></div>
+
+    <!-- Loading overlay -->
+    <div id="loading">Loading, please wait...</div>
+
 </body>
 
 </html>
