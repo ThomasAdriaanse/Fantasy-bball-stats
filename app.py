@@ -99,7 +99,7 @@ def select_teams_page():
     info_list = info_string.split(',') if info_string else []
 
     #check if user has input swid and espn_s2 so we can use the right league call (private vs public league)
-    if len(info_list)>2:
+    if len(info_list)==4:
         league_details = {
             'league_id': info_list[0],
             'year': int(info_list[1]),
