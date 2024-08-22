@@ -22,6 +22,23 @@ def entry_page():
 
 @app.route('/compare_page', methods=['POST'])
 def compare_page():
+    
+    # Retrieve the custom scoring values from the form
+    scoring = {
+        'fgm': int(request.form.get('fgm', 2)),
+        'fga': int(request.form.get('fga', -1)),
+        'ftm': int(request.form.get('ftm', 1)),
+        'fta': int(request.form.get('fta', -1)),
+        'threeptm': int(request.form.get('threeptm', 1)),
+        'reb': int(request.form.get('reb', 1)),
+        'ast': int(request.form.get('ast', 2)),
+        'stl': int(request.form.get('stl', 4)),
+        'blk': int(request.form.get('blk', 4)),
+        'turno': int(request.form.get('turno', -2)),
+        'pts': int(request.form.get('pts', 1)),
+    }
+    print(scoring)
+    
     my_team_name = request.form.get('myTeam')
     opponents_team_name = request.form.get('opponentsTeam')
     league_id = request.form.get('league_id')
@@ -57,6 +74,7 @@ def compare_page():
     team_stats_table_name_2 = 'compare_team_stats_2'
 
     player_data_column_names = ['player_name', 'min', 'fgm', 'fga', 'ftm', 'fta', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts', 'inj', 'fpts', 'games']
+
 
     team1_player_data = cpd.get_team_player_data(league, team1_index, compare_table_name_1, player_data_column_names)
     team2_player_data = cpd.get_team_player_data(league, team2_index, compare_table_name_2, player_data_column_names)

@@ -58,7 +58,8 @@ input[type="text"]:focus {
     outline: none;
 }
 
-input[type="submit"], button[type="button"] {
+/* Remove overlap - apply only to submit buttons or other generic buttons */
+input[type="submit"], button:not(.team-button) {
     background-color: #ff4c4c;
     color: white;
     padding: 10px;
@@ -69,6 +70,7 @@ input[type="submit"], button[type="button"] {
     transition: background-color 0.3s, transform 0.3s;
     margin-top: 20px; /* Added margin-top for buttons */
 }
+
 
 input[type="submit"]:hover, button[type="button"]:hover {
     background-color: #e04343;

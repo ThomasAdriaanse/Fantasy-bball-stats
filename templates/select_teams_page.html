@@ -6,10 +6,60 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/defaultstyle.css') }}">
     <title>Select Teams</title>
+    <style>
+        .main-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .scoring-area {
+            width: 400px;
+            margin-right: 20px;
+        }
+
+        .scoring-container {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .scoring-box {
+            width: 42%;
+            margin-bottom: 15px;
+            margin-right: 8%;
+        }
+
+        .scoring-box:nth-child(2n) {
+            margin-right: 0;
+        }
+
+        .scoring-box label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .scoring-box input[type="text"] {
+            width: 100%;
+            padding: 5px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            background-color: #333;
+            color: #f5f5f5;
+        }
+
+        h2 {
+            margin-bottom: 10px;
+        }
+
+        .teams-container {
+            flex-grow: 1;
+        }
+    </style>
     <script type="text/javascript">
         var myTeam = '';
         var opponentsTeam = '';
-    
+
         function selectMyTeam(teamName, buttonId) {
             if (myTeam !== '') {
                 document.getElementById(myTeam).classList.remove('team-selected-my');
@@ -17,7 +67,7 @@
             myTeam = buttonId;
             document.getElementById(myTeam).classList.add('team-selected-my');
         }
-    
+
         function selectOpponentsTeam(teamName, buttonId) {
             if (opponentsTeam !== '') {
                 document.getElementById(opponentsTeam).classList.remove('team-selected-opponent');
@@ -25,7 +75,7 @@
             opponentsTeam = buttonId;
             document.getElementById(opponentsTeam).classList.add('team-selected-opponent');
         }
-    
+
         function compareTeams() {
             if (myTeam === '' || opponentsTeam === '') {
                 alert('Please select both your team and the opponent\'s team.');
@@ -35,21 +85,21 @@
             var opponentsTeamName = document.getElementById(opponentsTeam).textContent;
             document.getElementById('myTeamInput').value = myTeamName;
             document.getElementById('opponentsTeamInput').value = opponentsTeamName;
-    
+
             // Show the loading overlay
             document.getElementById('loading').style.display = 'flex';
-    
+
             // Submit the form
             document.getElementById('compareForm').submit();
         }
-    
+
         // Hide the loading overlay when the page is loaded or revisited
         function hideLoading() {
             document.getElementById('loading').style.display = 'none';
         }
-    
+
         window.onload = hideLoading;
-    
+
         // This handles when the page is loaded from the cache (e.g., back button)
         window.onpageshow = function(event) {
             if (event.persisted) {
@@ -59,7 +109,7 @@
             }
         };
     </script>
-    
+
 </head>
 
 <!-- Google tag (gtag.js) -->
@@ -74,24 +124,79 @@
 
 <body>
     <h1>Select Teams to Compare</h1>
-    <div class="teams-container">
-        <div class="team-column">
-            <div class="team-selector my-team">My Team</div>
-            {% for team in info_list %}
-            <button id="myTeam{{ loop.index }}" class="team-button" data-team-name="{{ team }}"
-                onclick="selectMyTeam(this.getAttribute('data-team-name'), 'myTeam{{ loop.index }}')">{{ team }}</button>
-            {% endfor %}
+    <form id="compareForm" action="/compare_page" method="post">
+        <div class="main-container">
+            <!-- Scoring area to the left -->
+            <div class="scoring-area">
+                <h2>Adjust Scoring for Stats</h2>
+                <div class="scoring-container">
+                    <div class="scoring-box">
+                        <label for="fgm">Field Goals Made (FGM):</label>
+                        <input type="text" id="fgm" name="fgm" value="2">
+                    </div>
+                    <div class="scoring-box">
+                        <label for="fga">Field Goals Attempted (FGA):</label>
+                        <input type="text" id="fga" name="fga" value="-1">
+                    </div>
+                    <div class="scoring-box">
+                        <label for="ftm">Free Throws Made (FTM):</label>
+                        <input type="text" id="ftm" name="ftm" value="1">
+                    </div>
+                    <div class="scoring-box">
+                        <label for="fta">Free Throws Attempted (FTA):</label>
+                        <input type="text" id="fta" name="fta" value="-1">
+                    </div>
+                    <div class="scoring-box">
+                        <label for="threeptm">Three Pointers Made (3PTM):</label>
+                        <input type="text" id="threeptm" name="threeptm" value="1">
+                    </div>
+                    <div class="scoring-box">
+                        <label for="reb">Rebounds (REB):</label>
+                        <input type="text" id="reb" name="reb" value="1">
+                    </div>
+                    <div class="scoring-box">
+                        <label for="ast">Assists (AST):</label>
+                        <input type="text" id="ast" name="ast" value="2">
+                    </div>
+                    <div class="scoring-box">
+                        <label for="stl">Steals (STL):</label>
+                        <input type="text" id="stl" name="stl" value="4">
+                    </div>
+                    <div class="scoring-box">
+                        <label for="blk">Blocks (BLK):</label>
+                        <input type="text" id="blk" name="blk" value="4">
+                    </div>
+                    <div class="scoring-box">
+                        <label for="turno">Turnovers (TO):</label>
+                        <input type="text" id="turno" name="turno" value="-2">
+                    </div>
+                    <div class="scoring-box">
+                        <label for="pts">Points (PTS):</label>
+                        <input type="text" id="pts" name="pts" value="1">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Teams selection area -->
+            <div class="teams-container">
+                <div class="team-column">
+                    <div class="team-selector my-team">My Team</div>
+                    {% for team in info_list %}
+                    <button type="button" id="myTeam{{ loop.index }}" class="team-button" data-team-name="{{ team }}"
+                        onclick="selectMyTeam(this.getAttribute('data-team-name'), 'myTeam{{ loop.index }}')">{{ team }}</button>
+                    {% endfor %}
+                </div>
+
+                <div class="team-column">
+                    <div class="team-selector opponents-team">Opponent's Team</div>
+                    {% for team in info_list %}
+                    <button type="button" id="opponentsTeam{{ loop.index }}" class="team-button" data-team-name="{{ team }}"
+                        onclick="selectOpponentsTeam(this.getAttribute('data-team-name'), 'opponentsTeam{{ loop.index }}')">{{ team }}</button>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
 
-        <div class="team-column">
-            <div class="team-selector opponents-team">Opponent's Team</div>
-            {% for team in info_list %}
-            <button id="opponentsTeam{{ loop.index }}" class="team-button" data-team-name="{{ team }}"
-                onclick="selectOpponentsTeam(this.getAttribute('data-team-name'), 'opponentsTeam{{ loop.index }}')">{{ team }}</button>
-            {% endfor %}
-        </div>
-    </div>
-    <form id="compareForm" action="/compare_page" method="post">
         <!-- Hidden inputs for league details -->
         <input type="hidden" name="league_id" value="{{ league_id }}">
         <input type="hidden" name="year" value="{{ year }}">
@@ -105,10 +210,7 @@
         <!-- Submit button -->
         <button type="button" onclick="compareTeams()">Compare Teams</button>
     </form>
-    <div id="myTeamDisplay"></div>
-    <div id="opponentsTeamDisplay"></div>
 
-    <!-- Loading overlay -->
     <div id="loading">Loading, please wait...</div>
 
 </body>
