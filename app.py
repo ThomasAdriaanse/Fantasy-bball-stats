@@ -24,7 +24,7 @@ def entry_page():
 def compare_page():
     
     # Retrieve the custom scoring values from the form
-    scoring = {
+    league_scoring_rules = {
         'fgm': int(request.form.get('fgm', 2)),
         'fga': int(request.form.get('fga', -1)),
         'ftm': int(request.form.get('ftm', 1)),
@@ -37,7 +37,7 @@ def compare_page():
         'turno': int(request.form.get('turno', -2)),
         'pts': int(request.form.get('pts', 1)),
     }
-    print(scoring)
+    print(league_scoring_rules)
     
     my_team_name = request.form.get('myTeam')
     opponents_team_name = request.form.get('opponentsTeam')
@@ -68,16 +68,12 @@ def compare_page():
     if team2_index == -1:
         return redirect(url_for('entry_page', error_message="Team 2 not found. Please try again."))
 
-    compare_table_name_1 = 'compare_team_players_1'
-    compare_table_name_2 = 'compare_team_players_2'
-    team_stats_table_name_1 = 'compare_team_stats_1'
-    team_stats_table_name_2 = 'compare_team_stats_2'
 
     player_data_column_names = ['player_name', 'min', 'fgm', 'fga', 'ftm', 'fta', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts', 'inj', 'fpts', 'games']
 
 
-    team1_player_data = cpd.get_team_player_data(league, team1_index, compare_table_name_1, player_data_column_names)
-    team2_player_data = cpd.get_team_player_data(league, team2_index, compare_table_name_2, player_data_column_names)
+    team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, league_scoring_rules)
+    team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, league_scoring_rules)
 
     team_data_column_names = ['team_avg_fpts', 'team_expected_points', 'team_chance_of_winning', 'team_name', 'team_current_points']
 

@@ -27,7 +27,7 @@ def get_team_player_data_schema():
     return table_schema
 
 
-def get_team_player_data(league, team_num, table, columns):
+def get_team_player_data(league, team_num, columns, league_scoring_rules):
 
     team = league.teams[team_num]
     
@@ -54,10 +54,19 @@ def get_team_player_data(league, team_num, table, columns):
             team_data['pts'].append(round(player_avg_stats['PTS'], 2))
             team_data['inj'].append(player.injuryStatus)
 
-            fpts = round(player_avg_stats['FGM']*2 - player_avg_stats['FGA'] + player_avg_stats['FTM'] - 
-            player_avg_stats['FTA'] + player_avg_stats['3PTM'] + player_avg_stats['REB'] + 
-            2*player_avg_stats['AST'] + 4*player_avg_stats['STL'] + 4*player_avg_stats['BLK'] - 
-            2*player_avg_stats['TO'] + player_avg_stats['PTS'], 2)
+            fpts = round(
+            player_avg_stats['FGM']*league_scoring_rules['fgm'] +
+            player_avg_stats['FGA']*league_scoring_rules['fga'] + 
+            player_avg_stats['FTM']*league_scoring_rules['ftm'] +
+            player_avg_stats['FTA']*league_scoring_rules['fta'] + 
+            player_avg_stats['3PTM']*league_scoring_rules['threeptm'] + 
+            player_avg_stats['REB']*league_scoring_rules['reb'] + 
+            player_avg_stats['AST']*league_scoring_rules['ast'] + 
+            player_avg_stats['STL']*league_scoring_rules['stl'] + 
+            player_avg_stats['BLK']*league_scoring_rules['blk'] + 
+            player_avg_stats['TO']*league_scoring_rules['turno'] + 
+            player_avg_stats['PTS']*league_scoring_rules['pts']
+            , 2)
             
             team_data['fpts'].append(fpts)
 
