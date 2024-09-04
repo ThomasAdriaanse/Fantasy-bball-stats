@@ -6,3 +6,4 @@ espn-api
 numpy
 pandas
 datetime
+gunicorn
