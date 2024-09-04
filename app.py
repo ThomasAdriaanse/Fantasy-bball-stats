@@ -10,6 +10,9 @@ from scipy.stats import norm
 from espn_api.basketball import League
 from espn_api.requests.espn_requests import ESPNUnknownError
 import pandas as pd
+from nba_api.stats.endpoints import playergamelog
+from nba_api.stats.static import players
+import json
 
 load_dotenv()
 app = Flask(__name__)
@@ -19,6 +22,125 @@ def entry_page():
     error_message = request.args.get('error_message', '')
     return render_template('entry.html', error_message=error_message)
 
+@app.route('/player_stats', methods=['GET', 'POST'])
+def player_stats():
+    num_games = 10  # Default to 10 games
+    selected_player = "bol bol"  # Default player
+
+    if request.method == 'POST':
+        selected_player = request.form.get('player_name', selected_player)  # Update player based on user input
+        num_games = int(request.form.get('num_games', num_games))  # Update based on user input
+    
+    generate_json_file(selected_player, num_games)  # Generate JSON file with specified player and number of games
+
+    # Get the list of all active players for the dropdown
+    active_players = players.get_active_players()
+    active_players.sort(key=lambda x: x['full_name'])
+
+    return render_template('player_stats.html', players=active_players, selected_player=selected_player, num_games=num_games)
+
+# Route to serve the JSON file for player stats
+@app.route('/data/<path:filename>')
+def serve_data(filename):
+    return send_from_directory('static', filename)
+
+# Player stats generation function (integrated from the player stats app)
+def generate_json_file(player_name, num_games):
+    player_info = players.find_players_by_full_name(player_name)
+    
+    if not player_info:
+        print(f"Player {player_name} not found.")
+        return
+    
+    player_id = player_info[0]['id']
+    print(f"Fetching data for: {player_name} (ID: {player_id})")
+
+    all_seasons_df = pd.DataFrame()
+
+    year = 2023
+    while year >= 1999:
+        seasons_checked = 0
+        while seasons_checked < 3:
+            season = str(year)
+            print(f"Fetching data for season {season}...")
+
+            game_log = playergamelog.PlayerGameLog(player_id, season=season, season_type_all_star="Regular Season").get_dict()
+
+            if game_log['resultSets'][0]['rowSet']:
+                games = game_log['resultSets'][0]['rowSet']
+                df = pd.DataFrame(games, columns=game_log['resultSets'][0]['headers'])
+
+                all_seasons_df = pd.concat([all_seasons_df, df], ignore_index=True)
+                break
+            else:
+                print(f"No data found for season {season}. Checking next year...")
+                seasons_checked += 1
+                year -= 1
+        
+        if seasons_checked == 3:
+            print(f"No games found for three consecutive seasons starting from {year + 3}. Stopping.")
+            break
+        
+        year -= 1
+    
+    if all_seasons_df.empty:
+        print("No data available for the specified player.")
+        return
+
+    league_scoring_rules = {
+        'fgm': 2,
+        'fga': -1,
+        'ftm': 1,
+        'fta': -1,
+        'threeptm': 1,
+        'reb': 1,
+        'ast': 2,
+        'stl': 4,
+        'blk': 4,
+        'turno': -2,
+        'pts': 1
+    }
+
+    all_seasons_df['FPTS'] = all_seasons_df.apply(lambda row: calculate_fantasy_points(row, league_scoring_rules), axis=1)
+
+    all_seasons_df['Game_Date'] = pd.to_datetime(all_seasons_df['GAME_DATE'], format='%b %d, %Y')
+    all_seasons_df = all_seasons_df.sort_values('Game_Date').reset_index(drop=True)
+
+    all_seasons_df['Game_Number'] = all_seasons_df.index + 1
+
+    def centered_average(index, x):
+        start = max(0, index - x)
+        end = min(len(all_seasons_df), index + x + 1)
+        return all_seasons_df['FPTS'].iloc[start:end].mean()
+
+    all_seasons_df['Centered_Avg_FPTS'] = all_seasons_df.index.map(lambda i: centered_average(i, num_games))
+
+    result_df = all_seasons_df[['Game_Number', 'Centered_Avg_FPTS', 'MATCHUP']].replace({float('nan'): None}).dropna()
+
+    data = result_df.to_dict(orient='records')
+
+    output_dir = os.path.join(app.root_path, 'static')
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = os.path.join(output_dir, 'player_fpts.json')
+    
+    with open(output_file, 'w') as f:
+        json.dump(data, f, indent=4)
+    
+    print(f"Data saved to {output_file}")
+
+def calculate_fantasy_points(row, scoring_rules):
+    fpts = (row['FGM'] * scoring_rules['fgm'] +
+            row['FGA'] * scoring_rules['fga'] +
+            row['FTM'] * scoring_rules['ftm'] +
+            row['FTA'] * scoring_rules['fta'] +
+            row['FG3M'] * scoring_rules['threeptm'] +
+            row['REB'] * scoring_rules['reb'] +
+            row['AST'] * scoring_rules['ast'] +
+            row['STL'] * scoring_rules['stl'] +
+            row['BLK'] * scoring_rules['blk'] +
+            row['TOV'] * scoring_rules['turno'] +
+            row['PTS'] * scoring_rules['pts'])
+    return fpts
 
 @app.route('/compare_page', methods=['POST'])
 def compare_page():
@@ -129,7 +251,6 @@ def select_teams_page():
     teams_list = [team.team_name for team in league.teams]
 
     return render_template('select_teams_page.html', info_list=teams_list, **league_details)
-
 
 
 @app.route('/process', methods=['POST'])

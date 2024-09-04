@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/defaultstyle.css') }}">
+    <title>{{ selected_player }} - Past X-Game Average Fantasy Points</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+        #chart {
+            margin-top: 20px;
+        }
+        #form-container {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h2>{{ selected_player }} - X-Games before and after Moving Average Fantasy Points Per Game</h2>
+    
+    <div id="form-container">
+        <form method="POST" action="/player_stats">
+            <label for="player_name">Select Player:</label>
+            <select id="player_name" name="player_name">
+                {% for player in players %}
+                    <option value="{{ player['full_name'] }}" {% if player['full_name'] == selected_player %}selected{% endif %}>
+                        {{ player['full_name'] }}
+                    </option>
+                {% endfor %}
+            </select>
+
+            <label for="num_games">Number of games on each side for moving average:</label>
+            <input type="number" id="num_games" name="num_games" value="{{ num_games }}">
+            <button type="submit">Update</button>
+        </form>
+    </div>
+
+    <div id="chart"></div>
+
+    <script>
+        d3.json("/static/player_fpts.json").then(function(data) {
+            if (data.length === 0) {
+                d3.select("#chart").append("p").text("No data available for this selection.");
+                return;
+            }
+
+            const margin = {top: 50, right: 30, bottom: 50, left: 60},
+                  width = 800 - margin.left - margin.right,
+                  height = 400 - margin.top - margin.bottom;
+
+            const svg = d3.select("#chart")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+            const x = d3.scaleLinear()
+                .domain([1, d3.max(data, d => d.Game_Number)])
+                .range([0, width]);
+
+            svg.append("g")
+                .attr("transform", "translate(0," + height + ")")
+                .call(d3.axisBottom(x))
+                .append("text")
+                .attr("x", width / 2)
+                .attr("y", 40)
+                .attr("fill", "#000")
+                .attr("text-anchor", "middle")
+                .text("Game Number");
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d.Centered_Avg_FPTS) + 5])
+                .range([height, 0]);
+
+            svg.append("g")
+                .call(d3.axisLeft(y))
+                .append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("x", -height / 2)
+                .attr("y", -50)
+                .attr("fill", "#000")
+                .attr("text-anchor", "middle")
+                .text("X-Game Average Fantasy Points");
+
+            svg.append("path")
+                .datum(data)
+                .attr("fill", "none")
+                .attr("stroke", "steelblue")
+                .attr("stroke-width", 2)
+                .attr("d", d3.line()
+                    .x(d => x(d.Game_Number))
+                    .y(d => y(d.Centered_Avg_FPTS))
+                );
+
+            // Detect team changes and add vertical red lines
+            let lastTeam = null;
+            data.forEach(d => {
+                const currentTeam = d.MATCHUP.split(' ')[0];  // Assuming team abbreviation is the first part of MATCHUP
+                console.log("Current team:", currentTeam, "Last team:", lastTeam);  // Debugging: Log team changes
+
+                if (lastTeam && lastTeam !== currentTeam) {
+                    // Add vertical line when the team changes
+                    svg.append("line")
+                        .attr("x1", x(d.Game_Number))
+                        .attr("x2", x(d.Game_Number))
+                        .attr("y1", 0)
+                        .attr("y2", height)
+                        .attr("stroke", "red")
+                        .attr("stroke-width", 2)
+                        .attr("stroke-dasharray", "4 4");  // Optional: makes the line dashed
+                }
+                lastTeam = currentTeam;
+            });
+
+        }).catch(function(error){
+            console.error('Error loading the JSON data:', error);
+            d3.select("#chart").append("p").text("Failed to load data.");
+        });
+    </script>
+</body>
+</html>

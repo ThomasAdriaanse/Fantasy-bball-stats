@@ -21,38 +21,80 @@
 <body>
     <div class="container">
         <h1>Fantasy Basketball Matchup Predictor</h1>
-        <form action="/process" method="post">
-            <label for="league_id">League ID:</label>
-            <input type="text" id="league_id" name="league_id" required>
+        <div class="flex-container">
+            <!-- Button to go to Player Stats Page -->
+            <div class="button-container">
+                <a href="{{ url_for('player_stats') }}" class="player-stats-button">Player Stats</a>
+            </div>
 
-            <label for="year">Year:</label>
-            <input type="text" id="year" name="year" required>
+            <!-- Form for Matchup Predictor -->
+            <div class="form-container">
+                <form action="/process" method="post">
+                    <label for="league_id">League ID:</label>
+                    <input type="text" id="league_id" name="league_id" required>
 
-            <label for="espn_s2">ESPN S2:</label>
-            <input type="text" id="espn_s2" name="espn_s2">
+                    <label for="year">Year:</label>
+                    <input type="text" id="year" name="year" required>
 
-            <label for="swid">SWID:</label>
-            <input type="text" id="swid" name="swid">
+                    <label for="espn_s2">ESPN S2:</label>
+                    <input type="text" id="espn_s2" name="espn_s2">
 
-            <input type="submit" value="Submit">
-        </form>
-        <div class="note">
-            <p><b>Note:</b> You only need espn_s2 and swid cookies if your league is not publicly viewable.</p>
-            <p><u>How to find your espn_s2 and swid:</u><br>
-                Log in to your account on ESPN's fantasy basketball website. Right-click anywhere on the website and select
-                "Inspect". From there, click on "Storage" in the top bar. Then click the "Cookies" section for
-                http://fantasy.espn.com. You should be able to find your swid and espn_s2 values there. They remain the
-                same through different sessions.
-            </p>
-            <p><u>If you want to try this tool out, use the example league details below:</u></p>
-            <p><b>Example League:</b><br> League ID = 190002826<br> Year = 2024<br> ESPN S2 = <i>blank</i><br> SWID = <i>blank</i></p>
+                    <label for="swid">SWID:</label>
+                    <input type="text" id="swid" name="swid">
+
+                    <input type="submit" value="Submit">
+                </form>
+                <div class="note">
+                    <p><b>Note:</b> You only need espn_s2 and swid cookies if your league is not publicly viewable.</p>
+                    <p><u>How to find your espn_s2 and swid:</u><br>
+                        Log in to your account on ESPN's fantasy basketball website. Right-click anywhere on the website and select
+                        "Inspect". From there, click on "Storage" in the top bar. Then click the "Cookies" section for
+                        http://fantasy.espn.com. You should be able to find your swid and espn_s2 values there. They remain the
+                        same through different sessions.
+                    </p>
+                    <p><u>If you want to try this tool out, use the example league details below:</u></p>
+                    <p><b>Example League:</b><br> League ID = 190002826<br> Year = 2024<br> ESPN S2 = <i>blank</i><br> SWID = <i>blank</i></p>
+                </div>
+                {% if error_message %}
+                <div class="error-message">
+                    {{ error_message }}
+                </div>
+                {% endif %}
+            </div>
         </div>
-        {% if error_message %}
-        <div class="error-message">
-            {{ error_message }}
-        </div>
-        {% endif %}
     </div>
+
+    <!-- Inline CSS to position the Player Stats button and the form side by side -->
+    <style>
+        .flex-container {
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .button-container {
+            margin-right: 20px;
+        }
+
+        .player-stats-button {
+            display: inline-block;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+
+        .player-stats-button:hover {
+            background-color: #45a049;
+        }
+
+        .form-container {
+            flex-grow: 1;
+        }
+    </style>
 </body>
 
 </html>
