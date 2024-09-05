@@ -24,11 +24,13 @@ def entry_page():
 
 @app.route('/player_stats', methods=['GET', 'POST'])
 def player_stats():
-    num_games = 10  # Default to 10 games
-    selected_player = "bol bol"  # Default player
-
-    if request.method == 'POST':
-        selected_player = request.form.get('player_name', selected_player)  # Update player based on user input
+    num_games = 20  # Default to 20 games
+    
+    # Check if player_name is passed via query parameters (GET request)
+    if request.method == 'GET':
+        selected_player = request.args.get('player_name', 'Bol Bol')  # Default to 'bol bol' if no player_name is given
+    elif request.method == 'POST':
+        selected_player = request.form.get('player_name', 'Bol Bol')  # Default player if no input
         num_games = int(request.form.get('num_games', num_games))  # Update based on user input
     
     generate_json_file(selected_player, num_games)  # Generate JSON file with specified player and number of games
@@ -39,12 +41,13 @@ def player_stats():
 
     return render_template('player_stats.html', players=active_players, selected_player=selected_player, num_games=num_games)
 
+
 # Route to serve the JSON file for player stats
 @app.route('/data/<path:filename>')
 def serve_data(filename):
     return send_from_directory('static', filename)
 
-# Player stats generation function (integrated from the player stats app)
+# Player stats generation function
 def generate_json_file(player_name, num_games):
     player_info = players.find_players_by_full_name(player_name)
     

@@ -20,12 +20,15 @@
 
 <body>
     <div class="container">
+        <!-- Button to go to Player Stats Page -->
+        <div class="button-container">
+            <a href="{{ url_for('player_stats') }}" class="player-stats-button">Player Stats</a>
+        </div>
+    </div>
+    <div class="container">
         <h1>Fantasy Basketball Matchup Predictor</h1>
+            
         <div class="flex-container">
-            <!-- Button to go to Player Stats Page -->
-            <div class="button-container">
-                <a href="{{ url_for('player_stats') }}" class="player-stats-button">Player Stats</a>
-            </div>
 
             <!-- Form for Matchup Predictor -->
             <div class="form-container">
@@ -63,38 +66,7 @@
             </div>
         </div>
     </div>
-
-    <!-- Inline CSS to position the Player Stats button and the form side by side -->
-    <style>
-        .flex-container {
-            display: flex;
-            align-items: flex-start;
-        }
-
-        .button-container {
-            margin-right: 20px;
-        }
-
-        .player-stats-button {
-            display: inline-block;
-            padding: 10px 20px;
-            font-size: 16px;
-            background-color: #4CAF50;
-            color: white;
-            text-align: center;
-            text-decoration: none;
-            border-radius: 5px;
-            margin-top: 20px;
-        }
-
-        .player-stats-button:hover {
-            background-color: #45a049;
-        }
-
-        .form-container {
-            flex-grow: 1;
-        }
-    </style>
 </body>
+
 
 </html>

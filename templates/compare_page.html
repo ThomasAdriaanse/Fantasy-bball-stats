@@ -53,7 +53,10 @@
                 <tbody>
                     {% for row in data_team_players_1 %}
                     <tr>
-                        <td class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">{{ row['player_name'] }}</td>
+                        <!-- Make player name clickable, sending them to a player stats page -->
+                        <td class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">
+                            <a href="{{ url_for('player_stats') }}?player_name={{ row['player_name'] }}">{{ row['player_name'] }}</a>
+                        </td>
                         <td>{{ row['min'] }}</td>
                         <td>{{ row['fgm'] }}</td>
                         <td>{{ row['fga'] }}</td>
@@ -72,6 +75,7 @@
                     {% endfor %}
                 </tbody>
             </table>
+            <!-- Team Stats Table -->
             <table class="data-table">
                 <thead>
                     <tr>
@@ -117,7 +121,10 @@
                 <tbody>
                     {% for row in data_team_players_2 %}
                     <tr>
-                        <td class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">{{ row['player_name'] }}</td>
+                        <!-- Make player name clickable, sending them to a player stats page -->
+                        <td class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">
+                            <a href="{{ url_for('player_stats') }}?player_name={{ row['player_name'] }}">{{ row['player_name'] }}</a>
+                        </td>
                         <td>{{ row['min'] }}</td>
                         <td>{{ row['fgm'] }}</td>
                         <td>{{ row['fga'] }}</td>
@@ -136,6 +143,7 @@
                     {% endfor %}
                 </tbody>
             </table>
+            <!-- Team Stats Table -->
             <table class="data-table">
                 <thead>
                     <tr>

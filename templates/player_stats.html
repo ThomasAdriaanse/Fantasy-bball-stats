@@ -20,7 +20,7 @@
     </style>
 </head>
 <body>
-    <h2>{{ selected_player }} - X-Games before and after Moving Average Fantasy Points Per Game</h2>
+    <h2>{{ selected_player }} - Moving Average FPTS</h2>
     
     <div id="form-container">
         <form method="POST" action="/player_stats">
@@ -69,7 +69,7 @@
                 .append("text")
                 .attr("x", width / 2)
                 .attr("y", 40)
-                .attr("fill", "#000")
+                .attr("fill", "#fff") 
                 .attr("text-anchor", "middle")
                 .text("Game Number");
 
@@ -83,9 +83,9 @@
                 .attr("transform", "rotate(-90)")
                 .attr("x", -height / 2)
                 .attr("y", -50)
-                .attr("fill", "#000")
+                .attr("fill", "#fff") 
                 .attr("text-anchor", "middle")
-                .text("X-Game Average Fantasy Points");
+                .text("Average FPTS");
 
             svg.append("path")
                 .datum(data)
