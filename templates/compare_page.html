@@ -55,7 +55,7 @@
                     <tr>
                         <!-- Make player name clickable, sending them to a player stats page -->
                         <td class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">
-                            <a href="{{ url_for('player_stats') }}?player_name={{ row['player_name'] }}">{{ row['player_name'] }}</a>
+                            <!--<a href="{{ url_for('player_stats') }}?player_name={{ row['player_name'] }}">-->{{ row['player_name'] }}<!--</a>-->
                         </td>
                         <td>{{ row['min'] }}</td>
                         <td>{{ row['fgm'] }}</td>
@@ -123,7 +123,7 @@
                     <tr>
                         <!-- Make player name clickable, sending them to a player stats page -->
                         <td class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">
-                            <a href="{{ url_for('player_stats') }}?player_name={{ row['player_name'] }}">{{ row['player_name'] }}</a>
+                            <!--<a href="{{ url_for('player_stats') }}?player_name={{ row['player_name'] }}">-->{{ row['player_name'] }}<!--</a>-->
                         </td>
                         <td>{{ row['min'] }}</td>
                         <td>{{ row['fgm'] }}</td>
