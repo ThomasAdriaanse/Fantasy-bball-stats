@@ -45,7 +45,7 @@ def get_team_player_data(league, team_num, columns, league_scoring_rules):
             team_data['fga'].append(round(player_avg_stats['FGA'], 2))
             team_data['ftm'].append(round(player_avg_stats['FTM'], 2))
             team_data['fta'].append(round(player_avg_stats['FTA'], 2))
-            team_data['threeptm'].append(round(player_avg_stats['3PTM'], 2))
+            team_data['threeptm'].append(round(player_avg_stats['3PM'], 2))
             team_data['reb'].append(round(player_avg_stats['REB'], 2))
             team_data['ast'].append(round(player_avg_stats['AST'], 2))
             team_data['stl'].append(round(player_avg_stats['STL'], 2))
@@ -59,7 +59,7 @@ def get_team_player_data(league, team_num, columns, league_scoring_rules):
             player_avg_stats['FGA']*league_scoring_rules['fga'] + 
             player_avg_stats['FTM']*league_scoring_rules['ftm'] +
             player_avg_stats['FTA']*league_scoring_rules['fta'] + 
-            player_avg_stats['3PTM']*league_scoring_rules['threeptm'] + 
+            player_avg_stats['3PM']*league_scoring_rules['threeptm'] + 
             player_avg_stats['REB']*league_scoring_rules['reb'] + 
             player_avg_stats['AST']*league_scoring_rules['ast'] + 
             player_avg_stats['STL']*league_scoring_rules['stl'] + 

@@ -69,7 +69,7 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
             player_avg_stats = player.stats['2024_total']['avg']
 
             fpts = round(player_avg_stats['FGM']*2 - player_avg_stats['FGA'] + player_avg_stats['FTM'] - 
-                            player_avg_stats['FTA'] + player_avg_stats['3PTM'] + player_avg_stats['REB'] + 
+                            player_avg_stats['FTA'] + player_avg_stats['3PM'] + player_avg_stats['REB'] + 
                             2*player_avg_stats['AST'] + 4*player_avg_stats['STL'] + 4*player_avg_stats['BLK'] - 
                             2*player_avg_stats['TO'] + player_avg_stats['PTS'], 2)
             

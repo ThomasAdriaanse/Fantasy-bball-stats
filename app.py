@@ -33,7 +33,8 @@ def player_stats():
         selected_player = request.form.get('player_name', 'Bol Bol')  # Default player if no input
         num_games = int(request.form.get('num_games', num_games))  # Update based on user input
     
-    generate_json_file(selected_player, num_games)  # Generate JSON file with specified player and number of games
+    # Take this away when pushing
+    #generate_json_file(selected_player, num_games)  # Generate JSON file with specified player and number of games
 
     # Get the list of all active players for the dropdown
     active_players = players.get_active_players()
