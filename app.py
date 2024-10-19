@@ -206,18 +206,21 @@ def compare_page():
     team1_data = tsd.get_team_stats(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names, league_scoring_rules, year)
     team2_data = tsd.get_team_stats(league, team2_index, team2_player_data, team1_index, team1_player_data, team_data_column_names, league_scoring_rules, year)
 
+    combined_df = cpd.get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names)
+    combined_json = combined_df.to_json(orient='records')  # Convert the DataFrame to JSON
+
     # Convert DataFrames to list of dictionaries
     team1_player_data = team1_player_data.to_dict(orient='records')
     team2_player_data = team2_player_data.to_dict(orient='records')
     team1_data = team1_data.to_dict(orient='records')
     team2_data = team2_data.to_dict(orient='records')
 
-    # Also need graph data:
-    # Day and time each player has a game
-    # Avg FPTS for each player
-    cpd.get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data)
-
-    return render_template('compare_page.html', data_team_players_1=team1_player_data, data_team_players_2=team2_player_data, data_team_stats_1=team1_data, data_team_stats_2=team2_data)
+    return render_template('compare_page.html', 
+                            data_team_players_1=team1_player_data, 
+                            data_team_players_2=team2_player_data, 
+                            data_team_stats_1=team1_data, 
+                            data_team_stats_2=team2_data,
+                            combined_json=combined_json)
 
 @app.route('/select_teams_page')
 def select_teams_page():

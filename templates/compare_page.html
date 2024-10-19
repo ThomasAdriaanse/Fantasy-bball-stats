@@ -4,6 +4,28 @@
     <title>Basketball Data</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+        #graph {
+            margin: 0 auto;
+            width: 80%;
+        }
+        #chart {
+            margin-top: 20px;
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .axis-label {
+            font-size: 12px;
+            fill: #333;
+        }
+    </style>
 </head>
 
 <!-- Google tag (gtag.js) -->
@@ -165,5 +187,98 @@
         </div>
     </div>
     
+    <h2>Team Comparison - Predicted and Actual Fantasy Points</h2>
+    
+    <div id="graph">
+        <div id="chart"></div>
+    </div>
+
+    <script>
+        // Parse JSON data passed from Flask
+        const graphData = JSON.parse('{{ combined_json | safe }}');
+
+        // Set dimensions and margins for the graph
+        const margin = { top: 50, right: 30, bottom: 50, left: 60 };
+        const width = 800 - margin.left - margin.right;
+        const height = 400 - margin.top - margin.bottom;
+
+        // Append an SVG element to the #chart container
+        const svg = d3.select("#chart")
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Parse the date from the data
+        const parseDate = d3.timeParse("%Y-%m-%d");
+
+        // Format the data
+        graphData.forEach(d => {
+            d.date = parseDate(d.date);
+            d.predicted_fpts = +d.predicted_fpts;
+            d.actual_fpts = +d.actual_fpts;
+        });
+
+        // Define the scales
+        const x = d3.scaleTime()
+            .domain(d3.extent(graphData, d => d.date))
+            .range([0, width]);
+
+        const y = d3.scaleLinear()
+            .domain([0, d3.max(graphData, d => Math.max(d.predicted_fpts, d.actual_fpts))])
+            .nice()
+            .range([height, 0]);
+
+        // Define the line generator functions for predicted and actual FPTS
+        const linePredicted = d3.line()
+            .x(d => x(d.date))
+            .y(d => y(d.predicted_fpts));
+
+        const lineActual = d3.line()
+            .x(d => x(d.date))
+            .y(d => y(d.actual_fpts));
+
+        // Append the predicted line
+        svg.append("path")
+            .datum(graphData)
+            .attr("fill", "none")
+            .attr("stroke", "steelblue")
+            .attr("stroke-width", 2)
+            .attr("d", linePredicted);
+
+        // Append the actual line
+        svg.append("path")
+            .datum(graphData)
+            .attr("fill", "none")
+            .attr("stroke", "orange")
+            .attr("stroke-width", 2)
+            .attr("d", lineActual);
+
+        // Add the X Axis with date labels
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(x).ticks(d3.timeDay.every(1)).tickFormat(d3.timeFormat("%b %d")))
+            .append("text")
+            .attr("x", width / 2)
+            .attr("y", 40)
+            .attr("fill", "#333") 
+            .attr("text-anchor", "middle")
+            .text("Date")
+            .attr("class", "axis-label");
+
+        // Add the Y Axis
+        svg.append("g")
+            .call(d3.axisLeft(y))
+            .append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("x", -height / 2)
+            .attr("y", -50)
+            .attr("fill", "#333") 
+            .attr("text-anchor", "middle")
+            .text("Fantasy Points")
+            .attr("class", "axis-label");
+    </script>
+
 </body>
 </html>

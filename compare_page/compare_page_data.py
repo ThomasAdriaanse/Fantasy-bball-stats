@@ -103,22 +103,58 @@ def get_team_player_data(league, team_num, columns, league_scoring_rules, year):
         team_data['games'].append(len(games_left_this_week))
 
     df = pd.DataFrame(team_data)
-    #df.set_index('player_name', inplace=True)
-    print(df)
     return df
-"""
+
+
 def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names):
-    
     team1 = league.teams[team1_index]
     team2 = league.teams[team2_index]
 
-    today = datetime.today()
-    end_of_week = db_utils.range_of_current_week()
+    today = datetime.today().date()
+    start_of_week, end_of_week = db_utils.range_of_current_week()  # Assuming this function returns datetime.date objects
 
-    days_left = end_of_week-today
+    # Initialize DataFrame for storing day-wise FPTS contributions
+    dates = pd.date_range(start=start_of_week, end=end_of_week).date
+    team1_daily_fpts = pd.DataFrame({'date': dates, 'predicted_fpts': [0] * len(dates), 'actual_fpts': [0] * len(dates)})
+    team2_daily_fpts = team1_daily_fpts.copy()
+
+    def calculate_daily_fpts(team, daily_fpts_df, player_data):
+        for player in team.roster:
+            player_name = player.name
+
+            # Ensure that 'player_data' is a DataFrame and contains the player_name column
+            # Filter to get the player's average FPTS from the DataFrame
+            player_row = player_data[player_data['player_name'] == player_name]
+
+            if player_row.empty:
+                avg_fpts = 0  # If no matching player is found in player_data, set avg_fpts to 0
+            else:
+                avg_fpts = player_row['fpts'].values[0]
+
+            # Get the player's schedule and sort by date
+            player_schedule = player.schedule
+            games_left = [game['date'] for game in player_schedule.values() if start_of_week <= game['date'] <= end_of_week]
+
+            # Add FPTS contribution to each game day
+            for game_day in games_left:
+                daily_fpts_df.loc[daily_fpts_df['date'] == game_day, 'predicted_fpts'] += avg_fpts
+
+            # If today is on or after a game day, contribute to 'actual_fpts' to reflect today's actual progress
+            for game_day in games_left:
+                if today >= game_day:
+                    daily_fpts_df.loc[daily_fpts_df['date'] == game_day, 'actual_fpts'] += avg_fpts
 
 
-    for player in team1.roster:"""
+    # Calculate contributions for Team 1
+    calculate_daily_fpts(team1, team1_daily_fpts, team1_player_data)
 
+    # Calculate contributions for Team 2
+    calculate_daily_fpts(team2, team2_daily_fpts, team2_player_data)
 
+    # Combine both teams' data into a single DataFrame for easy graphing
+    team1_daily_fpts['team'] = 'Team 1'
+    team2_daily_fpts['team'] = 'Team 2'
+    combined_df = pd.concat([team1_daily_fpts, team2_daily_fpts], ignore_index=True)
+
+    return combined_df
 
