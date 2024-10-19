@@ -50,6 +50,7 @@ def serve_data(filename):
 
 # Player stats generation function
 def generate_json_file(player_name, num_games):
+
     player_info = players.find_players_by_full_name(player_name)
     
     if not player_info:
@@ -163,8 +164,7 @@ def compare_page():
         'turno': int(request.form.get('turno', -2)),
         'pts': int(request.form.get('pts', 1)),
     }
-    print(league_scoring_rules)
-    
+        
     my_team_name = request.form.get('myTeam')
     opponents_team_name = request.form.get('opponentsTeam')
     league_id = request.form.get('league_id')
@@ -198,24 +198,24 @@ def compare_page():
     player_data_column_names = ['player_name', 'min', 'fgm', 'fga', 'ftm', 'fta', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts', 'inj', 'fpts', 'games']
 
 
-    team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, league_scoring_rules)
-    team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, league_scoring_rules)
+    team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, league_scoring_rules, year)
+    team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, league_scoring_rules, year)
 
     team_data_column_names = ['team_avg_fpts', 'team_expected_points', 'team_chance_of_winning', 'team_name', 'team_current_points']
 
-    team1_data = tsd.get_team_stats(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names)
-    team2_data = tsd.get_team_stats(league, team2_index, team2_player_data, team1_index, team1_player_data, team_data_column_names)
-
-    #print(team1_player_data)
-    #print(team2_player_data)
-    #print(team1_data)
-    #print(team2_data)
+    team1_data = tsd.get_team_stats(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names, league_scoring_rules, year)
+    team2_data = tsd.get_team_stats(league, team2_index, team2_player_data, team1_index, team1_player_data, team_data_column_names, league_scoring_rules, year)
 
     # Convert DataFrames to list of dictionaries
     team1_player_data = team1_player_data.to_dict(orient='records')
     team2_player_data = team2_player_data.to_dict(orient='records')
     team1_data = team1_data.to_dict(orient='records')
     team2_data = team2_data.to_dict(orient='records')
+
+    # Also need graph data:
+    # Day and time each player has a game
+    # Avg FPTS for each player
+    cpd.get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data)
 
     return render_template('compare_page.html', data_team_players_1=team1_player_data, data_team_players_2=team2_player_data, data_team_stats_1=team1_data, data_team_stats_2=team2_data)
 
