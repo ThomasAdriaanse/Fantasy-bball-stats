@@ -87,9 +87,7 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
             team_average_fpts += fpts
             num_players += 1
         else:
-            team_average_fpts+=0
-
-        num_players += 1
+            team_average_fpts += 0
 
     team_average_fpts /= num_players
     team_average_fpts = round(team_average_fpts, 2)
