@@ -208,6 +208,7 @@ def compare_page():
 
     combined_df = cpd.get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names)
     combined_json = combined_df.to_json(orient='records')  # Convert the DataFrame to JSON
+    print(combined_df)
 
     # Convert DataFrames to list of dictionaries
     team1_player_data = team1_player_data.to_dict(orient='records')
@@ -221,6 +222,7 @@ def compare_page():
                             data_team_stats_1=team1_data, 
                             data_team_stats_2=team2_data,
                             combined_json=combined_json)
+
 
 @app.route('/select_teams_page')
 def select_teams_page():

@@ -10,16 +10,25 @@
             font-family: Arial, sans-serif;
             margin: 40px;
         }
+        #graph-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 40px 0; /* Add some space between tables and graph */
+        }
         #graph {
-            margin: 0 auto;
-            width: 80%;
+            display: flex;  /* Use Flexbox */
+            justify-content: center;  /* Center the chart horizontally */
+            width: 100%;  /* Make the container take up the full width */
+            margin-top: 20px;
         }
         #chart {
-            margin-top: 20px;
             background-color: #f5f5f5;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            max-width: 800px;  /* Max width of the chart */
+            width: 100%;  /* Chart will take up full width up to 800px */
         }
         .axis-label {
             font-size: 12px;
@@ -186,22 +195,36 @@
             </table>
         </div>
     </div>
-    
-    <h2>Team Comparison - Predicted and Actual Fantasy Points</h2>
-    
-    <div id="graph">
-        <div id="chart"></div>
+
+    <div id="graph-container">
+        <h2>Team Comparison - Predicted and Predicted from Present Fantasy Points</h2>
+        <div id="graph">
+            <div id="chart"></div>
+        </div>
     </div>
 
+    <style>
+        /* Ensure the chart container adapts to the SVG size */
+        #chart {
+            width: auto;
+            height: auto;
+        }
+    </style>
+    
     <script>
         // Parse JSON data passed from Flask
         const graphData = JSON.parse('{{ combined_json | safe }}');
-
+    
         // Set dimensions and margins for the graph
         const margin = { top: 50, right: 30, bottom: 50, left: 60 };
         const width = 800 - margin.left - margin.right;
         const height = 400 - margin.top - margin.bottom;
-
+    
+        // Set the dimensions for the chart container based on the SVG size
+        const container = document.getElementById('chart');
+        container.style.width = `${width + margin.left + margin.right}px`;
+        container.style.height = `${height + margin.top + margin.bottom}px`;
+    
         // Append an SVG element to the #chart container
         const svg = d3.select("#chart")
             .append("svg")
@@ -209,52 +232,79 @@
             .attr("height", height + margin.top + margin.bottom)
             .append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
-
-        // Parse the date from the data
-        const parseDate = d3.timeParse("%Y-%m-%d");
-
+    
         // Format the data
         graphData.forEach(d => {
-            d.date = parseDate(d.date);
+            d.date = new Date(d.date);  // Convert Unix timestamp to JavaScript Date object
             d.predicted_fpts = +d.predicted_fpts;
-            d.actual_fpts = +d.actual_fpts;
+            d.predicted_fpts_from_present = +d.predicted_fpts_from_present;
         });
-
+    
+        // Split data into Team 1 and Team 2 based on the team field
+        const team1Data = graphData.filter(d => d.team === "Team 1");
+        const team2Data = graphData.filter(d => d.team === "Team 2");
+    
         // Define the scales
         const x = d3.scaleTime()
             .domain(d3.extent(graphData, d => d.date))
             .range([0, width]);
-
+    
         const y = d3.scaleLinear()
-            .domain([0, d3.max(graphData, d => Math.max(d.predicted_fpts, d.actual_fpts))])
+            .domain([0, d3.max(graphData, d => Math.max(d.predicted_fpts, d.predicted_fpts_from_present))])
             .nice()
             .range([height, 0]);
-
-        // Define the line generator functions for predicted and actual FPTS
-        const linePredicted = d3.line()
+    
+        // Define the line generator functions for predicted and actual FPTS for both teams
+        const linePredicted1 = d3.line()
             .x(d => x(d.date))
             .y(d => y(d.predicted_fpts));
-
-        const lineActual = d3.line()
+    
+        const lineActual1 = d3.line()
             .x(d => x(d.date))
-            .y(d => y(d.actual_fpts));
-
-        // Append the predicted line
+            .y(d => y(d.predicted_fpts_from_present));
+    
+        const linePredicted2 = d3.line()
+            .x(d => x(d.date))
+            .y(d => y(d.predicted_fpts));
+    
+        const lineActual2 = d3.line()
+            .x(d => x(d.date))
+            .y(d => y(d.predicted_fpts_from_present));
+    
+        // Append the predicted line for Team 1
         svg.append("path")
-            .datum(graphData)
+            .datum(team1Data)
             .attr("fill", "none")
-            .attr("stroke", "steelblue")
+            .attr("stroke", "red")
             .attr("stroke-width", 2)
-            .attr("d", linePredicted);
-
-        // Append the actual line
+            .style("stroke-dasharray", ("3, 3")) 
+            .attr("d", linePredicted1);
+    
+        // Append the actual line for Team 1
         svg.append("path")
-            .datum(graphData)
+            .datum(team1Data)
             .attr("fill", "none")
-            .attr("stroke", "orange")
+            .attr("stroke", "red")
             .attr("stroke-width", 2)
-            .attr("d", lineActual);
-
+            .attr("d", lineActual1);
+    
+        // Append the predicted line for Team 2
+        svg.append("path")
+            .datum(team2Data)
+            .attr("fill", "none")
+            .attr("stroke", "blue")
+            .attr("stroke-width", 2)
+            .style("stroke-dasharray", ("3, 3")) 
+            .attr("d", linePredicted2);
+    
+        // Append the actual line for Team 2
+        svg.append("path")
+            .datum(team2Data)
+            .attr("fill", "none")
+            .attr("stroke", "blue")
+            .attr("stroke-width", 2)
+            .attr("d", lineActual2);
+    
         // Add the X Axis with date labels
         svg.append("g")
             .attr("transform", `translate(0,${height})`)
@@ -266,7 +316,7 @@
             .attr("text-anchor", "middle")
             .text("Date")
             .attr("class", "axis-label");
-
+    
         // Add the Y Axis
         svg.append("g")
             .call(d3.axisLeft(y))
@@ -279,6 +329,6 @@
             .text("Fantasy Points")
             .attr("class", "axis-label");
     </script>
-
+    
 </body>
 </html>
