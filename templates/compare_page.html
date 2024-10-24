@@ -197,7 +197,7 @@
     </div>
 
     <div id="graph-container">
-        <h2>Team Comparison - Predicted and Predicted from Present Fantasy Points</h2>
+        <h2>Team Comparison - Predicted Fantasy Points</h2>
         <div id="graph">
             <div id="chart"></div>
         </div>
@@ -212,123 +212,80 @@
     </style>
     
     <script>
-        // Parse JSON data passed from Flask
-        const graphData = JSON.parse('{{ combined_json | safe }}');
-    
-        // Set dimensions and margins for the graph
-        const margin = { top: 50, right: 30, bottom: 50, left: 60 };
-        const width = 800 - margin.left - margin.right;
-        const height = 400 - margin.top - margin.bottom;
-    
-        // Set the dimensions for the chart container based on the SVG size
-        const container = document.getElementById('chart');
-        container.style.width = `${width + margin.left + margin.right}px`;
-        container.style.height = `${height + margin.top + margin.bottom}px`;
-    
-        // Append an SVG element to the #chart container
-        const svg = d3.select("#chart")
+
+        // Set the dimensions and margins for the graph
+        var margin = {top: 30, right: 30, bottom: 30, left: 30},
+            width = 800 - margin.left - margin.right,
+            height = 400 - margin.top - margin.bottom;
+        
+        // Append the svg object to the #chart container
+        var svg = d3.select("#chart")
             .append("svg")
             .attr("width", width + margin.left + margin.right)
             .attr("height", height + margin.top + margin.bottom)
             .append("g")
-            .attr("transform", `translate(${margin.left},${margin.top})`);
-    
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+        
+        // Parse JSON data passed from Flask
+        var graphData = JSON.parse('{{ combined_json | safe }}');
+        
         // Format the data
-        graphData.forEach(d => {
-            d.date = new Date(d.date);  // Convert Unix timestamp to JavaScript Date object
-            d.predicted_fpts = +d.predicted_fpts;
-            d.predicted_fpts_from_present = +d.predicted_fpts_from_present;
+        graphData.forEach(function(d) {
+        // Convert to JavaScript Date object
+        d.date = new Date(d.date);
+        d.date.setDate(d.date.getDate() + 1);
+        d.date.setHours(0, 0, 0, 0);            
+        d.predicted_fpts = +d.predicted_fpts;
         });
-    
+        
         // Split data into Team 1 and Team 2 based on the team field
-        const team1Data = graphData.filter(d => d.team === "Team 1");
-        const team2Data = graphData.filter(d => d.team === "Team 2");
-    
-        // Define the scales
-        const x = d3.scaleTime()
-            .domain(d3.extent(graphData, d => d.date))
+        var team1Data = graphData.filter(function(d) { return d.team === "Team 1"; });
+        var team2Data = graphData.filter(function(d) { return d.team === "Team 2"; });
+   
+        // Add X axis   
+        var x = d3.scaleTime()
+            .domain(d3.extent(graphData, function(d) { return d.date; }))
             .range([0, width]);
-    
-        const y = d3.scaleLinear()
-            .domain([0, d3.max(graphData, d => Math.max(d.predicted_fpts, d.predicted_fpts_from_present))])
+        svg.append("g")
+            .attr("transform", "translate(0," + height + ")")
+            .call(d3.axisBottom(x)
+                .ticks(d3.timeDay.every(1))  // Ensure only one tick per day
+                .tickFormat(d3.timeFormat("%b %d"))  // Format ticks as "Month Day"
+            );
+
+        // Add Y axis
+        var y = d3.scaleLinear()    
+            .domain([0, d3.max(graphData, function(d) { return +d.predicted_fpts; })])
             .nice()
-            .range([height, 0]);
-    
-        // Define the line generator functions for predicted and actual FPTS for both teams
-        const linePredicted1 = d3.line()
-            .x(d => x(d.date))
-            .y(d => y(d.predicted_fpts));
-    
-        const lineActual1 = d3.line()
-            .x(d => x(d.date))
-            .y(d => y(d.predicted_fpts_from_present));
-    
-        const linePredicted2 = d3.line()
-            .x(d => x(d.date))
-            .y(d => y(d.predicted_fpts));
-    
-        const lineActual2 = d3.line()
-            .x(d => x(d.date))
-            .y(d => y(d.predicted_fpts_from_present));
-    
-        // Append the predicted line for Team 1
-        svg.append("path")
-            .datum(team1Data)
-            .attr("fill", "none")
-            .attr("stroke", "red")
-            .attr("stroke-width", 2)
-            .style("stroke-dasharray", ("3, 3")) 
-            .attr("d", linePredicted1);
-    
-        // Append the actual line for Team 1
-        svg.append("path")
-            .datum(team1Data)
-            .attr("fill", "none")
-            .attr("stroke", "red")
-            .attr("stroke-width", 2)
-            .attr("d", lineActual1);
-    
-        // Append the predicted line for Team 2
-        svg.append("path")
-            .datum(team2Data)
-            .attr("fill", "none")
-            .attr("stroke", "blue")
-            .attr("stroke-width", 2)
-            .style("stroke-dasharray", ("3, 3")) 
-            .attr("d", linePredicted2);
-    
-        // Append the actual line for Team 2
-        svg.append("path")
-            .datum(team2Data)
-            .attr("fill", "none")
-            .attr("stroke", "blue")
-            .attr("stroke-width", 2)
-            .attr("d", lineActual2);
-    
-        // Add the X Axis with date labels
+            .range([height, 0]);        
         svg.append("g")
-            .attr("transform", `translate(0,${height})`)
-            .call(d3.axisBottom(x).ticks(d3.timeDay.every(1)).tickFormat(d3.timeFormat("%b %d")))
-            .append("text")
-            .attr("x", width / 2)
-            .attr("y", 40)
-            .attr("fill", "#333") 
-            .attr("text-anchor", "middle")
-            .text("Date")
-            .attr("class", "axis-label");
-    
-        // Add the Y Axis
-        svg.append("g")
-            .call(d3.axisLeft(y))
-            .append("text")
-            .attr("transform", "rotate(-90)")
-            .attr("x", -height / 2)
-            .attr("y", -50)
-            .attr("fill", "#333") 
-            .attr("text-anchor", "middle")
-            .text("Fantasy Points")
-            .attr("class", "axis-label");
-    </script>
+            .call(d3.axisLeft(y));
+        
+        // Define line generators for each team's predicted and actual points
+        var linePredicted = d3.line()
+            .x(function(d) { return x(d.date); })
+            .y(function(d) { return y(d.predicted_fpts); });
+        
+        // Add the predicted line for Team 1
+        svg.append("path")
+          .datum(team1Data)
+          .attr("fill", "none")
+          .attr("stroke", "blue")
+          .attr("stroke-width", 2)
+          .style("stroke-dasharray", ("3, 3"))
+          .attr("d", linePredicted);
+        
+        // Add the predicted line for Team 2
+        svg.append("path")
+          .datum(team2Data)
+          .attr("fill", "none")
+          .attr("stroke", "red")
+          .attr("stroke-width", 2)
+          .style("stroke-dasharray", ("3, 3"))
+          .attr("d", linePredicted);
+        
+        </script>
+        
     
 </body>
 </html>

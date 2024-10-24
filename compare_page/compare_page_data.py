@@ -145,21 +145,21 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
                 avg_fpts = player_row['fpts'].values[0]
 
             # For testing
-            avg_fpts = random.randint(20, 60)
+            #avg_fpts = random.randint(20, 60)
+            if not isinstance(avg_fpts, str):
+                # Get player's schedule
+                list_schedule = list(player.schedule.values())
+                list_schedule.sort(key=lambda x: x['date'], reverse=False)
 
-            # Get player's schedule
-            list_schedule = list(player.schedule.values())
-            list_schedule.sort(key=lambda x: x['date'], reverse=False)
+                # Add FPTS to dates when appropriate, convert to pst from utc 0
+                for game in list_schedule:
+                    game_date = (game['date']-timedelta(hours=9)).date()
 
-            # Add FPTS to dates when appropriate
-            for game in list_schedule:
-                game_date = game['date'].date()
+                    if game_date in dates_dict:
+                        predicted_values[dates_dict[game_date]] += avg_fpts
 
-                if game_date in dates_dict:
-                    predicted_values[dates_dict[game_date]] += avg_fpts
-
-                    if game_date >= today:
-                        predicted_values_from_present[dates_dict[game_date]] += avg_fpts
+                        if game_date >= today:
+                            predicted_values_from_present[dates_dict[game_date]] += avg_fpts
 
     # Calculate FPTS for both teams
     calculate_fpts_for_team(team1, team1_player_data, predicted_values_team1, predicted_values_from_present_team1, dates_dict)
@@ -169,13 +169,12 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
     team2_current_score = get_current_score(league, team2)
 
     # For testing
-    team1_current_score = 500
-    team2_current_score = 450
+    #team1_current_score = 500
+    #team2_current_score = 450
 
     for index, date in enumerate(dates):
         
-        # or index < 3 for testing
-        if date <= today or index < 3:
+        if date <= today:
             predicted_values_from_present_team1[index] = team1_current_score
             predicted_values_from_present_team2[index] = team2_current_score
 
