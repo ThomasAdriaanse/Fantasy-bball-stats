@@ -197,7 +197,7 @@
     </div>
 
     <div id="graph-container">
-        <h2>Team Comparison - Predicted Fantasy Points</h2>
+        <h2>Team Comparison - Projeced Fantasy Points</h2>
         <div id="graph">
             <div id="chart"></div>
         </div>
@@ -210,11 +210,9 @@
             height: auto;
         }
     </style>
-    
     <script>
-
         // Set the dimensions and margins for the graph
-        var margin = {top: 30, right: 30, bottom: 30, left: 30},
+        var margin = {top: 30, right: 50, bottom: 30, left: 50}, // Adjusted left margin to prevent Y-axis cutoff
             width = 800 - margin.left - margin.right,
             height = 400 - margin.top - margin.bottom;
         
@@ -231,17 +229,29 @@
         
         // Format the data
         graphData.forEach(function(d) {
-        // Convert to JavaScript Date object
-        d.date = new Date(d.date);
-        d.date.setDate(d.date.getDate() + 1);
-        d.date.setHours(0, 0, 0, 0);            
-        d.predicted_fpts = +d.predicted_fpts;
+            d.date = new Date(d.date); // Convert to JavaScript Date object
+            d.date.setDate(d.date.getDate() + 1); // Adjust for date
+            d.date.setHours(0, 0, 0, 0); // Normalize to midnight
+            d.predicted_fpts = +d.predicted_fpts;
+            d.predicted_fpts_from_present = +d.predicted_fpts_from_present;
         });
+        
+        // Get today's date to differentiate between past and future
+        var today = new Date();
+        today.setHours(0, 0, 0, 0); // Set to midnight for accurate comparison
         
         // Split data into Team 1 and Team 2 based on the team field
         var team1Data = graphData.filter(function(d) { return d.team === "Team 1"; });
         var team2Data = graphData.filter(function(d) { return d.team === "Team 2"; });
-   
+        
+        // Split Team 1 data into past and future segments based on today
+        var team1PastData = team1Data.filter(function(d) { return d.date <= today; });
+        var team1FutureData = team1Data.filter(function(d) { return d.date >= today; });
+        
+        // Split Team 2 data into past and future segments based on today
+        var team2PastData = team2Data.filter(function(d) { return d.date <= today; });
+        var team2FutureData = team2Data.filter(function(d) { return d.date >= today; });
+        
         // Add X axis   
         var x = d3.scaleTime()
             .domain(d3.extent(graphData, function(d) { return d.date; }))
@@ -252,40 +262,146 @@
                 .ticks(d3.timeDay.every(1))  // Ensure only one tick per day
                 .tickFormat(d3.timeFormat("%b %d"))  // Format ticks as "Month Day"
             );
-
+        
         // Add Y axis
         var y = d3.scaleLinear()    
-            .domain([0, d3.max(graphData, function(d) { return +d.predicted_fpts; })])
+            .domain([0, d3.max(graphData, function(d) { return Math.max(d.predicted_fpts, d.predicted_fpts_from_present); })])
             .nice()
             .range([height, 0]);        
         svg.append("g")
             .call(d3.axisLeft(y));
         
-        // Define line generators for each team's predicted and actual points
+        // Define line generators
         var linePredicted = d3.line()
             .x(function(d) { return x(d.date); })
             .y(function(d) { return y(d.predicted_fpts); });
         
-        // Add the predicted line for Team 1
+        var lineActual = d3.line()
+            .x(function(d) { return x(d.date); })
+            .y(function(d) { return y(d.predicted_fpts_from_present); });
+        
+        /*// Add the predicted line (dotted) for Team 1 (blue)
         svg.append("path")
-          .datum(team1Data)
-          .attr("fill", "none")
-          .attr("stroke", "blue")
-          .attr("stroke-width", 2)
-          .style("stroke-dasharray", ("3, 3"))
-          .attr("d", linePredicted);
+            .datum(team1Data)
+            .attr("fill", "none")
+            .attr("stroke", "blue")
+            .attr("stroke-width", 2)
+            .style("stroke-dasharray", ("3, 3"))
+            .style("opacity", 0.5)
+            .attr("d", linePredicted);*/
         
-        // Add the predicted line for Team 2
+        // Add the actual line for Team 1 (blue, solid for past)
         svg.append("path")
-          .datum(team2Data)
-          .attr("fill", "none")
-          .attr("stroke", "red")
-          .attr("stroke-width", 2)
-          .style("stroke-dasharray", ("3, 3"))
-          .attr("d", linePredicted);
+            .datum(team1PastData)
+            .attr("fill", "none")
+            .attr("stroke", "blue")
+            .attr("stroke-width", 2)
+            .attr("d", lineActual);
         
-        </script>
+        // Add the predicted part of the actual line for Team 1 (dotted for future)
+        svg.append("path")
+            .datum(team1FutureData)
+            .attr("fill", "none")
+            .attr("stroke", "blue")
+            .attr("stroke-width", 2)
+            .style("stroke-dasharray", ("5, 5"))
+            .attr("d", lineActual);
         
+        /*// Add the predicted line (dotted) for Team 2 (red)
+        svg.append("path")
+            .datum(team2Data)
+            .attr("fill", "none")
+            .attr("stroke", "red")
+            .attr("stroke-width", 2)
+            .style("stroke-dasharray", ("3, 3"))
+            .style("opacity", 0.5)
+            .attr("d", linePredicted);*/
+        
+        // Add the actual line for Team 2 (red, solid for past)
+        svg.append("path")
+            .datum(team2PastData)
+            .attr("fill", "none")
+            .attr("stroke", "red")
+            .attr("stroke-width", 2)
+            .attr("d", lineActual);
+        
+        // Add the predicted part of the actual line for Team 2 (dotted for future)
+        svg.append("path")
+            .datum(team2FutureData)
+            .attr("fill", "none")
+            .attr("stroke", "red")
+            .attr("stroke-width", 2)
+            .style("stroke-dasharray", ("5, 5"))
+            .attr("d", lineActual);
+        
+        // Add Legend (Top Left)
+        var legend = svg.append("g")
+            .attr("transform", "translate(0, -10)"); // Top left
+        
+        // Team 1 (Blue) legend
+        legend.append("line")
+            .attr("x1", 0)
+            .attr("y1", 10)
+            .attr("x2", 20)
+            .attr("y2", 10)
+            .attr("stroke", "blue")
+            .attr("stroke-width", 2);
+        
+        legend.append("text")
+            .attr("x", 30)
+            .attr("y", 10)
+            .text("Team 1 (Actual)")
+            .attr("alignment-baseline", "middle");
+    
+        // Team 1 Predicted (Dotted Blue Line)
+        legend.append("line")
+            .attr("x1", 0)
+            .attr("y1", 30)
+            .attr("x2", 20)
+            .attr("y2", 30)
+            .attr("stroke", "blue")
+            .attr("stroke-width", 2)
+            .style("stroke-dasharray", ("5, 5"));
+    
+        legend.append("text")
+            .attr("x", 30)
+            .attr("y", 30)
+            .text("Team 1 (Predicted)")
+            .attr("alignment-baseline", "middle");
+        
+        // Team 2 Actual (Solid Red Line)
+        legend.append("line")
+            .attr("x1", 0)
+            .attr("y1", 50)
+            .attr("x2", 20)
+            .attr("y2", 50)
+            .attr("stroke", "red")
+            .attr("stroke-width", 2);
+        
+        legend.append("text")
+            .attr("x", 30)
+            .attr("y", 50)
+            .text("Team 2 (Actual)")
+            .attr("alignment-baseline", "middle");
+    
+        // Team 2 Predicted (Dotted Red Line)
+        legend.append("line")
+            .attr("x1", 0)
+            .attr("y1", 70)
+            .attr("x2", 20)
+            .attr("y2", 70)
+            .attr("stroke", "red")
+            .attr("stroke-width", 2)
+            .style("stroke-dasharray", ("5, 5"));
+        
+        legend.append("text")
+            .attr("x", 30)
+            .attr("y", 70)
+            .text("Team 2 (Predicted)")
+            .attr("alignment-baseline", "middle");
+    
+    </script>
+    
     
 </body>
 </html>

@@ -105,8 +105,6 @@ def get_team_player_data(league, team_num, columns, league_scoring_rules, year):
     df = pd.DataFrame(team_data)
     return df
 
-import random
-
 def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names):
     
     team1 = league.teams[team1_index]
@@ -135,6 +133,7 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
 
     # Helper function to calculate FPTS for a team's roster
     def calculate_fpts_for_team(team, team_player_data, predicted_values, predicted_values_from_present, dates_dict):
+
         for player in team.roster:
             player_name = player.name
             player_row = team_player_data[team_player_data['player_name'] == player_name]
@@ -161,31 +160,72 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
                         if game_date >= today:
                             predicted_values_from_present[dates_dict[game_date]] += avg_fpts
 
+    #print(predicted_values_from_present_team1)
+
     # Calculate FPTS for both teams
     calculate_fpts_for_team(team1, team1_player_data, predicted_values_team1, predicted_values_from_present_team1, dates_dict)
     calculate_fpts_for_team(team2, team2_player_data, predicted_values_team2, predicted_values_from_present_team2, dates_dict)
 
-    team1_current_score = get_current_score(league, team1)
-    team2_current_score = get_current_score(league, team2)
+    boxscore_number_team1, home_or_away_team1 = get_team_boxscore_number(league, team1)
+    boxscore_number_team2, home_or_away_team2 = get_team_boxscore_number(league, team2)
 
-    # For testing
-    #team1_current_score = 500
-    #team2_current_score = 450
+    box_scores = league.box_scores(matchup_total=False)
 
+    #new
+    team1_box_score_list = []
+    team2_box_score_list = []
+
+    #creating lists of the weekly box scores for each team
+    for i, date in enumerate(dates):
+
+        if home_or_away_team1 == "home":
+            team1_box_score_list.append(league.box_scores(scoring_period=i, matchup_total=False)[boxscore_number_team1].home_score)
+        if home_or_away_team1 == "away":
+            team1_box_score_list.append(league.box_scores(scoring_period=i, matchup_total=False)[boxscore_number_team1].away_score)
+
+        if home_or_away_team2 == "home":
+            team2_box_score_list.append(league.box_scores(scoring_period=i, matchup_total=False)[boxscore_number_team2].home_score)
+        if home_or_away_team2 == "away":
+            team2_box_score_list.append(league.box_scores(scoring_period=i, matchup_total=False)[boxscore_number_team2].away_score)
+
+    print(team1_box_score_list)
+    print(team2_box_score_list)
+
+    # Instead of 0s ESPN uses the moost recent score, so i have to replace scores that maatch the most recent score with 0
+    # I can append the most recent score later
+    for i, v in enumerate(team1_box_score_list):
+        if team1_box_score_list[i]==team1_box_score_list[-1]:
+            team1_box_score_list[i]=0
+
+        if team2_box_score_list[i]==team2_box_score_list[-1]:
+            team2_box_score_list[i]=0
+
+    #old in tact
     for index, date in enumerate(dates):
-        
-        if date <= today:
-            predicted_values_from_present_team1[index] = team1_current_score
-            predicted_values_from_present_team2[index] = team2_current_score
 
-        elif index>0:
-            predicted_values_from_present_team1[index] += predicted_values_from_present_team1[index-1]
-            predicted_values_from_present_team2[index] += predicted_values_from_present_team2[index-1]
+        box_scores = league.box_scores(scoring_period=index, matchup_total=False)
+        
+        if date < today:
+            if home_or_away_team1 == "home":
+                predicted_values_from_present_team1[index] = team1_box_score_list[index]
+            elif home_or_away_team1 == "away":
+                predicted_values_from_present_team1[index] = team1_box_score_list[index]
+
+            if home_or_away_team2 == "home":
+                predicted_values_from_present_team2[index] = team2_box_score_list[index]
+            elif home_or_away_team2 == "away":
+                predicted_values_from_present_team2[index] = team2_box_score_list[index]
+
 
         if index > 0:
             predicted_values_team1[index] += predicted_values_team1[index-1]
             predicted_values_team2[index] += predicted_values_team2[index-1]
 
+            predicted_values_from_present_team1[index] += predicted_values_from_present_team1[index-1]
+            predicted_values_from_present_team2[index] += predicted_values_from_present_team2[index-1]
+
+    print(predicted_values_from_present_team1)
+    print(predicted_values_from_present_team2)
 
 
     # Convert the predicted values into separate DataFrames for each team
@@ -211,10 +251,25 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
 def get_current_score(league, team):
 
     for boxscore in league.box_scores():
-        if league.teams[team.team_id] == boxscore.home_team:
+        if team == boxscore.home_team:
             return boxscore.home_score 
 
-        elif league.teams[team.team_id] == boxscore.away_team:  
+        elif team == boxscore.away_team:  
             return boxscore.away_score 
+
+    return "error"
+
+def get_team_boxscore_number(league, team):
+
+    for index, boxscore in enumerate(league.box_scores(matchup_total=False)):
+        #print(boxscore)
+        #print(index)
+        if team == boxscore.home_team:
+         #   print("in")
+            return index, "home"
+
+        elif team == boxscore.away_team:  
+         #   print("in")
+            return index, "away"
 
     return "error"
