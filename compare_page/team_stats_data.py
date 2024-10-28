@@ -95,21 +95,22 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     team_data['team_avg_fpts'].append(team_average_fpts)
 
     # Filtering the DataFrame to get only players who are not 'out' and selecting their fantasy points
-    team_averages = team_player_data[(team_player_data['inj'] != 'OUT') & (team_player_data['fpts'] != 'N/A')]['fpts'].tolist()
-    team_games_left = team_player_data[(team_player_data['inj'] != 'OUT') & (team_player_data['fpts'] != 'N/A')]['games'].tolist()
+    player_averages = team_player_data[(team_player_data['inj'] != 'OUT') & (team_player_data['fpts'] != 'N/A')]['fpts'].tolist()
+    player_games_left = team_player_data[(team_player_data['inj'] != 'OUT') & (team_player_data['fpts'] != 'N/A')]['games'].tolist()
 
     # Do the same for team 2
-    opponent_averages = opponent_player_data[(opponent_player_data['inj'] != 'OUT') & (opponent_player_data['fpts'] != 'N/A')]['fpts'].tolist()
-    opponent_games_left = opponent_player_data[(opponent_player_data['inj'] != 'OUT') & (opponent_player_data['fpts'] != 'N/A')]['games'].tolist()
+    opponent_player_averages = opponent_player_data[(opponent_player_data['inj'] != 'OUT') & (opponent_player_data['fpts'] != 'N/A')]['fpts'].tolist()
+    opponent_player_games_left = opponent_player_data[(opponent_player_data['inj'] != 'OUT') & (opponent_player_data['fpts'] != 'N/A')]['games'].tolist()
 
     # Assuming the standard deviation is 40% of the average fantasy points for each player
     player_std_dev = 0.40
-    team_1_stds = [avg * player_std_dev for avg in team_averages]
-    team_2_stds = [avg * player_std_dev for avg in opponent_averages]
+    team_1_stds = [avg * player_std_dev for avg in player_averages]
+    team_2_stds = [avg * player_std_dev for avg in opponent_player_averages]
 
     # Calculate expected points remaining
-    team_expected_points_remaining = sum(player_avg_fpts * games_left for player_avg_fpts, games_left in zip(team_averages, team_games_left))
-    opponent_expected_points_remaining = sum(player_avg_fpts * games_left for player_avg_fpts, games_left in zip(opponent_averages, opponent_games_left))
+    team_expected_points_remaining = sum(player_avg_fpts * games_left for player_avg_fpts, games_left in zip(player_averages, player_games_left))
+    opponent_expected_points_remaining = sum(player_avg_fpts * games_left for player_avg_fpts, games_left in zip(opponent_player_averages, opponent_player_games_left))
+
 
     # Get current box scores
     if team_home_or_away == "home":
@@ -126,8 +127,8 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     opponent_total_expected = opponent_expected_points_remaining + opponent_current_points
 
     # Calculate the total variance and standard deviation for each team
-    total_variance_team_1 = sum((std * games_left)**2 for std, games_left in zip(team_1_stds, team_games_left))
-    total_variance_team_2 = sum((std * games_left)**2 for std, games_left in zip(team_2_stds, opponent_games_left))
+    total_variance_team_1 = sum((std * games_left)**2 for std, games_left in zip(team_1_stds, player_games_left))
+    total_variance_team_2 = sum((std * games_left)**2 for std, games_left in zip(team_2_stds, opponent_player_games_left))
     total_std_team_1 = total_variance_team_1**0.5
     total_std_team_2 = total_variance_team_2**0.5
     expected_point_difference = team_total_expected - opponent_total_expected

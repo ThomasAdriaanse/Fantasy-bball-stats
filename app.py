@@ -206,7 +206,7 @@ def compare_page():
     team1_data = tsd.get_team_stats(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names, league_scoring_rules, year)
     team2_data = tsd.get_team_stats(league, team2_index, team2_player_data, team1_index, team1_player_data, team_data_column_names, league_scoring_rules, year)
 
-    combined_df = cpd.get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names)
+    combined_df = cpd.get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data)
     combined_json = combined_df.to_json(orient='records')  # Convert the DataFrame to JSON
     print(combined_df)
 

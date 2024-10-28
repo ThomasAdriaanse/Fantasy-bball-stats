@@ -97,7 +97,7 @@ def get_team_player_data(league, team_num, columns, league_scoring_rules, year):
         start_of_week, end_of_week = db_utils.range_of_current_week()
 
         today = datetime.today()
-        games_left_this_week = [game for game in list_schedule if today <= game['date'] <= end_of_week]
+        games_left_this_week = [game for game in list_schedule if today <= game['date'] <= end_of_week+timedelta(hours=9)]
         
         #add number of games left to the database
         team_data['games'].append(len(games_left_this_week))
@@ -105,7 +105,7 @@ def get_team_player_data(league, team_num, columns, league_scoring_rules, year):
     df = pd.DataFrame(team_data)
     return df
 
-def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names):
+def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data):
     
     team1 = league.teams[team1_index]
     team2 = league.teams[team2_index]
@@ -145,7 +145,8 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
 
             # For testing
             #avg_fpts = random.randint(20, 60)
-            if not isinstance(avg_fpts, str):
+
+            if not isinstance(avg_fpts, str) and player_row['inj'].values[0] != 'OUT':
                 # Get player's schedule
                 list_schedule = list(player.schedule.values())
                 list_schedule.sort(key=lambda x: x['date'], reverse=False)
@@ -193,12 +194,12 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
 
     # Instead of 0s ESPN uses the moost recent score, so i have to replace scores that maatch the most recent score with 0
     # I can append the most recent score later
-    for i, v in enumerate(team1_box_score_list):
-        if team1_box_score_list[i]==team1_box_score_list[-1]:
-            team1_box_score_list[i]=0
+    #for i, v in enumerate(team1_box_score_list):
+    #    if team1_box_score_list[i]==team1_box_score_list[-1]:
+    #        team1_box_score_list[i]-=team1_box_score_list[-1]
 
-        if team2_box_score_list[i]==team2_box_score_list[-1]:
-            team2_box_score_list[i]=0
+    #    if team2_box_score_list[i]==team2_box_score_list[-1]:
+    #        team2_box_score_list[i]-=team1_box_score_list[-1]
 
     #old in tact
     for index, date in enumerate(dates):
