@@ -1,9 +1,7 @@
 from flask import Flask, render_template, redirect, url_for, request
-import psycopg2
 import os
 from dotenv import load_dotenv
 from psycopg2 import extras
-import db_utils
 import compare_page.compare_page_data as cpd
 import compare_page.team_stats_data as tsd
 from scipy.stats import norm
@@ -13,6 +11,7 @@ import pandas as pd
 from nba_api.stats.endpoints import playergamelog
 from nba_api.stats.static import players
 import json
+import time
 
 load_dotenv()
 app = Flask(__name__)
@@ -150,6 +149,8 @@ def calculate_fantasy_points(row, scoring_rules):
 @app.route('/compare_page', methods=['POST'])
 def compare_page():
     
+    start_time = time.time()
+
     # Retrieve the custom scoring values from the form
     league_scoring_rules = {
         'fgm': int(request.form.get('fgm', 2)),
@@ -197,24 +198,35 @@ def compare_page():
 
     player_data_column_names = ['player_name', 'min', 'fgm', 'fga', 'ftm', 'fta', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts', 'inj', 'fpts', 'games']
 
+    init_data_time = time.time()
+    print(f"Time to initialize data: {init_data_time - start_time:.2f} seconds")
 
     team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, league_scoring_rules, year)
     team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, league_scoring_rules, year)
 
+    get_player_data_time = time.time()
+    print(f"Time to get player data: {get_player_data_time - init_data_time:.2f} seconds")
+
     team_data_column_names = ['team_avg_fpts', 'team_expected_points', 'team_chance_of_winning', 'team_name', 'team_current_points']
 
-    team1_data = tsd.get_team_stats(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names, league_scoring_rules, year)
-    team2_data = tsd.get_team_stats(league, team2_index, team2_player_data, team1_index, team1_player_data, team_data_column_names, league_scoring_rules, year)
+    team1_data, team2_data = tsd.get_team_stats(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names, league_scoring_rules, year)
+    #team2_data = tsd.get_team_stats(league, team2_index, team2_player_data, team1_index, team1_player_data, team_data_column_names, league_scoring_rules, year)
+
+    get_team_stats_time = time.time()
+    print(f"Time to get team stats: {get_team_stats_time - get_player_data_time:.2f} seconds")
 
     combined_df = cpd.get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data)
     combined_json = combined_df.to_json(orient='records')  # Convert the DataFrame to JSON
-    print(combined_df)
+    #print(combined_df)
 
     # Convert DataFrames to list of dictionaries
     team1_player_data = team1_player_data.to_dict(orient='records')
     team2_player_data = team2_player_data.to_dict(orient='records')
     team1_data = team1_data.to_dict(orient='records')
     team2_data = team2_data.to_dict(orient='records')
+
+    end_time = time.time()
+    print(f"Total time: {end_time - get_team_stats_time:.2f} seconds")
 
     return render_template('compare_page.html', 
                             data_team_players_1=team1_player_data, 

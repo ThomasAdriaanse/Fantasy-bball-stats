@@ -16,8 +16,8 @@ def get_team_stats_data_schema():
 
 def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_player_data, columns, league_scoring_rules, year):
 
-    start_time = time.time()
-    print("Starting get_team_stats...")
+    #start_time = time.time()
+    #print("Starting get_team_stats...")
 
     # Finding which team in the box scores dictionary we are
     team_boxscore_num = -1
@@ -48,51 +48,50 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     if team_boxscore_num == -1 or opponent_boxscore_num == -1:
         print("Error: Could not find box scores for a team")
 
-    mid_time = time.time()
-    print(f"Time taken to find teams in box scores: {mid_time - start_time:.4f} seconds")
+    #mid_time = time.time()
+    #print(f"Time taken to find teams in box scores: {mid_time - start_time:.4f} seconds")
 
     team = league.teams[team_num]
     team_data = {column: [] for column in columns}
+    opponent = league.teams[opponent_num]
+    opponent_data = {column: [] for column in columns}
+    
+    # Calculating average fpts of the team    
+    def get_team_avg_fpts(team, year):
+        year_string = str(year) + "_total"
+        team_average_fpts = 0
+        num_players = 0
 
-    # Get player in IR to exclude him from calculations
-    if team_home_or_away == "home":
-        lineup = league.box_scores()[team_boxscore_num].home_lineup
-    else:
-        lineup = league.box_scores()[team_boxscore_num].away_lineup
+        for player in team.roster:
+            if year_string in player.stats and 'avg' in player.stats[year_string].keys():
+                player_avg_stats = player.stats[year_string]['avg']
 
-    # Calculating average fpts of the team
-    team_average_fpts = 0
-    num_players = 0
+                fpts = round(
+                player_avg_stats['FGM']*league_scoring_rules['fgm'] +
+                player_avg_stats['FGA']*league_scoring_rules['fga'] + 
+                player_avg_stats['FTM']*league_scoring_rules['ftm'] +
+                player_avg_stats['FTA']*league_scoring_rules['fta'] + 
+                player_avg_stats['3PM']*league_scoring_rules['threeptm'] + 
+                player_avg_stats['REB']*league_scoring_rules['reb'] + 
+                player_avg_stats['AST']*league_scoring_rules['ast'] + 
+                player_avg_stats['STL']*league_scoring_rules['stl'] + 
+                player_avg_stats['BLK']*league_scoring_rules['blk'] + 
+                player_avg_stats['TO']*league_scoring_rules['turno'] + 
+                player_avg_stats['PTS']*league_scoring_rules['pts']
+                , 2)
 
-    year_string = str(year) + "_total"
+                team_average_fpts += fpts
+                num_players += 1
+            else:
+                team_average_fpts += 0
 
-    for player in team.roster:
-        if year_string in player.stats and 'avg' in player.stats[year_string].keys():
-            player_avg_stats = player.stats[year_string]['avg']
+        team_average_fpts /= num_players
+        team_average_fpts = round(team_average_fpts, 2)
 
-            fpts = round(
-            player_avg_stats['FGM']*league_scoring_rules['fgm'] +
-            player_avg_stats['FGA']*league_scoring_rules['fga'] + 
-            player_avg_stats['FTM']*league_scoring_rules['ftm'] +
-            player_avg_stats['FTA']*league_scoring_rules['fta'] + 
-            player_avg_stats['3PM']*league_scoring_rules['threeptm'] + 
-            player_avg_stats['REB']*league_scoring_rules['reb'] + 
-            player_avg_stats['AST']*league_scoring_rules['ast'] + 
-            player_avg_stats['STL']*league_scoring_rules['stl'] + 
-            player_avg_stats['BLK']*league_scoring_rules['blk'] + 
-            player_avg_stats['TO']*league_scoring_rules['turno'] + 
-            player_avg_stats['PTS']*league_scoring_rules['pts']
-            , 2)
+        return team_average_fpts
 
-            team_average_fpts += fpts
-            num_players += 1
-        else:
-            team_average_fpts += 0
-
-    team_average_fpts /= num_players
-    team_average_fpts = round(team_average_fpts, 2)
-
-    team_data['team_avg_fpts'].append(team_average_fpts)
+    team_data['team_avg_fpts'].append(get_team_avg_fpts(team, year))
+    opponent_data['team_avg_fpts'].append(get_team_avg_fpts(opponent, year))
 
     # Filtering the DataFrame to get only players who are not 'out' and selecting their fantasy points
     player_averages = team_player_data[(team_player_data['inj'] != 'OUT') & (team_player_data['fpts'] != 'N/A')]['fpts'].tolist()
@@ -153,8 +152,14 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     team_data['team_name'].append(team.team_name)
     team_data['team_current_points'].append(team_current_points)
 
-    end_time = time.time()
-    print(f"Total time for get_team_stats: {end_time - start_time:.4f} seconds")
+    opponent_data['team_expected_points'].append(round(opponent_total_expected, 2))
+    opponent_data['team_chance_of_winning'].append(round(100-probability_team_wins*100, 2))
+    opponent_data['team_name'].append(opponent.team_name)
+    opponent_data['team_current_points'].append(opponent_current_points)
+
+    #end_time = time.time()
+    #print(f"Total time for get_team_stats: {end_time - start_time:.4f} seconds")
 
     df = pd.DataFrame(team_data)
-    return df
+    opponent_df = pd.DataFrame(opponent_data)
+    return df, opponent_df

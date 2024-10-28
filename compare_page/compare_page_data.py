@@ -105,94 +105,97 @@ def get_team_player_data(league, team_num, columns, league_scoring_rules, year):
     df = pd.DataFrame(team_data)
     return df
 
+import time
+
 def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data):
     
+    start_time = time.time()
+    
+    # Step 1: Initialize Teams
     team1 = league.teams[team1_index]
     team2 = league.teams[team2_index]
+    
+    #init_teams_time = time.time()
+    #print(f"Time to initialize teams: {init_teams_time - start_time:.2f} seconds")
 
+    # Step 2: Calculate Date Range
     today = datetime.today().date()
-    start_of_week, end_of_week =db_utils.range_of_current_week() 
-
+    start_of_week, end_of_week = db_utils.range_of_current_week() 
     dates = pd.date_range(start=start_of_week, end=end_of_week).date
+    
+    #calc_dates_time = time.time()
+    #print(f"Time to calculate date range: {calc_dates_time - init_teams_time:.2f} seconds")
 
-    # Need this dict for the function to tell which scores correspond to which dates in the predicted_values arrays
+    # Step 3: Initialize Dictionaries for Predicted Values
     dates_dict = {date: i for i, date in enumerate(dates)}
+    predicted_values_team1 = [0] * len(dates)
+    predicted_values_from_present_team1 = [0] * len(dates)
+    predicted_values_team2 = [0] * len(dates)
+    predicted_values_from_present_team2 = [0] * len(dates)
+    
+    #init_dicts_time = time.time()
+    #print(f"Time to initialize dictionaries: {init_dicts_time - calc_dates_time:.2f} seconds")
 
-    # Initialize dictionaries to store predicted and actual FPTS for both teams
-    predicted_values_team1 = []
-    predicted_values_from_present_team1 = []
-    predicted_values_team2 = []
-    predicted_values_from_present_team2 = []
-
-
-    for date in dates:
-        predicted_values_team1.append(0)
-        predicted_values_from_present_team1.append(0)
-        predicted_values_team2.append(0)
-        predicted_values_from_present_team2.append(0)
-
-    # Helper function to calculate FPTS for a team's roster
+    # Step 4: Helper Function to Calculate FPTS
     def calculate_fpts_for_team(team, team_player_data, predicted_values, predicted_values_from_present, dates_dict):
-
         for player in team.roster:
             player_name = player.name
             player_row = team_player_data[team_player_data['player_name'] == player_name]
 
             if player_row.empty:
-                avg_fpts = 0  # If no matching player is found in player_data, set avg_fpts to 0
+                avg_fpts = 0
             else:
                 avg_fpts = player_row['fpts'].values[0]
 
-            # For testing
-            #avg_fpts = random.randint(20, 60)
-
             if not isinstance(avg_fpts, str) and player_row['inj'].values[0] != 'OUT':
-                # Get player's schedule
                 list_schedule = list(player.schedule.values())
                 list_schedule.sort(key=lambda x: x['date'], reverse=False)
 
-                # Add FPTS to dates when appropriate, convert to pst from utc 0
                 for game in list_schedule:
-                    game_date = (game['date']-timedelta(hours=9)).date()
-
+                    game_date = (game['date'] - timedelta(hours=9)).date()
                     if game_date in dates_dict:
                         predicted_values[dates_dict[game_date]] += avg_fpts
-
                         if game_date >= today:
                             predicted_values_from_present[dates_dict[game_date]] += avg_fpts
+    
+    #calc_fpts_start = time.time()
+    #print(f"Time before calculating FPTS: {calc_fpts_start - init_dicts_time:.2f} seconds")
 
-    #print(predicted_values_from_present_team1)
-
-    # Calculate FPTS for both teams
+    # Step 5: Calculate FPTS for Both Teams
     calculate_fpts_for_team(team1, team1_player_data, predicted_values_team1, predicted_values_from_present_team1, dates_dict)
     calculate_fpts_for_team(team2, team2_player_data, predicted_values_team2, predicted_values_from_present_team2, dates_dict)
+    
+    #calc_fpts_end = time.time()
+    #print(f"Time to calculate FPTS for both teams: {calc_fpts_end - calc_fpts_start:.2f} seconds")
 
+    # Step 6: Get Box Score Numbers
     boxscore_number_team1, home_or_away_team1 = get_team_boxscore_number(league, team1)
     boxscore_number_team2, home_or_away_team2 = get_team_boxscore_number(league, team2)
+    
+    #get_boxscore_time = time.time()
+    #print(f"Time to get boxscore numbers: {get_boxscore_time - calc_fpts_end:.2f} seconds")
 
-    box_scores = league.box_scores(matchup_total=False)
-
-    #new
+    # Step 7: Get Weekly Box Scores for Both Teams
     team1_box_score_list = []
     team2_box_score_list = []
 
-    #creating lists of the weekly box scores for each team
+    #print(league.box_scores(scoring_period={1:5},matchup_total = False)[1].home_score)
+
     for i, date in enumerate(dates):
-
+        box_scores = league.box_scores(scoring_period=i, matchup_total=False)
         if home_or_away_team1 == "home":
-            team1_box_score_list.append(league.box_scores(scoring_period=i, matchup_total=False)[boxscore_number_team1].home_score)
+            team1_box_score_list.append(box_scores[boxscore_number_team1].home_score)
         if home_or_away_team1 == "away":
-            team1_box_score_list.append(league.box_scores(scoring_period=i, matchup_total=False)[boxscore_number_team1].away_score)
-
+            team1_box_score_list.append(box_scores[boxscore_number_team1].away_score)
         if home_or_away_team2 == "home":
-            team2_box_score_list.append(league.box_scores(scoring_period=i, matchup_total=False)[boxscore_number_team2].home_score)
+            team2_box_score_list.append(box_scores[boxscore_number_team2].home_score)
         if home_or_away_team2 == "away":
-            team2_box_score_list.append(league.box_scores(scoring_period=i, matchup_total=False)[boxscore_number_team2].away_score)
+            team2_box_score_list.append(box_scores[boxscore_number_team2].away_score)
+    
+    #get_box_scores_time = time.time()
+    #print(f"Time to get weekly box scores: {get_box_scores_time - get_boxscore_time:.2f} seconds")
 
-    print(team1_box_score_list)
-    print(team2_box_score_list)
-
-    # Instead of 0s ESPN uses the moost recent score, so i have to replace scores that maatch the most recent score with 0
+    # Instead of 0s ESPN uses the most recent score, so i have to replace scores that match the most recent score with 0
     # I can append the most recent score later
     #for i, v in enumerate(team1_box_score_list):
     #    if team1_box_score_list[i]==team1_box_score_list[-1]:
@@ -201,35 +204,22 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
     #    if team2_box_score_list[i]==team2_box_score_list[-1]:
     #        team2_box_score_list[i]-=team1_box_score_list[-1]
 
-    #old in tact
+    # Step 8: Update Predicted Values with Box Scores
     for index, date in enumerate(dates):
-
-        box_scores = league.box_scores(scoring_period=index, matchup_total=False)
-        
         if date < today:
-            if home_or_away_team1 == "home":
-                predicted_values_from_present_team1[index] = team1_box_score_list[index]
-            elif home_or_away_team1 == "away":
-                predicted_values_from_present_team1[index] = team1_box_score_list[index]
-
-            if home_or_away_team2 == "home":
-                predicted_values_from_present_team2[index] = team2_box_score_list[index]
-            elif home_or_away_team2 == "away":
-                predicted_values_from_present_team2[index] = team2_box_score_list[index]
-
+            predicted_values_from_present_team1[index] = team1_box_score_list[index]
+            predicted_values_from_present_team2[index] = team2_box_score_list[index]
 
         if index > 0:
-            predicted_values_team1[index] += predicted_values_team1[index-1]
-            predicted_values_team2[index] += predicted_values_team2[index-1]
+            predicted_values_team1[index] += predicted_values_team1[index - 1]
+            predicted_values_team2[index] += predicted_values_team2[index - 1]
+            predicted_values_from_present_team1[index] += predicted_values_from_present_team1[index - 1]
+            predicted_values_from_present_team2[index] += predicted_values_from_present_team2[index - 1]
+    
+    #update_predicted_values_time = time.time()
+    #print(f"Time to update predicted values with box scores: {update_predicted_values_time - get_box_scores_time:.2f} seconds")
 
-            predicted_values_from_present_team1[index] += predicted_values_from_present_team1[index-1]
-            predicted_values_from_present_team2[index] += predicted_values_from_present_team2[index-1]
-
-    print(predicted_values_from_present_team1)
-    print(predicted_values_from_present_team2)
-
-
-    # Convert the predicted values into separate DataFrames for each team
+    # Step 9: Convert Predicted Values into DataFrames
     team1_df = pd.DataFrame({
         'date': dates,
         'predicted_fpts': predicted_values_team1,
@@ -244,10 +234,18 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
         'team': 'Team 2'
     })
 
-    # Combine both DataFrames
     combined_df = pd.concat([team1_df, team2_df], ignore_index=True)
+    
+    #create_df_time = time.time()
+    #print(f"Time to create DataFrames: {create_df_time - update_predicted_values_time:.2f} seconds")
+
+    # Step 10: Final Execution Time
+    #end_time = time.time()
+    #execution_time = end_time - start_time
+    #print(f"Total execution time: {execution_time:.2f} seconds")
 
     return combined_df
+
 
 def get_current_score(league, team):
 
@@ -263,14 +261,10 @@ def get_current_score(league, team):
 def get_team_boxscore_number(league, team):
 
     for index, boxscore in enumerate(league.box_scores(matchup_total=False)):
-        #print(boxscore)
-        #print(index)
         if team == boxscore.home_team:
-         #   print("in")
             return index, "home"
 
         elif team == boxscore.away_team:  
-         #   print("in")
             return index, "away"
 
     return "error"

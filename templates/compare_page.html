@@ -3,6 +3,7 @@
 <head>
     <title>Basketball Data</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
@@ -211,6 +212,10 @@
         }
     </style>
     <script>
+        
+        // Tracking time for graph to load
+        const graphRenderStart = performance.now();
+
         // Set the dimensions and margins for the graph
         var margin = {top: 30, right: 50, bottom: 30, left: 50}, // Adjusted left margin to prevent Y-axis cutoff
             width = 800 - margin.left - margin.right,
@@ -400,8 +405,17 @@
             .text("Team 2 (Predicted)")
             .attr("alignment-baseline", "middle");
     
+        const graphRenderEnd = performance.now();
+        console.log(`Graph render time: ${(graphRenderEnd - graphRenderStart).toFixed(2)} ms`);
     </script>
     
-    
+    <script>
+    const pageLoadStart = performance.now();
+    window.addEventListener('load', () => {
+        const pageLoadEnd = performance.now();
+        console.log(`Total page load time: ${(pageLoadEnd - pageLoadStart).toFixed(2)} ms`);
+    });
+    </script>
+
 </body>
 </html>
