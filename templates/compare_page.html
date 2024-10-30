@@ -244,6 +244,8 @@
         // Get today's date to differentiate between past and future
         var today = new Date();
         today.setHours(0, 0, 0, 0); // Set to midnight for accurate comparison
+        today.setDate(today.getDate() - 1)
+
         
         // Split data into Team 1 and Team 2 based on the team field
         var team1Data = graphData.filter(function(d) { return d.team === "Team 1"; });

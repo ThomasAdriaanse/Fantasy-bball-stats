@@ -195,6 +195,7 @@ def compare_page():
     if team2_index == -1:
         return redirect(url_for('entry_page', error_message="Team 2 not found. Please try again."))
 
+    current_matchup_period = league.currentMatchupPeriod
 
     player_data_column_names = ['player_name', 'min', 'fgm', 'fga', 'ftm', 'fta', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts', 'inj', 'fpts', 'games']
 
@@ -215,9 +216,9 @@ def compare_page():
     get_team_stats_time = time.time()
     print(f"Time to get team stats: {get_team_stats_time - get_player_data_time:.2f} seconds")
 
-    combined_df = cpd.get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data)
+    combined_df = cpd.get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, year)
     combined_json = combined_df.to_json(orient='records')  # Convert the DataFrame to JSON
-    #print(combined_df)
+    print(combined_df)
 
     # Convert DataFrames to list of dictionaries
     team1_player_data = team1_player_data.to_dict(orient='records')
