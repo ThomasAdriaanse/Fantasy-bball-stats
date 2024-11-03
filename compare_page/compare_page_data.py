@@ -181,7 +181,7 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
     # Step 6: Get Box Score Numbers
     boxscore_number_team1, home_or_away_team1 = get_team_boxscore_number(league, team1, current_matchup_period)
     boxscore_number_team2, home_or_away_team2 = get_team_boxscore_number(league, team2, current_matchup_period)
-    
+    print(boxscore_number_team1, home_or_away_team1, boxscore_number_team2, home_or_away_team2)
     #get_boxscore_time = time.time()
     #print(f"Time to get boxscore numbers: {get_boxscore_time - calc_fpts_end:.2f} seconds")
 
@@ -190,6 +190,7 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
     team2_box_score_list = []
 
     #print(league.box_scores(scoring_period={1:5},matchup_total = False)[1].home_score)
+
 
     for i, date in enumerate(dates):
         box_scores = league.box_scores(matchup_period = current_matchup_period,scoring_period=i, matchup_total=False)
@@ -230,9 +231,6 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
 
     # Step 8: Update Predicted Values with Box Scores
     for index, date in enumerate(dates):
-        print(index)
-        print(date)
-        print(today)
         if date < today_minus_6:
             predicted_values_from_present_team1[index] = team1_box_score_list[index]
             predicted_values_from_present_team2[index] = team2_box_score_list[index]

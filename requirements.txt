@@ -2,7 +2,7 @@ Flask
 psycopg2-binary
 python-dotenv
 scipy
-espn-api
+espn_api
 numpy
 pandas
 datetime
