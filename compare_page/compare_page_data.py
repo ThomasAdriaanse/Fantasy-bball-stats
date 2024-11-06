@@ -125,13 +125,16 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
 
     # Step 2: Calculate Date Range
     #if year == "2025":
-    today = datetime.today().date()
-    today_minus_6 = (datetime.today()-timedelta(hours=3)).date()
+    today = datetime.today()
+    today_date = datetime.today().date()
+    today_minus_8 = (today-timedelta(hours=8)).date()  
+    print("TODAY:")
+    print(today, today_date, today_minus_8)
     #else:
     #    league.finalScoringPeriod
 
-    start_of_week, end_of_week = db_utils.range_of_current_week(today) 
-    dates = pd.date_range(start=start_of_week-timedelta(hours=24), end=end_of_week).date
+    start_of_week, end_of_week = db_utils.range_of_current_week(today_minus_8) 
+    dates = pd.date_range(start=start_of_week, end=end_of_week).date
     
     #calc_dates_time = time.time()
     #print(f"Time to calculate date range: {calc_dates_time - init_teams_time:.2f} seconds")
@@ -165,7 +168,7 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
                     game_date = (game['date'] - timedelta(hours=9)).date()
                     if game_date in dates_dict:
                         predicted_values[dates_dict[game_date]] += avg_fpts
-                        if game_date >= today_minus_6:
+                        if game_date >= today_minus_8:
                             predicted_values_from_present[dates_dict[game_date]] += avg_fpts
     
     #calc_fpts_start = time.time()
@@ -191,9 +194,11 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
 
     #print(league.box_scores(scoring_period={1:5},matchup_total = False)[1].home_score)
 
-
     for i, date in enumerate(dates):
-        box_scores = league.box_scores(matchup_period = current_matchup_period,scoring_period=i, matchup_total=False)
+        mperiod = current_matchup_period
+        speriod = i+(mperiod-1)*7
+        print(mperiod, speriod)
+        box_scores = league.box_scores(matchup_period = mperiod, scoring_period=speriod, matchup_total=False)
         if home_or_away_team1 == "home":
             team1_box_score_list.append(box_scores[boxscore_number_team1].home_score)
         if home_or_away_team1 == "away":
@@ -202,36 +207,12 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
             team2_box_score_list.append(box_scores[boxscore_number_team2].home_score)
         if home_or_away_team2 == "away":
             team2_box_score_list.append(box_scores[boxscore_number_team2].away_score)
-    print(team1_box_score_list)
-    print(team2_box_score_list)
-    
-    # Because the box scores list they give us is weird, we have to rotate it sometimes:
-    num_rotations = 6
-    #for i, v in enumerate(team1_box_score_list):
-    #    if v !=0:
-    #        num_rotations = i
-    #        return
-        
-    team1_box_score_list = team1_box_score_list[num_rotations:]+team1_box_score_list[:num_rotations]
-    team2_box_score_list = team2_box_score_list[num_rotations:]+team2_box_score_list[:num_rotations]
 
-    print(team1_box_score_list)
-    print(team2_box_score_list)
-    #get_box_scores_time = time.time()
-    #print(f"Time to get weekly box scores: {get_box_scores_time - get_boxscore_time:.2f} seconds")
-
-    # Instead of 0s ESPN uses the most recent score, so i have to replace scores that match the most recent score with 0
-    # I can append the most recent score later
-    #for i, v in enumerate(team1_box_score_list):
-    #    if team1_box_score_list[i]==team1_box_score_list[-1]:
-    #        team1_box_score_list[i]-=team1_box_score_list[-1]
-
-    #    if team2_box_score_list[i]==team2_box_score_list[-1]:
-    #        team2_box_score_list[i]-=team1_box_score_list[-1]
+   
 
     # Step 8: Update Predicted Values with Box Scores
     for index, date in enumerate(dates):
-        if date < today_minus_6:
+        if date < today_minus_8:
             predicted_values_from_present_team1[index] = team1_box_score_list[index]
             predicted_values_from_present_team2[index] = team2_box_score_list[index]
 
@@ -243,6 +224,14 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
     
     #update_predicted_values_time = time.time()
     #print(f"Time to update predicted values with box scores: {update_predicted_values_time - get_box_scores_time:.2f} seconds")
+    predicted_values_from_present_team1.insert(0, 0)
+    predicted_values_from_present_team2.insert(0, 0)
+    del predicted_values_from_present_team1[-1]
+    del predicted_values_from_present_team2[-1]
+
+    print(predicted_values_from_present_team1)
+    print(predicted_values_from_present_team2)
+
 
     # Step 9: Convert Predicted Values into DataFrames
     team1_df = pd.DataFrame({
