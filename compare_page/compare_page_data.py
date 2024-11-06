@@ -111,34 +111,18 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
     
     start_time = time.time()
     
-    # Step 1: Initialize Teams
+
     team1 = league.teams[team1_index]
     team2 = league.teams[team2_index]
-    
-    #init_teams_time = time.time()
-    #print(f"Time to initialize teams: {init_teams_time - start_time:.2f} seconds")
 
-    #print(league.current_week)
-    #print(league.settings.matchup_periods)
-    #print(league.settings.reg_season_count)
     current_matchup_period = league.currentMatchupPeriod
 
-    # Step 2: Calculate Date Range
-    #if year == "2025":
     today = datetime.today()
-    today_date = datetime.today().date()
     today_minus_8 = (today-timedelta(hours=8)).date()  
-    print("TODAY:")
-    print(today, today_date, today_minus_8)
-    #else:
-    #    league.finalScoringPeriod
 
     start_of_week, end_of_week = db_utils.range_of_current_week(today_minus_8) 
     dates = pd.date_range(start=start_of_week, end=end_of_week).date
     
-    #calc_dates_time = time.time()
-    #print(f"Time to calculate date range: {calc_dates_time - init_teams_time:.2f} seconds")
-
     # Step 3: Initialize Dictionaries for Predicted Values
     dates_dict = {date: i for i, date in enumerate(dates)}
     predicted_values_team1 = [0] * len(dates)
@@ -146,10 +130,7 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
     predicted_values_team2 = [0] * len(dates)
     predicted_values_from_present_team2 = [0] * len(dates)
     
-    #init_dicts_time = time.time()
-    #print(f"Time to initialize dictionaries: {init_dicts_time - calc_dates_time:.2f} seconds")
-
-    # Step 4: Helper Function to Calculate FPTS
+    # Helper Function to Calculate FPTS
     def calculate_fpts_for_team(team, team_player_data, predicted_values, predicted_values_from_present, dates_dict):
         for player in team.roster:
             player_name = player.name
@@ -170,29 +151,16 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
                         predicted_values[dates_dict[game_date]] += avg_fpts
                         if game_date >= today_minus_8:
                             predicted_values_from_present[dates_dict[game_date]] += avg_fpts
-    
-    #calc_fpts_start = time.time()
-    #print(f"Time before calculating FPTS: {calc_fpts_start - init_dicts_time:.2f} seconds")
 
-    # Step 5: Calculate FPTS for Both Teams
     calculate_fpts_for_team(team1, team1_player_data, predicted_values_team1, predicted_values_from_present_team1, dates_dict)
     calculate_fpts_for_team(team2, team2_player_data, predicted_values_team2, predicted_values_from_present_team2, dates_dict)
-    
-    #calc_fpts_end = time.time()
-    #print(f"Time to calculate FPTS for both teams: {calc_fpts_end - calc_fpts_start:.2f} seconds")
 
-    # Step 6: Get Box Score Numbers
     boxscore_number_team1, home_or_away_team1 = get_team_boxscore_number(league, team1, current_matchup_period)
     boxscore_number_team2, home_or_away_team2 = get_team_boxscore_number(league, team2, current_matchup_period)
-    print(boxscore_number_team1, home_or_away_team1, boxscore_number_team2, home_or_away_team2)
-    #get_boxscore_time = time.time()
-    #print(f"Time to get boxscore numbers: {get_boxscore_time - calc_fpts_end:.2f} seconds")
 
-    # Step 7: Get Weekly Box Scores for Both Teams
+    # Get Weekly Box Scores for Both Teams
     team1_box_score_list = []
     team2_box_score_list = []
-
-    #print(league.box_scores(scoring_period={1:5},matchup_total = False)[1].home_score)
 
     for i, date in enumerate(dates):
         mperiod = current_matchup_period
@@ -208,9 +176,7 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
         if home_or_away_team2 == "away":
             team2_box_score_list.append(box_scores[boxscore_number_team2].away_score)
 
-   
-
-    # Step 8: Update Predicted Values with Box Scores
+    # Update Predicted Values with Box Scores
     for index, date in enumerate(dates):
         if date < today_minus_8:
             predicted_values_from_present_team1[index] = team1_box_score_list[index]
@@ -222,18 +188,22 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
             predicted_values_from_present_team1[index] += predicted_values_from_present_team1[index - 1]
             predicted_values_from_present_team2[index] += predicted_values_from_present_team2[index - 1]
     
-    #update_predicted_values_time = time.time()
-    #print(f"Time to update predicted values with box scores: {update_predicted_values_time - get_box_scores_time:.2f} seconds")
+
     predicted_values_from_present_team1.insert(0, 0)
     predicted_values_from_present_team2.insert(0, 0)
     del predicted_values_from_present_team1[-1]
     del predicted_values_from_present_team2[-1]
 
+    predicted_values_team1.insert(0, 0)
+    predicted_values_team2.insert(0, 0)
+    del predicted_values_team1[-1]
+    del predicted_values_team2[-1]
+
     print(predicted_values_from_present_team1)
     print(predicted_values_from_present_team2)
 
 
-    # Step 9: Convert Predicted Values into DataFrames
+    #Convert Predicted Values into DataFrames
     team1_df = pd.DataFrame({
         'date': dates,
         'predicted_fpts': predicted_values_team1,
@@ -250,13 +220,6 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
 
     combined_df = pd.concat([team1_df, team2_df], ignore_index=True)
     
-    #create_df_time = time.time()
-    #print(f"Time to create DataFrames: {create_df_time - update_predicted_values_time:.2f} seconds")
-
-    # Step 10: Final Execution Time
-    #end_time = time.time()
-    #execution_time = end_time - start_time
-    #print(f"Total execution time: {execution_time:.2f} seconds")
 
     return combined_df
 
