@@ -35,6 +35,17 @@
             font-size: 12px;
             fill: #333;
         }
+        .back-button {
+            background-color: #ff4c4c;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: background-color 0.3s, transform 0.3s;
+            margin-top: 20px; /* Added margin-top for buttons */
+        }
     </style>
 </head>
 
@@ -49,6 +60,7 @@
 </script>
 
 <body>
+    <button id="back-button" onclick="window.history.back()">Back</button>
     <div class="team-names">
         <div class="team-name-left">
             <span>{{ data_team_stats_1[0]['team_name'] }}</span>
@@ -245,6 +257,9 @@
         var today = new Date();
         today.setHours(0, 0, 0, 0); // Set to midnight for accurate comparison
         today.setDate(today.getDate())
+
+        var team1Name = JSON.parse('{{ data_team_stats_1[0]["team_name"] | tojson }}');
+        var team2Name = JSON.parse('{{ data_team_stats_2[0]["team_name"] | tojson }}');
         
         // Split data into Team 1 and Team 2 based on the team field
         var team1Data = graphData.filter(function(d) { return d.team === "Team 1"; });
@@ -356,7 +371,7 @@
         legend.append("text")
             .attr("x", 30)
             .attr("y", 10)
-            .text("Team 1 (Actual)")
+            .text(team1Name + " (Actual)")
             .attr("alignment-baseline", "middle");
     
         // Team 1 Predicted (Dotted Blue Line)
@@ -372,7 +387,7 @@
         legend.append("text")
             .attr("x", 30)
             .attr("y", 30)
-            .text("Team 1 (Predicted)")
+            .text(team1Name+ " (Predicted)")
             .attr("alignment-baseline", "middle");
         
         // Team 2 Actual (Solid Red Line)
@@ -387,7 +402,7 @@
         legend.append("text")
             .attr("x", 30)
             .attr("y", 50)
-            .text("Team 2 (Actual)")
+            .text(team2Name+ " (Actual)")
             .attr("alignment-baseline", "middle");
     
         // Team 2 Predicted (Dotted Red Line)
@@ -403,7 +418,7 @@
         legend.append("text")
             .attr("x", 30)
             .attr("y", 70)
-            .text("Team 2 (Predicted)")
+            .text(team2Name+ " (Predicted)")
             .attr("alignment-baseline", "middle");
     
         const graphRenderEnd = performance.now();

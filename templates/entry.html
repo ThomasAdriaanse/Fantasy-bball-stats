@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico">
-    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/defaultstyle.css') }}">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/entry_page.css') }}">
     <title>Enter Information</title>
 </head>
 
@@ -21,19 +21,13 @@
 
 <body>
     <div class="container">
-        <!-- Button to go to Player Stats Page -->
-        <div class="button-container">
-            <a href="{{ url_for('player_stats') }}" class="player-stats-button">Player Stats</a>
-        </div>
-    </div>
-    <div class="container">
         <h1>Fantasy Basketball Matchup Predictor</h1>
             
         <div class="flex-container">
 
             <!-- Form for Matchup Predictor -->
             <div class="form-container">
-                <form action="/process" method="post">
+                <form id="matchupForm" action="/process" method="post">
                     <label for="league_id">League ID:</label>
                     <input type="text" id="league_id" name="league_id" required>
 
@@ -56,9 +50,10 @@
                         http://fantasy.espn.com. You should be able to find your swid and espn_s2 values there. They remain the
                         same through different sessions.
                     </p>
-                    <p><u>If you want to try this tool out, use the example league details below:</u></p>
-                    <p><b>Example League:</b><br> League ID = 190002826<br> Year = 2024<br> ESPN S2 = <i>blank</i><br> SWID = <i>blank</i></p>
-                </div>
+                    <p><b>If you want to try this tool out, click the button below to use an example league:</b></p>
+                    <div class="button-wrapper">
+                        <button id="exampleButton" onclick="fillAndSubmitForm()">Use Example League</button>
+                    </div>                </div>
                 {% if error_message %}
                 <div class="error-message">
                     {{ error_message }}
@@ -67,7 +62,19 @@
             </div>
         </div>
     </div>
-</body>
 
+    <script>
+        function fillAndSubmitForm() {
+            // Set the form field values with example data
+            document.getElementById('league_id').value = '190002826';
+            document.getElementById('year').value = '2024';
+            document.getElementById('espn_s2').value = ''; // Leave blank
+            document.getElementById('swid').value = ''; // Leave blank
+
+            // Submit the form
+            document.getElementById('matchupForm').submit();
+        }
+    </script>
+</body>
 
 </html>

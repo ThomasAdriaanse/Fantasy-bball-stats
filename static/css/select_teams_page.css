@@ -6,12 +6,11 @@ body {
     padding: 0;
     display: flex;
     justify-content: center; /* Prioritizing center alignment from the first page */
-    align-items: center;
+    /*align-items: center;*/
     flex-direction: column; /* Including column layout for the second page */
     color: #f5f5f5;
     height: 100vh; /* Retained from the first page */
 }
-
 
 /* Container styling from the first page */
 .container {
@@ -21,6 +20,10 @@ body {
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
     width: 100%;
     max-width: 500px;
+}
+
+.body-container {
+    align-items: center;
 }
 
 /* Heading styles from both pages, prioritizing the first page */
@@ -35,6 +38,7 @@ h1 {
 form {
     display: flex;
     flex-direction: column;
+    align-items: center;
 }
 
 label {
@@ -180,4 +184,66 @@ input[type="submit"]:hover, button[type="button"]:hover {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+.main-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.scoring-area {
+    width: 400px;
+    margin-right: 20px;
+}
+
+.scoring-container {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.scoring-box {
+    width: 42%;
+    margin-bottom: 15px;
+    margin-right: 8%;
+}
+
+.scoring-box:nth-child(2n) {
+    margin-right: 0;
+}
+
+.scoring-box label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.scoring-box input[type="text"] {
+    width: 100%;
+    padding: 5px;
+    border: 1px solid #444;
+    border-radius: 5px;
+    background-color: #333;
+    color: #f5f5f5;
+}
+
+h2 {
+    margin-bottom: 10px;
+}
+
+.teams-container {
+    flex-grow: 1;
+}
+
+.back-button {
+    background-color: #ff4c4c;
+    color: white;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 18px;
+    transition: background-color 0.3s, transform 0.3s;
+    text-decoration: none; /* Remove underline from the link */
+    display: inline-block; /* Ensure it takes up only the necessary space */
+    width: 45px;
 }
