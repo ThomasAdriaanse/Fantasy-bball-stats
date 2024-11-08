@@ -155,6 +155,9 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
 
     current_matchup_period = league.currentMatchupPeriod
 
+    print("CURRENT MATCHUIP:",current_matchup_period)
+
+
     boxscore_number_team1, home_or_away_team1 = get_team_boxscore_number(league, team1, current_matchup_period)
     boxscore_number_team2, home_or_away_team2 = get_team_boxscore_number(league, team2, current_matchup_period)
 
@@ -162,26 +165,28 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
     team1_box_score_list = []
     team2_box_score_list = []
 
-    # Note: calling box_scores 14 times (7 for each team) is what makes the loading slow
-    for i, date in enumerate(dates):
-        if date < today_minus_8:
-            scoring_period = i+(current_matchup_period-1)*7
-            print(current_matchup_period, scoring_period)
-            box_scores = league.box_scores(matchup_period = current_matchup_period, scoring_period=scoring_period, matchup_total=False)
-            if home_or_away_team1 == "home":
-                team1_box_score_list.append(box_scores[boxscore_number_team1].home_score)
-            if home_or_away_team1 == "away":
-                team1_box_score_list.append(box_scores[boxscore_number_team1].away_score)
-            if home_or_away_team2 == "home":
-                team2_box_score_list.append(box_scores[boxscore_number_team2].home_score)
-            if home_or_away_team2 == "away":
-                team2_box_score_list.append(box_scores[boxscore_number_team2].away_score)
-        else:
-            team1_box_score_list.append(0)
-            team2_box_score_list.append(0)
+    matchup_periods = db_utils.get_matchup_periods(league, current_matchup_period)
+    for matchup_period in matchup_periods:
+        # Note: calling box_scores 14 times (7 for each team) is what makes the loading slow
+        for i, date in enumerate(dates):
+            if date < today_minus_8:
+                scoring_period = i+(matchup_period-1)*7
+                print(matchup_period, scoring_period)
+                box_scores = league.box_scores(matchup_period = current_matchup_period, scoring_period=scoring_period, matchup_total=False)
+                if home_or_away_team1 == "home":
+                    team1_box_score_list.append(box_scores[boxscore_number_team1].home_score)
+                if home_or_away_team1 == "away":
+                    team1_box_score_list.append(box_scores[boxscore_number_team1].away_score)
+                if home_or_away_team2 == "home":
+                    team2_box_score_list.append(box_scores[boxscore_number_team2].home_score)
+                if home_or_away_team2 == "away":
+                    team2_box_score_list.append(box_scores[boxscore_number_team2].away_score)
+            else:
+                team1_box_score_list.append(0)
+                team2_box_score_list.append(0)
 
-    print(team1_box_score_list)
-    print(team2_box_score_list)
+        print(team1_box_score_list)
+        print(team2_box_score_list)
 
 
     # Update Predicted Values with Box Scores

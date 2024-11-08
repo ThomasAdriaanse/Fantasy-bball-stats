@@ -94,3 +94,6 @@ def range_of_current_week(date):
     start_of_week = date - timedelta(days=date.weekday())
     end_of_week = start_of_week + timedelta(days=6)
     return start_of_week, end_of_week
+
+def get_matchup_periods(league, current_matchup_period):
+    return(league.settings.matchup_periods[str(current_matchup_period)])
