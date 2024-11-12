@@ -276,18 +276,23 @@ def select_teams_page():
     info_string = request.args.get('info', '')
     info_list = info_string.split(',') if info_string else []
 
+    try:
+        year = int(info_list[1])
+    except:
+        return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
+
     #check if user has input swid and espn_s2 so we can use the right league call (private vs public league)
     if len(info_list)==4:
         league_details = {
             'league_id': info_list[0],
-            'year': int(info_list[1]),
+            'year': year,
             'espn_s2': info_list[2],
             'swid': info_list[3]
         }
     else:
         league_details = {
             'league_id': info_list[0],
-            'year': int(info_list[1]),
+            'year': year,
             'espn_s2': None,
             'swid': None
         }
@@ -305,6 +310,9 @@ def select_teams_page():
             league = League(league_id=league_details['league_id'], year=league_details['year'], espn_s2=league_details['espn_s2'], swid=league_details['swid'])
         except ESPNUnknownError:
             return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
+
+    if league.settings.scoring_type == "H2H_CATEGORY":
+        return redirect(url_for('entry_page', error_message="League must be Points, not Categories"))
 
     teams_list = [team.team_name for team in league.teams]
 
