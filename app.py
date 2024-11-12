@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, request
+from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory
 import os
 from dotenv import load_dotenv
 from psycopg2 import extras
@@ -15,6 +15,8 @@ import time
 
 load_dotenv()
 app = Flask(__name__)
+
+app.secret_key = os.urandom(24)
 
 @app.route('/')
 def entry_page():
@@ -150,20 +152,52 @@ def calculate_fantasy_points(row, scoring_rules):
 def compare_page():
     
     start_time = time.time()
-
+    try:
+        # Attempt to convert form inputs to integers
+        fgm = int(request.form.get('fgm', 2))
+        fga = int(request.form.get('fga', -1))
+        ftm = int(request.form.get('ftm', 1))
+        fta = int(request.form.get('fta', -1))
+        threeptm = int(request.form.get('threeptm', 1))
+        reb = int(request.form.get('reb', 1))
+        ast = int(request.form.get('ast', 2))
+        stl = int(request.form.get('stl', 4))
+        blk = int(request.form.get('blk', 4))
+        turno = int(request.form.get('turno', -2))
+        pts = int(request.form.get('pts', 1))
+    except (ValueError, TypeError):
+        # Flash an error message to the user
+        flash("Invalid input. Please ensure all stats are numbers.")
+        
+        # Retrieve league details to maintain context
+        league_id = request.form.get('league_id')
+        year = request.form.get('year')
+        espn_s2 = request.form.get('espn_s2')
+        swid = request.form.get('swid')
+        
+        # Construct the info string for redirection
+        info_list = [league_id, year, espn_s2, swid]
+        info_string = ','.join(filter(None, info_list))
+        
+        # Save the current form data to the session for reuse
+        session['form_data'] = request.form.to_dict()
+        
+        # Redirect back to select_teams_page with league info
+        return redirect(url_for('select_teams_page', info=info_string))
+    
     # Retrieve the custom scoring values from the form
     league_scoring_rules = {
-        'fgm': int(request.form.get('fgm', 2)),
-        'fga': int(request.form.get('fga', -1)),
-        'ftm': int(request.form.get('ftm', 1)),
-        'fta': int(request.form.get('fta', -1)),
-        'threeptm': int(request.form.get('threeptm', 1)),
-        'reb': int(request.form.get('reb', 1)),
-        'ast': int(request.form.get('ast', 2)),
-        'stl': int(request.form.get('stl', 4)),
-        'blk': int(request.form.get('blk', 4)),
-        'turno': int(request.form.get('turno', -2)),
-        'pts': int(request.form.get('pts', 1)),
+        'fgm': fgm,
+        'fga': fga,
+        'ftm': ftm,
+        'fta': fta,
+        'threeptm': threeptm,
+        'reb': reb,
+        'ast': ast,
+        'stl': stl,
+        'blk': blk,
+        'turno': turno,
+        'pts': pts,
     }
         
     my_team_name = request.form.get('myTeam')
@@ -262,23 +296,21 @@ def select_teams_page():
     if league_details['espn_s2'] == None:
         try:
             league = League(league_id=league_details['league_id'], year=league_details['year'])
-        except ESPNUnknownError:
+        except (ESPNUnknownError, ESPNInvalidLeague):
             return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
         except ESPNAccessDenied:
             return redirect(url_for('entry_page', error_message="That is a private league which needs espn_s2 and SWID. Please try again."))
-        except ESPNInvalidLeague:
-            return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
     else:
         try:
             league = League(league_id=league_details['league_id'], year=league_details['year'], espn_s2=league_details['espn_s2'], swid=league_details['swid'])
         except ESPNUnknownError:
             return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
 
-
-    #ESPNAccessDenied
     teams_list = [team.team_name for team in league.teams]
 
-    return render_template('select_teams_page.html', info_list=teams_list, **league_details)
+    form_data = session.pop('form_data', {})
+
+    return render_template('select_teams_page.html', info_list=teams_list, **league_details, form_data = form_data)
 
 
 @app.route('/process', methods=['POST'])
