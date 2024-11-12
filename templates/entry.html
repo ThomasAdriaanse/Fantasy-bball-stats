@@ -42,6 +42,11 @@
 
                     <input type="submit" value="Submit">
                 </form>
+                {% if error_message %}
+                <div class="error-message">
+                    {{ error_message }}
+                </div>
+                {% endif %}
                 <div class="note">
                     <p><b>Note:</b> You only need espn_s2 and swid cookies if your league is private.</p>
                     <p><u>How to find your espn_s2 and swid:</u><br>
@@ -53,12 +58,8 @@
                     <p><b>If you want to try this tool out, click the button below to use an example league:</b></p>
                     <div class="button-wrapper">
                         <button id="exampleButton" onclick="fillAndSubmitForm()">Use Example League</button>
-                    </div>                </div>
-                {% if error_message %}
-                <div class="error-message">
-                    {{ error_message }}
+                    </div>                
                 </div>
-                {% endif %}
             </div>
         </div>
     </div>

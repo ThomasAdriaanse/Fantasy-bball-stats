@@ -6,7 +6,7 @@ import compare_page.compare_page_data as cpd
 import compare_page.team_stats_data as tsd
 from scipy.stats import norm
 from espn_api.basketball import League
-from espn_api.requests.espn_requests import ESPNUnknownError
+from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, ESPNInvalidLeague
 import pandas as pd
 from nba_api.stats.endpoints import playergamelog
 from nba_api.stats.static import players
@@ -254,15 +254,19 @@ def select_teams_page():
         league_details = {
             'league_id': info_list[0],
             'year': int(info_list[1]),
-            'espn_s2': 1,
+            'espn_s2': None,
             'swid': None
         }
     
     #choose one based on if swid and espn_s2 are given
-    if league_details['espn_s2'] == 1:
+    if league_details['espn_s2'] == None:
         try:
             league = League(league_id=league_details['league_id'], year=league_details['year'])
         except ESPNUnknownError:
+            return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
+        except ESPNAccessDenied:
+            return redirect(url_for('entry_page', error_message="That is a private league which needs espn_s2 and SWID. Please try again."))
+        except ESPNInvalidLeague:
             return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
     else:
         try:
@@ -270,6 +274,8 @@ def select_teams_page():
         except ESPNUnknownError:
             return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
 
+
+    #ESPNAccessDenied
     teams_list = [team.team_name for team in league.teams]
 
     return render_template('select_teams_page.html', info_list=teams_list, **league_details)
