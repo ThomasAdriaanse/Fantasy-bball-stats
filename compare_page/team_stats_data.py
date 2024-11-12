@@ -2,6 +2,7 @@ import pandas as pd
 from scipy.stats import norm
 import compare_page.compare_page_data as cpd
 import time
+import db_utils
 
 def get_team_stats_data_schema():
     table_schema = """
@@ -110,17 +111,27 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     team_expected_points_remaining = sum(player_avg_fpts * games_left for player_avg_fpts, games_left in zip(player_averages, player_games_left))
     opponent_expected_points_remaining = sum(player_avg_fpts * games_left for player_avg_fpts, games_left in zip(opponent_player_averages, opponent_player_games_left))
 
+    current_scoring_period = league.scoringPeriodId
+    current_matchup_period = league.currentMatchupPeriod
+    #team_current_points -= league.box_scores(matchup_period = current_matchup_period, scoring_period=current_scoring_period, matchup_total=False)
+    #opponent_current_points -= league.box_scores(matchup_period = current_matchup_period, scoring_period=current_scoring_period, matchup_total=False)
+ 
 
     # Get current box scores
     if team_home_or_away == "home":
         team_current_points = league.box_scores()[team_boxscore_num].home_score
+        team_current_points -= league.box_scores(matchup_period = current_matchup_period, scoring_period=current_scoring_period, matchup_total=False)[team_boxscore_num].home_score
     else:
         team_current_points = league.box_scores()[team_boxscore_num].away_score
+        team_current_points -= league.box_scores(matchup_period = current_matchup_period, scoring_period=current_scoring_period, matchup_total=False)[team_boxscore_num].away_score
 
     if opponent_home_or_away == "home":
         opponent_current_points = league.box_scores()[opponent_boxscore_num].home_score
+        opponent_current_points -= league.box_scores(matchup_period = current_matchup_period, scoring_period=current_scoring_period, matchup_total=False)[opponent_boxscore_num].home_score
     else:
         opponent_current_points = league.box_scores()[opponent_boxscore_num].away_score
+        opponent_current_points -= league.box_scores(matchup_period = current_matchup_period, scoring_period=current_scoring_period, matchup_total=False)[opponent_boxscore_num].away_score
+
 
     team_total_expected = team_expected_points_remaining + team_current_points
     opponent_total_expected = opponent_expected_points_remaining + opponent_current_points

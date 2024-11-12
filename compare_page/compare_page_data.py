@@ -93,11 +93,19 @@ def get_team_player_data(league, team_num, columns, league_scoring_rules, year):
         list_schedule = list(schedule.values())
         list_schedule.sort(key=lambda x: x['date'], reverse=False)
 
-        today = datetime.today()
+        today_minus_8 = (datetime.today()-timedelta(hours=8)).date()
 
-        start_of_week, end_of_week = db_utils.range_of_current_week(today)
+        start_of_week, end_of_week = db_utils.range_of_current_week(today_minus_8)
 
-        games_left_this_week = [game for game in list_schedule if today <= game['date'] <= end_of_week+timedelta(hours=9)]
+        # adjust by 5 for time zone changing
+        games_left_this_week = [game for game in list_schedule if today_minus_8 <= (game['date']-timedelta(hours=5)).date() <= end_of_week]
+
+        print(player.name)
+        print("date/time info")
+        for game in list_schedule:
+            if today_minus_8 <= (game['date']-timedelta(hours=5)).date() <= end_of_week+timedelta(hours=9):
+                print((game['date']-timedelta(hours=5)).date())
+        print(today_minus_8, end_of_week+timedelta(hours=9))
         
         #add number of games left to the database
         team_data['games'].append(len(games_left_this_week))
@@ -119,7 +127,7 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
     today_minus_8 = (today-timedelta(hours=8)).date()  
 
     start_of_week, end_of_week = db_utils.range_of_current_week(today_minus_8) 
-    dates = pd.date_range(start=start_of_week, end=end_of_week).date
+    dates = pd.date_range(start=start_of_week, end=end_of_week+timedelta(hours=24)).date
     
     # Step 3: Initialize Dictionaries for Predicted Values
     dates_dict = {date: i for i, date in enumerate(dates)}
@@ -143,8 +151,8 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
                 list_schedule = list(player.schedule.values())
                 list_schedule.sort(key=lambda x: x['date'], reverse=False)
 
-                for game in list_schedule:# 9 for timezone and 3 for game length
-                    game_date = (game['date'] - timedelta(hours=9)).date()
+                for game in list_schedule:# timezone adjustment
+                    game_date = (game['date'] - timedelta(hours=5)).date()
                     if game_date in dates_dict:
                         predicted_values[dates_dict[game_date]] += avg_fpts
                         if game_date >= today_minus_8:
