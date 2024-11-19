@@ -53,7 +53,6 @@ jobs:
           docker pull ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/fantasybballstats:latest
           docker stop fantasy_scraper_container || true
           docker rm fantasy_scraper_container || true
-          docker run -d -p 5000:5000 --name fantasy_scraper_container ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/fantasybballstats-new:latest
-
+          docker run -d --name fantasy_scraper_container -p 5000:5000 ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/fantasybballstats:latest
           # restart nginx to update website
           sudo systemctl restart nginx
