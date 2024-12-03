@@ -165,6 +165,7 @@ def compare_page():
         blk = int(request.form.get('blk', 4))
         turno = int(request.form.get('turno', -2))
         pts = int(request.form.get('pts', 1))
+
     except (ValueError, TypeError):
         # Flash an error message to the user
         flash("Invalid input. Please ensure all stats are numbers.")
@@ -174,6 +175,7 @@ def compare_page():
         year = request.form.get('year')
         espn_s2 = request.form.get('espn_s2')
         swid = request.form.get('swid')
+        scoring_type = request.form.get('scoring_type')
         
         # Construct the info string for redirection
         info_list = [league_id, year, espn_s2, swid]
@@ -183,7 +185,7 @@ def compare_page():
         session['form_data'] = request.form.to_dict()
         
         # Redirect back to select_teams_page with league info
-        return redirect(url_for('select_teams_page', info=info_string))
+        return redirect(url_for('select_teams_page', info=info_string, scoring_type=scoring_type))
     
     # Retrieve the custom scoring values from the form
     league_scoring_rules = {
@@ -206,6 +208,7 @@ def compare_page():
     year = int(request.form.get('year'))
     espn_s2 = request.form.get('espn_s2')
     swid = request.form.get('swid')
+    scoring_type = request.form.get('scoring_type')
 
     try:
         league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
@@ -228,48 +231,63 @@ def compare_page():
 
     if team2_index == -1:
         return redirect(url_for('entry_page', error_message="Team 2 not found. Please try again."))
+    
+    player_data_column_names = ['player_name', 'min', 'fgm', 'fga', 'fg%', 'ftm', 'fta', 'ft%', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts', 'inj', 'fpts', 'games']
 
-    current_matchup_period = league.currentMatchupPeriod
+    if scoring_type == "H2H_POINTS":
 
-    player_data_column_names = ['player_name', 'min', 'fgm', 'fga', 'ftm', 'fta', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts', 'inj', 'fpts', 'games']
+        team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, year, league_scoring_rules)
+        team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, year, league_scoring_rules)
 
-    init_data_time = time.time()
-    print(f"Time to initialize data: {init_data_time - start_time:.2f} seconds")
+        team_data_column_names = ['team_avg_fpts', 'team_expected_points', 'team_chance_of_winning', 'team_name', 'team_current_points']
 
-    team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, league_scoring_rules, year)
-    team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, league_scoring_rules, year)
+        team1_data, team2_data = tsd.get_team_stats(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names, league_scoring_rules, year)
 
-    get_player_data_time = time.time()
-    print(f"Time to get player data: {get_player_data_time - init_data_time:.2f} seconds")
+        combined_df = cpd.get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, year)
+        combined_json = combined_df.to_json(orient='records')  # Convert the DataFrame to JSON
+        #print(combined_df)
 
-    team_data_column_names = ['team_avg_fpts', 'team_expected_points', 'team_chance_of_winning', 'team_name', 'team_current_points']
+        # Convert DataFrames to list of dictionaries
+        team1_player_data = team1_player_data.to_dict(orient='records')
+        team2_player_data = team2_player_data.to_dict(orient='records')
+        team1_data = team1_data.to_dict(orient='records')
+        team2_data = team2_data.to_dict(orient='records')
 
-    team1_data, team2_data = tsd.get_team_stats(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names, league_scoring_rules, year)
-    #team2_data = tsd.get_team_stats(league, team2_index, team2_player_data, team1_index, team1_player_data, team_data_column_names, league_scoring_rules, year)
+        print(team1_player_data)
+        print(team2_player_data)
 
-    get_team_stats_time = time.time()
-    print(f"Time to get team stats: {get_team_stats_time - get_player_data_time:.2f} seconds")
+        return render_template('compare_page.html', 
+                                data_team_players_1=team1_player_data, 
+                                data_team_players_2=team2_player_data, 
+                                data_team_stats_1=team1_data, 
+                                data_team_stats_2=team2_data,
+                                combined_json=combined_json,
+                                scoring_type="H2H_POINTS")
+    
+    elif scoring_type == "H2H_CATEGORY":
 
-    combined_df = cpd.get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, year)
-    combined_json = combined_df.to_json(orient='records')  # Convert the DataFrame to JSON
-    print(combined_df)
+        team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, year, league_scoring_rules)
+        team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, year, league_scoring_rules)
+        
+        category_expected_totals = ['FG%', 'FT%', '3PTM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
 
-    # Convert DataFrames to list of dictionaries
-    team1_player_data = team1_player_data.to_dict(orient='records')
-    team2_player_data = team2_player_data.to_dict(orient='records')
-    team1_data = team1_data.to_dict(orient='records')
-    team2_data = team2_data.to_dict(orient='records')
+        category_win_percentages = ['FG%', 'FT%', '3PTM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
+        team1_data, team2_data =tsd.get_team_stats_categories(league, team1_index, team1_player_data, team2_index, team2_player_data, league_scoring_rules, year)
+        # lets create a 1-d heatmap of the chances of the outocme being 0-9. each square of the grid would contain a percentage, and they would add up to 100. also the cells could stretch based on their percentages.
+        
+        team1_player_data = team1_player_data.to_dict(orient='records')
+        team2_player_data = team2_player_data.to_dict(orient='records')
+        team1_data = team1_data.to_dict(orient='records')
+        team2_data = team2_data.to_dict(orient='records')
+        print(team1_player_data)
+        print(team2_player_data)
 
-    end_time = time.time()
-    print(f"Total time: {end_time - get_team_stats_time:.2f} seconds")
-
-    return render_template('compare_page.html', 
-                            data_team_players_1=team1_player_data, 
-                            data_team_players_2=team2_player_data, 
-                            data_team_stats_1=team1_data, 
-                            data_team_stats_2=team2_data,
-                            combined_json=combined_json)
-
+        return render_template('compare_page.html', 
+                                data_team_players_1=team1_player_data, 
+                                data_team_players_2=team2_player_data, 
+                                data_team_stats_1=team1_data, 
+                                data_team_stats_2=team2_data,
+                                scoring_type="H2H_POINTS")
 
 @app.route('/select_teams_page')
 def select_teams_page():
@@ -311,14 +329,14 @@ def select_teams_page():
         except ESPNUnknownError:
             return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
 
-    if league.settings.scoring_type == "H2H_CATEGORY":
-        return redirect(url_for('entry_page', error_message="League must be Points, not Categories"))
+    #if league.settings.scoring_type == "H2H_CATEGORY":
+    #    return redirect(url_for('entry_page', error_message="League must be Points, not Categories"))
 
     teams_list = [team.team_name for team in league.teams]
 
     form_data = session.pop('form_data', {})
 
-    return render_template('select_teams_page.html', info_list=teams_list, **league_details, form_data = form_data)
+    return render_template('select_teams_page.html', info_list=teams_list, **league_details, form_data = form_data, scoring_type=league.settings.scoring_type)
 
 
 @app.route('/process', methods=['POST'])

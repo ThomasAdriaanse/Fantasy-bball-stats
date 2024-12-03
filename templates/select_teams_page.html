@@ -90,6 +90,7 @@
         <form id="compareForm" action="/compare_page" method="post">
             <div class="main-container">
                 <!-- Scoring area to the left -->
+                {% if scoring_type == "H2H_POINTS" %}
                 <div class="scoring-area">
                     <h2>Adjust Scoring for Stats</h2>
                     <div class="scoring-container">
@@ -141,7 +142,7 @@
                         </div>
                     </div>
                 </div>
-
+                {% endif %}
                 <!-- Teams selection area -->
                 <div class="teams-container">
                     <div class="team-column">
@@ -167,6 +168,7 @@
             <input type="hidden" name="year" value="{{ year }}">
             <input type="hidden" name="espn_s2" value="{{ espn_s2 }}">
             <input type="hidden" name="swid" value="{{ swid }}">
+            <input type="hidden" name="scoring_type" value="{{ scoring_type }}">
 
             <!-- Hidden inputs for selected teams -->
             <input type="hidden" id="myTeamInput" name="myTeam" value="">

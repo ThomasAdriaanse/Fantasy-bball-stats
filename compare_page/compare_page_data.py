@@ -27,7 +27,7 @@ def get_team_player_data_schema():
     return table_schema
 
 
-def get_team_player_data(league, team_num, columns, league_scoring_rules, year):
+def get_team_player_data(league, team_num, columns, year, league_scoring_rules):
 
     team = league.teams[team_num]
     # Initialize an empty list for each column
@@ -44,8 +44,10 @@ def get_team_player_data(league, team_num, columns, league_scoring_rules, year):
             team_data['min'].append(round(player_avg_stats['MIN'], 2))
             team_data['fgm'].append(round(player_avg_stats['FGM'], 2))
             team_data['fga'].append(round(player_avg_stats['FGA'], 2))
+            team_data['fg%'].append(round((player_avg_stats['FGM']*100)/player_avg_stats['FGA'], 2))
             team_data['ftm'].append(round(player_avg_stats['FTM'], 2))
             team_data['fta'].append(round(player_avg_stats['FTA'], 2))
+            team_data['ft%'].append(round((player_avg_stats['FTM']*100)/player_avg_stats['FTA'], 2))
             team_data['threeptm'].append(round(player_avg_stats['3PM'], 2))
             team_data['reb'].append(round(player_avg_stats['REB'], 2))
             team_data['ast'].append(round(player_avg_stats['AST'], 2))
@@ -68,7 +70,6 @@ def get_team_player_data(league, team_num, columns, league_scoring_rules, year):
             player_avg_stats['TO']*league_scoring_rules['turno'] + 
             player_avg_stats['PTS']*league_scoring_rules['pts']
             , 2)
-            
             team_data['fpts'].append(fpts)
 
         else:
@@ -76,8 +77,10 @@ def get_team_player_data(league, team_num, columns, league_scoring_rules, year):
             team_data['min'].append('N/A')
             team_data['fgm'].append('N/A')
             team_data['fga'].append('N/A')
+            team_data['fg%'].append('N/A')
             team_data['ftm'].append('N/A')
             team_data['fta'].append('N/A')
+            team_data['ft%'].append('N/A')
             team_data['threeptm'].append('N/A')
             team_data['reb'].append('N/A')
             team_data['ast'].append('N/A')
@@ -100,12 +103,9 @@ def get_team_player_data(league, team_num, columns, league_scoring_rules, year):
         # adjust by 5 for time zone changing
         games_left_this_week = [game for game in list_schedule if today_minus_8 <= (game['date']-timedelta(hours=5)).date() <= end_of_week]
 
-        print(player.name)
-        print("date/time info")
-        for game in list_schedule:
-            if today_minus_8 <= (game['date']-timedelta(hours=5)).date() <= end_of_week+timedelta(hours=9):
-                print((game['date']-timedelta(hours=5)).date())
-        print(today_minus_8, end_of_week+timedelta(hours=9))
+        #for game in list_schedule:
+        #    if today_minus_8 <= (game['date']-timedelta(hours=5)).date() <= end_of_week+timedelta(hours=9):
+        #        print((game['date']-timedelta(hours=5)).date())
         
         #add number of games left to the database
         team_data['games'].append(len(games_left_this_week))
@@ -163,7 +163,7 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
 
     current_matchup_period = league.currentMatchupPeriod
 
-    print("CURRENT MATCHUIP:",current_matchup_period)
+    #print("CURRENT MATCHUIP:",current_matchup_period)
 
 
     boxscore_number_team1, home_or_away_team1 = get_team_boxscore_number(league, team1, current_matchup_period)
@@ -179,7 +179,7 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
         for i, date in enumerate(dates):
             if date < today_minus_8:
                 scoring_period = i+(matchup_period-1)*7
-                print(matchup_period, scoring_period)
+                #print(matchup_period, scoring_period)
                 box_scores = league.box_scores(matchup_period = current_matchup_period, scoring_period=scoring_period, matchup_total=False)
                 if home_or_away_team1 == "home":
                     team1_box_score_list.append(box_scores[boxscore_number_team1].home_score)
@@ -193,8 +193,8 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
                 team1_box_score_list.append(0)
                 team2_box_score_list.append(0)
 
-        print(team1_box_score_list)
-        print(team2_box_score_list)
+        #(team1_box_score_list)
+        #print(team2_box_score_list)
 
 
     # Update Predicted Values with Box Scores
@@ -220,8 +220,8 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
     del predicted_values_team1[-1]
     del predicted_values_team2[-1]
 
-    print(predicted_values_from_present_team1)
-    print(predicted_values_from_present_team2)
+    #print(predicted_values_from_present_team1)
+    #print(predicted_values_from_present_team2)
 
 
     #Convert Predicted Values into DataFrames
@@ -256,7 +256,7 @@ def get_current_score(league, team):
 
     return "error"
 
-def get_team_boxscore_number(league, team, matchup_period):
+def get_team_boxscore_number(league, team, matchup_period=None):
 
     for index, boxscore in enumerate(league.box_scores(matchup_total=False)):
         if team == boxscore.home_team:

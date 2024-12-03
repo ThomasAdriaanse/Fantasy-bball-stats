@@ -146,8 +146,8 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     try:
         z_score = expected_point_difference / ((total_std_team_2**2 + total_std_team_1**2)**0.5)
         probability_team_wins = norm.cdf(z_score)
-        print(z_score)
-        print(probability_team_wins)
+        #print(z_score)
+        #print(probability_team_wins)
     except ZeroDivisionError:            
         z_score = float('inf')
         if expected_point_difference > 0:
@@ -174,3 +174,93 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     df = pd.DataFrame(team_data)
     opponent_df = pd.DataFrame(opponent_data)
     return df, opponent_df
+
+def get_team_stats_categories(league, team_num, team_player_data, opponent_num, opponent_player_data, league_scoring_rules, year):
+    team = league.teams[team_num]
+    opponent = league.teams[opponent_num]
+
+    team_boxscore_num, team_home_or_away = cpd.get_team_boxscore_number(league, team)
+    opponent_boxscore_num, opponent_home_or_away = cpd.get_team_boxscore_number(league, opponent)
+
+    # Calculate expected cat stats remaining
+    cats = ['fg%', 'ft%', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts']
+    espn_cats = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
+    team_expected_stats_remaining = {}
+
+
+    current_scoring_period = league.scoringPeriodId
+    current_matchup_period = league.currentMatchupPeriod
+
+    if team_home_or_away == "home":
+        team_current_stats = league.box_scores()[team_boxscore_num].home_stats
+    else:
+        team_current_stats = league.box_scores()[team_boxscore_num].away_stats
+
+    if opponent_home_or_away == "home":
+        opponent_current_stats = league.box_scores()[opponent_boxscore_num].home_stats
+    else:
+        opponent_current_stats = league.box_scores()[opponent_boxscore_num].away_stats
+    
+    team_expected = []
+    opponent_expected = []
+    team_win_percentage = []
+    opponent_win_percentage = []
+
+    for cat, espn_cat in zip(cats, espn_cats):
+
+        texp, opexp, twin, opwin = get_cat_stats(cat, espn_cat, team_player_data, opponent_player_data, team_current_stats, opponent_current_stats)
+        team_expected.append(texp)
+        opponent_expected.append(opexp)
+        team_win_percentage.append(twin)
+        opponent_win_percentage.append(opwin)
+
+    df = pd.DataFrame(team_expected)
+    opponent_df = pd.DataFrame(opponent_expected)
+
+    #print("team 1 df:", df)
+    #print("team 2 df:", opponent_df)
+
+    return df, opponent_df
+
+
+def get_cat_stats(cat, espn_cat, team_player_data, opponent_player_data, team_current_stats, opponent_current_stats):
+
+        # fg% and ft% are messed up, ill fix them later
+        team_expected_remaining = sum(team_player_data[cat] * team_player_data['games'])
+        opponent_expected_remaining = sum(opponent_player_data[cat] * opponent_player_data['games'])
+
+        if espn_cat in team_current_stats and espn_cat in opponent_current_stats:
+            team_expected = team_current_stats[espn_cat].get('value', 0) + team_expected_remaining
+            opponent_expected = opponent_current_stats[espn_cat].get('value', 0) + opponent_expected_remaining
+
+        else:
+            print("error")
+
+        expected_difference = team_expected - opponent_expected
+
+        player_std_dev = 0.40
+
+        team_stats_variance_by_player = (team_player_data[cat]*player_std_dev*team_player_data['games'])
+        team_total_std = team_stats_variance_by_player**0.5
+
+        opponent_stats_variance_by_player = (opponent_player_data[cat]*player_std_dev*opponent_player_data['games'])
+        opponent_total_std = opponent_stats_variance_by_player**0.5
+
+        try:
+            z_score = expected_difference / ((opponent_total_std**2 + team_total_std**2)**0.5)
+            team_win_percentage = norm.cdf(z_score)
+            #print(z_score)
+            #print(team_win_percentage)
+        except ZeroDivisionError:            
+            z_score = float('inf')
+            if expected_difference > 0:
+                team_win_percentage = 1.0  
+            else:
+                team_win_percentage = 0.0
+            
+            if expected_difference == 0:
+                team_win_percentage = 0.5
+            
+        opponent_win_percentage = 100-team_win_percentage
+
+        return team_expected, opponent_expected, team_win_percentage, opponent_win_percentage
