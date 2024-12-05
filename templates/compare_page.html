@@ -21,7 +21,6 @@
 <body>
     <button id="back-button" onclick="window.history.back()">Back</button>
     <div class="team-names">
-        {% if scoring_type == "H2H_POINTS" %}
         <div class="team-name-left">
             <span>{{ data_team_stats_1[0]['team_name'] }}</span>
             <span>&nbsp;&nbsp;&nbsp;{{ data_team_stats_1[0]['team_current_points'] }}</span>
@@ -30,7 +29,6 @@
             <span>{{ data_team_stats_2[0]['team_current_points'] }}&nbsp;&nbsp;&nbsp;</span>
             <span>{{ data_team_stats_2[0]['team_name'] }}</span>
         </div>
-        {% endif %}
     </div>         
     <div class="table-container">
         <!-- First Table -->
@@ -42,10 +40,8 @@
                         <th>MIN</th>
                         <th>FGM</th>
                         <th>FGA</th>
-                        <th>FG%</th>
                         <th>FTM</th>
                         <th>FTA</th>
-                        <th>FT%</th>
                         <th>3PTM</th>
                         <th>REB</th>
                         <th>AST</th>
@@ -67,10 +63,8 @@
                         <td>{{ row['min'] }}</td>
                         <td>{{ row['fgm'] }}</td>
                         <td>{{ row['fga'] }}</td>
-                        <td>{{ row['fg%'] }}</td>
                         <td>{{ row['ftm'] }}</td>
                         <td>{{ row['fta'] }}</td>
-                        <td>{{ row['ft%'] }}</td>
                         <td>{{ row['threeptm'] }}</td>
                         <td>{{ row['reb'] }}</td>
                         <td>{{ row['ast'] }}</td>
@@ -85,7 +79,6 @@
                 </tbody>
             </table>
             <!-- Team Stats Table -->
-            {% if scoring_type == "H2H_POINTS" %}
             <table class="data-table">
                 <thead>
                     <tr>
@@ -104,7 +97,6 @@
                     {% endfor %}
                 </tbody>
             </table>
-            {% endif %}
         </div>
 
         <!-- Second Table -->
@@ -116,10 +108,8 @@
                         <th>MIN</th>
                         <th>FGM</th>
                         <th>FGA</th>
-                        <th>FG%</th>
                         <th>FTM</th>
                         <th>FTA</th>
-                        <th>FG%</th>
                         <th>3PTM</th>
                         <th>REB</th>
                         <th>AST</th>
@@ -141,10 +131,8 @@
                         <td>{{ row['min'] }}</td>
                         <td>{{ row['fgm'] }}</td>
                         <td>{{ row['fga'] }}</td>
-                        <td>{{ row['fg%'] }}</td>
                         <td>{{ row['ftm'] }}</td>
                         <td>{{ row['fta'] }}</td>
-                        <td>{{ row['ft%'] }}</td>
                         <td>{{ row['threeptm'] }}</td>
                         <td>{{ row['reb'] }}</td>
                         <td>{{ row['ast'] }}</td>
@@ -159,7 +147,6 @@
                 </tbody>
             </table>
             <!-- Team Stats Table -->
-            {% if scoring_type == "H2H_POINTS" %}
             <table class="data-table">
                 <thead>
                     <tr>
@@ -178,10 +165,9 @@
                     {% endfor %}
                 </tbody>
             </table>
-            {% endif %}
         </div>
     </div>
-    {% if scoring_type == "H2H_POINTS" %}
+
     <div id="graph-container">
         <p>Graph and table update at end of day (PST)</p>  
         <h2>Team Comparison - Projeced Fantasy Points</h2>
@@ -189,7 +175,7 @@
             <div id="chart"></div>
         </div>
     </div>
-    {% endif %}
+
     <style>
         /* Ensure the chart container adapts to the SVG size */
         #chart {
@@ -197,7 +183,6 @@
             height: auto;
         }
     </style>
-    <!--{% if scoring_type == "H2H_POINTS" %}-->
     <script>
         
         // Tracking time for graph to load
@@ -233,8 +218,8 @@
         today.setHours(0, 0, 0, 0); // Set to midnight for accurate comparison
         today.setDate(today.getDate())
 
-        var team1Name = JSON.parse('{asd{ data_team_stats_1[0]["team_name"] | tojson }}');
-        var team2Name = JSON.parse('{asd{ data_team_stats_2[0]["team_name"] | tojson }}');
+        var team1Name = JSON.parse('{{ data_team_stats_1[0]["team_name"] | tojson }}');
+        var team2Name = JSON.parse('{{ data_team_stats_2[0]["team_name"] | tojson }}');
         
         // Split data into Team 1 and Team 2 based on the team field
         var team1Data = graphData.filter(function(d) { return d.team === "Team 1"; });
@@ -407,6 +392,6 @@
         console.log(`Total page load time: ${(pageLoadEnd - pageLoadStart).toFixed(2)} ms`);
     });
     </script>
-    <!--{% endif %}-->
+
 </body>
 </html>

@@ -12,6 +12,7 @@ from nba_api.stats.endpoints import playergamelog
 from nba_api.stats.static import players
 import json
 import time
+import pprint
 
 load_dotenv()
 app = Flask(__name__)
@@ -253,8 +254,8 @@ def compare_page():
         team1_data = team1_data.to_dict(orient='records')
         team2_data = team2_data.to_dict(orient='records')
 
-        print(team1_player_data)
-        print(team2_player_data)
+        #print(team1_player_data)
+        #print(team2_player_data)
 
         return render_template('compare_page.html', 
                                 data_team_players_1=team1_player_data, 
@@ -265,29 +266,46 @@ def compare_page():
                                 scoring_type="H2H_POINTS")
     
     elif scoring_type == "H2H_CATEGORY":
-
-        team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, year, league_scoring_rules)
-        team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, year, league_scoring_rules)
+        # Retrieve player data for both teams
+        team1_player_data = cpd.get_team_player_data(
+            league, team1_index, player_data_column_names, year, league_scoring_rules
+        )
+        team2_player_data = cpd.get_team_player_data(
+            league, team2_index, player_data_column_names, year, league_scoring_rules
+        )
         
-        category_expected_totals = ['FG%', 'FT%', '3PTM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
-
-        category_win_percentages = ['FG%', 'FT%', '3PTM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
-        team1_data, team2_data =tsd.get_team_stats_categories(league, team1_index, team1_player_data, team2_index, team2_player_data, league_scoring_rules, year)
-        # lets create a 1-d heatmap of the chances of the outocme being 0-9. each square of the grid would contain a percentage, and they would add up to 100. also the cells could stretch based on their percentages.
+        # Get team stats for categories
+        team1_data, team2_data = tsd.get_team_stats_categories(
+            league, team1_index, team1_player_data, team2_index, team2_player_data, 
+            league_scoring_rules, year
+        )
         
+        # Generate comparison graphs for each category
+        combined_dfs = cpd.get_compare_graphs_categories(
+            league, team1_index, team1_player_data, team2_index, team2_player_data, year
+        )
+        
+        combined_jsons = {cat: df.to_dict(orient='records') for cat, df in combined_dfs.items()}
+        
+        #print(combined_jsons['REB'])
+        # Convert DataFrames to lists of dictionaries for rendering
         team1_player_data = team1_player_data.to_dict(orient='records')
         team2_player_data = team2_player_data.to_dict(orient='records')
         team1_data = team1_data.to_dict(orient='records')
         team2_data = team2_data.to_dict(orient='records')
-        print(team1_player_data)
-        print(team2_player_data)
 
-        return render_template('compare_page.html', 
-                                data_team_players_1=team1_player_data, 
-                                data_team_players_2=team2_player_data, 
-                                data_team_stats_1=team1_data, 
-                                data_team_stats_2=team2_data,
-                                scoring_type="H2H_POINTS")
+        print(combined_jsons)
+
+        return render_template(
+            'compare_page_cat.html', 
+            data_team_players_1=team1_player_data, 
+            data_team_players_2=team2_player_data, 
+            data_team_stats_1=team1_data, 
+            data_team_stats_2=team2_data,
+            combined_jsons=combined_jsons,
+            scoring_type="H2H_CATEGORY"
+        )
+
 
 @app.route('/select_teams_page')
 def select_teams_page():
