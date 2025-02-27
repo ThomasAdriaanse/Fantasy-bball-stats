@@ -8,11 +8,12 @@ from scipy.stats import norm
 from espn_api.basketball import League
 from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, ESPNInvalidLeague
 import pandas as pd
+import db_utils
 from nba_api.stats.endpoints import playergamelog
 from nba_api.stats.static import players
 import json
 import time
-import pprint
+from pprint import pprint
 
 load_dotenv()
 app = Flask(__name__)
@@ -210,6 +211,13 @@ def compare_page():
     espn_s2 = request.form.get('espn_s2')
     swid = request.form.get('swid')
     scoring_type = request.form.get('scoring_type')
+    week_num = int(request.form.get('week_num'))
+
+    #week_data = {
+    #    "selected_week": week_num
+     #   "current_week":   
+
+#    }
 
     try:
         league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
@@ -237,14 +245,14 @@ def compare_page():
 
     if scoring_type == "H2H_POINTS":
 
-        team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, year, league_scoring_rules)
-        team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, year, league_scoring_rules)
+        team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, year, league_scoring_rules, week_data)
+        team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, year, league_scoring_rules, week_data)
 
         team_data_column_names = ['team_avg_fpts', 'team_expected_points', 'team_chance_of_winning', 'team_name', 'team_current_points']
 
-        team1_data, team2_data = tsd.get_team_stats(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names, league_scoring_rules, year)
+        team1_data, team2_data = tsd.get_team_stats(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names, league_scoring_rules, year, week_data)
 
-        combined_df = cpd.get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, year)
+        combined_df = cpd.get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, year, week_data)
         combined_json = combined_df.to_json(orient='records')  # Convert the DataFrame to JSON
         #print(combined_df)
 
@@ -294,8 +302,9 @@ def compare_page():
         team1_data = team1_data.to_dict(orient='records')
         team2_data = team2_data.to_dict(orient='records')
 
-        print(combined_jsons)
-
+        #print(combined_jsons)
+        print(league.teams[team1_index].schedule)
+        print(len(league.teams[team1_index].schedule))
         return render_template(
             'compare_page_cat.html', 
             data_team_players_1=team1_player_data, 
@@ -305,7 +314,6 @@ def compare_page():
             combined_jsons=combined_jsons,
             scoring_type="H2H_CATEGORY"
         )
-
 
 @app.route('/select_teams_page')
 def select_teams_page():
@@ -350,12 +358,19 @@ def select_teams_page():
     #if league.settings.scoring_type == "H2H_CATEGORY":
     #    return redirect(url_for('entry_page', error_message="League must be Points, not Categories"))
 
+    # here i need to determine which week it currently is, and the start and end dates for each week.
+    #print(league.player_map)
+    print(league.scoringPeriodId)    
+    print(league.currentMatchupPeriod)
+    print(league.settings.matchup_periods)
+    print(db_utils.get_matchup_periods(league, league.currentMatchupPeriod))
+
+
     teams_list = [team.team_name for team in league.teams]
 
     form_data = session.pop('form_data', {})
 
     return render_template('select_teams_page.html', info_list=teams_list, **league_details, form_data = form_data, scoring_type=league.settings.scoring_type)
-
 
 @app.route('/process', methods=['POST'])
 def process_information():

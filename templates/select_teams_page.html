@@ -60,6 +60,11 @@
                 hideLoading();
             }
         };
+
+        function selectWeek(weekNumber) {
+            document.getElementById('selectedWeek').value = weekNumber;
+            document.getElementById('weekButton').textContent = 'Week ' + weekNumber;
+        }
     </script>
 
 </head>
@@ -87,6 +92,16 @@
             </div>
           {% endif %}
         {% endwith %}
+        <div class="dropdown-container">
+            <div class="dropdown">
+                <button type="button" class="dropbtn" id="weekButton">Week X (Hover to change)</button>
+                <div class="dropdown-content">
+                    <a href="javascript:void(0)" onclick="selectWeek(1)">Week 1</a>
+                    <a href="javascript:void(0)" onclick="selectWeek(2)">Week 2</a>
+                    <a href="javascript:void(0)" onclick="selectWeek(3)">Week 3</a>
+                </div>
+            </div>
+        </div>
         <form id="compareForm" action="/compare_page" method="post">
             <div class="main-container">
                 <!-- Scoring area to the left -->
@@ -173,6 +188,9 @@
             <!-- Hidden inputs for selected teams -->
             <input type="hidden" id="myTeamInput" name="myTeam" value="">
             <input type="hidden" id="opponentsTeamInput" name="opponentsTeam" value="">
+
+            <!-- Hidden input for week-->
+            <input type="hidden" id="selectedWeek" name="week_num" value="">
 
             <!-- Submit button -->
             <button type="button" onclick="compareTeams()">Compare Teams</button>

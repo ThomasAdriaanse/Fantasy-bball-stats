@@ -91,10 +91,12 @@ def get_team_player_data(league, team_num, columns, year, league_scoring_rules):
             team_data['inj'].append(player.injuryStatus)
             team_data['fpts'].append('N/A')
         
-        #get the players schedule this week
+        #get the players schedule for the week
         schedule = player.schedule
         list_schedule = list(schedule.values())
         list_schedule.sort(key=lambda x: x['date'], reverse=False)
+
+        
 
         today_minus_8 = (datetime.today()-timedelta(hours=8)).date()
 
