@@ -14,6 +14,7 @@ from nba_api.stats.static import players
 import json
 import time
 from pprint import pprint
+from datetime import datetime, timedelta
 
 load_dotenv()
 app = Flask(__name__)
@@ -358,12 +359,83 @@ def select_teams_page():
     #if league.settings.scoring_type == "H2H_CATEGORY":
     #    return redirect(url_for('entry_page', error_message="League must be Points, not Categories"))
 
-    # here i need to determine which week it currently is, and the start and end dates for each week.
+
+
+    # here i need to determine which week it currently is, and the start and end dates for each week, and period data
+
+    # dates should be a data object, and dict should look like this:
+
+    # week:matchupperiod, [scoringperiods], firstdate, lastdate
+
+    # scoring preiods are calculate like this:
+    # for i, date in enumerate(dates):
+    #    scoring_period = i+(matchup_period-1)*7
+    # 1 scoring period for each date in a matchup
+    # week 1 is 1 day less because it starts on a tuesday instead of a monday
+    # the starting date can be calculated by todays date - league.scoringPeriodId, because the leaguecats.scoringPeriodId is also the number of days since the season started.
+
+    # matchup 17 - league.firstScoringPeriod is all star break, so it is 7 days longer. the break days also have their scoring period calculated the same way
+
+    # use league.playoff_matchup_period_length determines the length of playoff matchups in # weeks (usually 2 weeks, 14 days), playoff matchups are the last matchup periods.
+
+    #league.settings.matchup_periods is {'1': [1], '2': [2], '3': [3], '4': [4], '5': [5], '6': [6], '7': [7], '8': [8], '9': [9], '10': [10], '11': [11], '12': [12], '13': [13], '14': [14], '15': [15], '16': [16], '17': [17], '18': [18], '19': [19], '20': [20], '21': [21], '22': [22]}
+    # for example
+
+    #print(vars(league.settings))
+
+    
+    def get_matchup_dates(league):
+        today = datetime.today()
+        season_start = today - timedelta(days=league.scoringPeriodId)
+        
+        matchupperiods = league.settings.matchup_periods
+        first_scoring_period = league.firstScoringPeriod
+        playoff_length = league.settings.playoff_matchup_period_length * 7  # Convert weeks to days
+        
+        matchup_date_data = {}
+        
+        matchup_period_keys = [int(k) for k in matchupperiods.keys()]
+        max_matchup_period = max(matchup_period_keys)
+        
+        for matchup_period, scoring_periods in matchupperiods.items():
+            matchup_period = int(matchup_period)
+            
+            if matchup_period == 1:
+                start_date = season_start
+                end_date = start_date + timedelta(days=6)  # First week is one day shorter
+            elif matchup_period == first_scoring_period:
+                start_date = prev_end_date + timedelta(days=1)
+                end_date = start_date + timedelta(days=13)  # All-Star break (7 days longer)
+            else:
+                start_date = prev_end_date + timedelta(days=1)
+                end_date = start_date + timedelta(days=6)  # Regular weeks are 7 days
+            
+            # Playoffs (last matchup periods)
+            if matchup_period >= max_matchup_period - (playoff_length // 7 - 1):
+                end_date = start_date + timedelta(days=playoff_length - 1)
+            
+            scoring_periods = [i + (matchup_period - 1) * 7 for i in range((end_date - start_date).days + 1)]
+            
+            matchup_date_data[f'week_{matchup_period}'] = {
+                'matchup_period': matchup_period,
+                'scoring_periods': scoring_periods,
+                'start_date': start_date.strftime('%Y-%m-%d'),
+                'end_date': end_date.strftime('%Y-%m-%d')
+            }
+            
+            prev_end_date = end_date
+        
+        return matchup_date_data
+
+    
+    matchup_date_data = get_matchup_dates(league)
+    print(matchup_date_data)
+
     #print(league.player_map)
-    print(league.scoringPeriodId)    
-    print(league.currentMatchupPeriod)
-    print(league.settings.matchup_periods)
-    print(db_utils.get_matchup_periods(league, league.currentMatchupPeriod))
+    #print(league.scoringPeriodId)    
+    #print(league.currentMatchupPeriod)
+    #print()
+    #print(db_utils.get_matchup_periods(league, league.currentMatchupPeriod))
 
 
     teams_list = [team.team_name for team in league.teams]
