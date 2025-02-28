@@ -15,7 +15,10 @@ def get_team_stats_data_schema():
     
     return table_schema
 
-def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_player_data, columns, league_scoring_rules, year):
+def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_player_data, columns, league_scoring_rules, year, week_data=None):
+
+    # Use selected week matchup period if available
+    selected_matchup_period = week_data['selected_week'] if week_data else league.currentMatchupPeriod
 
     #start_time = time.time()
     #print("Starting get_team_stats...")
@@ -27,7 +30,7 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     opponent_home_or_away = "temp"
 
     box_count = 0
-    for boxscore in league.box_scores():
+    for boxscore in league.box_scores(matchup_period=selected_matchup_period):
         if league.teams[team_num] == boxscore.home_team:
             team_boxscore_num = box_count 
             team_home_or_away = "home"
@@ -112,25 +115,56 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     opponent_expected_points_remaining = sum(player_avg_fpts * games_left for player_avg_fpts, games_left in zip(opponent_player_averages, opponent_player_games_left))
 
     current_scoring_period = league.scoringPeriodId
-    current_matchup_period = league.currentMatchupPeriod
-    #team_current_points -= league.box_scores(matchup_period = current_matchup_period, scoring_period=current_scoring_period, matchup_total=False)
-    #opponent_current_points -= league.box_scores(matchup_period = current_matchup_period, scoring_period=current_scoring_period, matchup_total=False)
  
 
     # Get current box scores
-    if team_home_or_away == "home":
-        team_current_points = league.box_scores()[team_boxscore_num].home_score
-        team_current_points -= league.box_scores(matchup_period = current_matchup_period, scoring_period=current_scoring_period, matchup_total=False)[team_boxscore_num].home_score
-    else:
-        team_current_points = league.box_scores()[team_boxscore_num].away_score
-        team_current_points -= league.box_scores(matchup_period = current_matchup_period, scoring_period=current_scoring_period, matchup_total=False)[team_boxscore_num].away_score
+    try:
+        if team_home_or_away == "home":
+            team_current_points = league.box_scores(matchup_period=selected_matchup_period)[team_boxscore_num].home_score
+            try:
+                current_period_scores = league.box_scores(matchup_period=selected_matchup_period, scoring_period=current_scoring_period, matchup_total=False)
+                if team_boxscore_num < len(current_period_scores):
+                    team_current_points -= current_period_scores[team_boxscore_num].home_score
+            except (IndexError, AttributeError):
+                print("error1")
+                # If we can't get current period scores for future weeks, just use total points
+                pass
+        else:
+            team_current_points = league.box_scores(matchup_period=selected_matchup_period)[team_boxscore_num].away_score
+            try:
+                current_period_scores = league.box_scores(matchup_period=selected_matchup_period, scoring_period=current_scoring_period, matchup_total=False)
+                if team_boxscore_num < len(current_period_scores):
+                    team_current_points -= current_period_scores[team_boxscore_num].away_score
+            except (IndexError, AttributeError):
+                print("error1")
+                # If we can't get current period scores for future weeks, just use total points
+                pass
 
-    if opponent_home_or_away == "home":
-        opponent_current_points = league.box_scores()[opponent_boxscore_num].home_score
-        opponent_current_points -= league.box_scores(matchup_period = current_matchup_period, scoring_period=current_scoring_period, matchup_total=False)[opponent_boxscore_num].home_score
-    else:
-        opponent_current_points = league.box_scores()[opponent_boxscore_num].away_score
-        opponent_current_points -= league.box_scores(matchup_period = current_matchup_period, scoring_period=current_scoring_period, matchup_total=False)[opponent_boxscore_num].away_score
+        if opponent_home_or_away == "home":
+            opponent_current_points = league.box_scores(matchup_period=selected_matchup_period)[opponent_boxscore_num].home_score
+            try:
+                current_period_scores = league.box_scores(matchup_period=selected_matchup_period, scoring_period=current_scoring_period, matchup_total=False)
+                if opponent_boxscore_num < len(current_period_scores):
+                    opponent_current_points -= current_period_scores[opponent_boxscore_num].home_score
+            except (IndexError, AttributeError):
+                print("error1")
+                # If we can't get current period scores for future weeks, just use total points
+                pass
+        else:
+            opponent_current_points = league.box_scores(matchup_period=selected_matchup_period)[opponent_boxscore_num].away_score
+            try:
+                current_period_scores = league.box_scores(matchup_period=selected_matchup_period, scoring_period=current_scoring_period, matchup_total=False)
+                if opponent_boxscore_num < len(current_period_scores):
+                    opponent_current_points -= current_period_scores[opponent_boxscore_num].away_score
+            except (IndexError, AttributeError):
+                print("error1")
+                # If we can't get current period scores for future weeks, just use total points
+                pass
+    except IndexError:
+        print("error2")
+        # If we're looking at a future matchup period with no box scores yet, set current points to 0
+        team_current_points = 0
+        opponent_current_points = 0
 
 
     team_total_expected = team_expected_points_remaining + team_current_points
@@ -175,12 +209,14 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     opponent_df = pd.DataFrame(opponent_data)
     return df, opponent_df
 
-def get_team_stats_categories(league, team_num, team_player_data, opponent_num, opponent_player_data, league_scoring_rules, year):
+def get_team_stats_categories(league, team_num, team_player_data, opponent_num, opponent_player_data, league_scoring_rules, year, week_data=None):
     team = league.teams[team_num]
     opponent = league.teams[opponent_num]
 
-    team_boxscore_num, team_home_or_away = cpd.get_team_boxscore_number(league, team)
-    opponent_boxscore_num, opponent_home_or_away = cpd.get_team_boxscore_number(league, opponent)
+    # Use selected week matchup period if available
+    selected_matchup_period = week_data['selected_week'] if week_data else league.currentMatchupPeriod
+    team_boxscore_num, team_home_or_away = cpd.get_team_boxscore_number(league, team, selected_matchup_period)
+    opponent_boxscore_num, opponent_home_or_away = cpd.get_team_boxscore_number(league, opponent, selected_matchup_period)
 
     # Calculate expected cat stats remaining
     cats = ['fg%', 'ft%', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts']
@@ -189,17 +225,16 @@ def get_team_stats_categories(league, team_num, team_player_data, opponent_num, 
 
 
     current_scoring_period = league.scoringPeriodId
-    current_matchup_period = league.currentMatchupPeriod
 
     if team_home_or_away == "home":
-        team_current_stats = league.box_scores()[team_boxscore_num].home_stats
+        team_current_stats = league.box_scores(matchup_period=selected_matchup_period)[team_boxscore_num].home_stats
     else:
-        team_current_stats = league.box_scores()[team_boxscore_num].away_stats
+        team_current_stats = league.box_scores(matchup_period=selected_matchup_period)[team_boxscore_num].away_stats
 
     if opponent_home_or_away == "home":
-        opponent_current_stats = league.box_scores()[opponent_boxscore_num].home_stats
+        opponent_current_stats = league.box_scores(matchup_period=selected_matchup_period)[opponent_boxscore_num].home_stats
     else:
-        opponent_current_stats = league.box_scores()[opponent_boxscore_num].away_stats
+        opponent_current_stats = league.box_scores(matchup_period=selected_matchup_period)[opponent_boxscore_num].away_stats
     
     team_expected = []
     opponent_expected = []

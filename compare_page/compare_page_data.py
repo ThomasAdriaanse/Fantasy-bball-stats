@@ -27,7 +27,7 @@ def get_team_player_data_schema():
     return table_schema
 
 
-def get_team_player_data(league, team_num, columns, year, league_scoring_rules):
+def get_team_player_data(league, team_num, columns, year, league_scoring_rules, week_data=None):
 
     team = league.teams[team_num]
     # Initialize an empty list for each column
@@ -91,44 +91,60 @@ def get_team_player_data(league, team_num, columns, year, league_scoring_rules):
             team_data['inj'].append(player.injuryStatus)
             team_data['fpts'].append('N/A')
         
-        #get the players schedule for the week
+        # Get the players schedule for the week
         schedule = player.schedule
         list_schedule = list(schedule.values())
         list_schedule.sort(key=lambda x: x['date'], reverse=False)
 
+        # Use selected week data if provided, otherwise use current week
+        if week_data and 'matchup_data' in week_data:
+            # Use the selected week's date range from matchup_data
+            start_date = datetime.strptime(week_data['matchup_data']['start_date'], '%Y-%m-%d').date()
+            end_date = datetime.strptime(week_data['matchup_data']['end_date'], '%Y-%m-%d').date()
+            
+            # Filter games for the selected week
+            games_in_week = [game for game in list_schedule if 
+                            start_date <= (game['date']-timedelta(hours=5)).date() <= end_date]
+        else:
+            # Fall back to current week if no week_data provided
+            today_minus_8 = (datetime.today()-timedelta(hours=8)).date()
+            start_of_week, end_of_week = db_utils.range_of_current_week(today_minus_8)
+            
+            # Filter games for current week
+            games_in_week = [game for game in list_schedule if 
+                            today_minus_8 <= (game['date']-timedelta(hours=5)).date() <= end_of_week]
         
-
-        today_minus_8 = (datetime.today()-timedelta(hours=8)).date()
-
-        start_of_week, end_of_week = db_utils.range_of_current_week(today_minus_8)
-
-        # adjust by 5 for time zone changing
-        games_left_this_week = [game for game in list_schedule if today_minus_8 <= (game['date']-timedelta(hours=5)).date() <= end_of_week]
-
-        #for game in list_schedule:
-        #    if today_minus_8 <= (game['date']-timedelta(hours=5)).date() <= end_of_week+timedelta(hours=9):
-        #        print((game['date']-timedelta(hours=5)).date())
-        
-        #add number of games left to the database
-        team_data['games'].append(len(games_left_this_week))
+        # Add number of games to the database
+        team_data['games'].append(len(games_in_week))
 
     df = pd.DataFrame(team_data)
     return df
 
-def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, year):
+def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, year, week_data=None):
     
     start_time = time.time()
     
-
     team1 = league.teams[team1_index]
     team2 = league.teams[team2_index]
 
-    today = datetime.today()
-    today_minus_8 = (today-timedelta(hours=8)).date()  
+    # Use selected week data if provided, otherwise use current week
+    if week_data and 'matchup_data' in week_data:
+        # Use the selected week's date range and matchup period
+        start_date = datetime.strptime(week_data['matchup_data']['start_date'], '%Y-%m-%d').date()
+        end_date = datetime.strptime(week_data['matchup_data']['end_date'], '%Y-%m-%d').date()
+        selected_matchup_period = week_data['selected_week']
+    else:
+        # Fall back to current week if no week_data provided
+        today = datetime.today()
+        today_minus_8 = (today-timedelta(hours=8)).date()
+        start_date, end_date = db_utils.range_of_current_week(today_minus_8)
+        selected_matchup_period = league.currentMatchupPeriod
 
-    start_of_week, end_of_week = db_utils.range_of_current_week(today_minus_8) 
-    dates = pd.date_range(start=start_of_week, end=end_of_week+timedelta(hours=24)).date
+    # Create date range for the selected week
+    dates = pd.date_range(start=start_date, end=end_date+timedelta(hours=24)).date
     
+    #print(dates)
+
     # Step 3: Initialize Dictionaries for Predicted Values
     dates_dict = {date: i for i, date in enumerate(dates)}
     predicted_values_team1 = [0] * len(dates)
@@ -155,157 +171,176 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
                     game_date = (game['date'] - timedelta(hours=5)).date()
                     if game_date in dates_dict:
                         predicted_values[dates_dict[game_date]] += avg_fpts
+                        today_minus_8 = (datetime.today()-timedelta(hours=8)).date()
                         if game_date >= today_minus_8:
                             predicted_values_from_present[dates_dict[game_date]] += avg_fpts
 
     calculate_fpts_for_team(team1, team1_player_data, predicted_values_team1, predicted_values_from_present_team1, dates_dict)
     calculate_fpts_for_team(team2, team2_player_data, predicted_values_team2, predicted_values_from_present_team2, dates_dict)
 
-    current_matchup_period = league.currentMatchupPeriod
-
-    #print("CURRENT MATCHUIP:",current_matchup_period)
-
-
-    boxscore_number_team1, home_or_away_team1 = get_team_boxscore_number(league, team1, current_matchup_period)
-    boxscore_number_team2, home_or_away_team2 = get_team_boxscore_number(league, team2, current_matchup_period)
+    boxscore_number_team1, home_or_away_team1 = get_team_boxscore_number(league, team1, selected_matchup_period)
+    boxscore_number_team2, home_or_away_team2 = get_team_boxscore_number(league, team2, selected_matchup_period)
 
     # Get Weekly Box Scores for Both Teams
     team1_box_score_list = []
     team2_box_score_list = []
 
-    matchup_periods = db_utils.get_matchup_periods(league, current_matchup_period)
-    for matchup_period in matchup_periods:
-        # Note: calling box_scores 14 times (7 for each team) is what makes the loading slow
-        for i, date in enumerate(dates):
-            if date < today_minus_8:
-                scoring_period = i+(matchup_period-1)*7
-                #print(matchup_period, scoring_period)
-                box_scores = league.box_scores(matchup_period = current_matchup_period, scoring_period=scoring_period, matchup_total=False)
+    # Get scoring periods from week_data if available
+    if week_data and 'matchup_data' in week_data:
+        scoring_periods = week_data['matchup_data']['scoring_periods']
+    else:
+        matchup_periods = db_utils.get_matchup_periods(league, selected_matchup_period)
+        scoring_periods = []
+        for matchup_period in matchup_periods:
+            for i, date in enumerate(dates):
+                scoring_periods.append(i + (matchup_period - 1) * 7)
+
+    # Initialize box score lists with zeros
+    team1_box_score_list = [0] * len(dates)
+    team2_box_score_list = [0] * len(dates)
+
+    # Get historical data for dates that have already passed
+    today_minus_8 = (datetime.today()-timedelta(hours=8)).date()
+    for i, date in enumerate(dates):
+        if date < today_minus_8:
+            try:
+                # Use scoring period from the matchup_data if available
+                scoring_period = scoring_periods[i] if i < len(scoring_periods) else i + (selected_matchup_period - 1) * 7
+
+                box_scores = league.box_scores(matchup_period=selected_matchup_period, 
+                                              scoring_period=scoring_period, 
+                                              matchup_total=False)
+                
                 if home_or_away_team1 == "home":
-                    team1_box_score_list.append(box_scores[boxscore_number_team1].home_score)
-                if home_or_away_team1 == "away":
-                    team1_box_score_list.append(box_scores[boxscore_number_team1].away_score)
+                    team1_box_score_list[i] = box_scores[boxscore_number_team1].home_score
+                elif home_or_away_team1 == "away":
+                    team1_box_score_list[i] = box_scores[boxscore_number_team1].away_score
+                    
                 if home_or_away_team2 == "home":
-                    team2_box_score_list.append(box_scores[boxscore_number_team2].home_score)
-                if home_or_away_team2 == "away":
-                    team2_box_score_list.append(box_scores[boxscore_number_team2].away_score)
-            else:
-                team1_box_score_list.append(0)
-                team2_box_score_list.append(0)
-
-        #(team1_box_score_list)
-        #print(team2_box_score_list)
+                    team2_box_score_list[i] = box_scores[boxscore_number_team2].home_score
+                elif home_or_away_team2 == "away":
+                    team2_box_score_list[i] = box_scores[boxscore_number_team2].away_score
+            except (IndexError, AttributeError):
+                print("box score out of range")
+                # Handle errors gracefully if box score data is not available
+                pass
 
 
+    real_and_predicted_scores_team1 = predicted_values_from_present_team1
+    real_and_predicted_scores_team2 = predicted_values_from_present_team2
+    
     # Update Predicted Values with Box Scores
     for index, date in enumerate(dates):
         if date < today_minus_8:
-            predicted_values_from_present_team1[index] = team1_box_score_list[index]
-            predicted_values_from_present_team2[index] = team2_box_score_list[index]
+            real_and_predicted_scores_team1[index] = team1_box_score_list[index]
+            real_and_predicted_scores_team2[index] = team2_box_score_list[index]
 
         if index > 0:
             predicted_values_team1[index] += predicted_values_team1[index - 1]
             predicted_values_team2[index] += predicted_values_team2[index - 1]
-            predicted_values_from_present_team1[index] += predicted_values_from_present_team1[index - 1]
-            predicted_values_from_present_team2[index] += predicted_values_from_present_team2[index - 1]
+            real_and_predicted_scores_team1[index] += real_and_predicted_scores_team1[index - 1]
+            real_and_predicted_scores_team2[index] += real_and_predicted_scores_team2[index - 1]
     
 
-    predicted_values_from_present_team1.insert(0, 0)
-    predicted_values_from_present_team2.insert(0, 0)
-    del predicted_values_from_present_team1[-1]
-    del predicted_values_from_present_team2[-1]
+    real_and_predicted_scores_team1.insert(0, 0)
+    real_and_predicted_scores_team2.insert(0, 0)
+    del real_and_predicted_scores_team1[-1]
+    del real_and_predicted_scores_team2[-1]
 
     predicted_values_team1.insert(0, 0)
     predicted_values_team2.insert(0, 0)
     del predicted_values_team1[-1]
     del predicted_values_team2[-1]
 
-    #print(predicted_values_from_present_team1)
-    #print(predicted_values_from_present_team2)
-
-
+    print(real_and_predicted_scores_team1)
+    print(predicted_values_team1)
     #Convert Predicted Values into DataFrames
     team1_df = pd.DataFrame({
         'date': dates,
         'predicted_fpts': predicted_values_team1,
-        'predicted_fpts_from_present': predicted_values_from_present_team1,
+        'predicted_fpts_from_present': real_and_predicted_scores_team1,
         'team': 'Team 1'
     })
 
     team2_df = pd.DataFrame({
         'date': dates,
         'predicted_fpts': predicted_values_team2,
-        'predicted_fpts_from_present': predicted_values_from_present_team2,
+        'predicted_fpts_from_present': real_and_predicted_scores_team2,
         'team': 'Team 2'
     })
 
     combined_df = pd.concat([team1_df, team2_df], ignore_index=True)
     
-
     return combined_df
 
-def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_index, team2_player_data, year):
+def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_index, team2_player_data, year, week_data=None):
     
-    current_matchup_period = league.currentMatchupPeriod
+    # Use selected week data if provided, otherwise use current week
+    if week_data and 'matchup_data' in week_data:
+        # Use the selected week's date range and matchup period
+        start_date = datetime.strptime(week_data['matchup_data']['start_date'], '%Y-%m-%d').date()
+        end_date = datetime.strptime(week_data['matchup_data']['end_date'], '%Y-%m-%d').date()
+        selected_matchup_period = week_data['selected_week']
+    else:
+        # Fall back to current week if no week_data provided
+        today = datetime.today()
+        today_minus_8 = (today-timedelta(hours=8)).date()
+        start_date, end_date = db_utils.range_of_current_week(today_minus_8)
+        selected_matchup_period = league.currentMatchupPeriod
 
     team1 = league.teams[team1_index]
     team2 = league.teams[team2_index]
     today = datetime.today()
     today_minus_8 = (today-timedelta(hours=8)).date()  
 
-    # need to use the league instance variables firstScoringPeriod and finalScoringPeriod later
-    start_of_week, end_of_week = db_utils.range_of_current_week(today_minus_8) 
-    dates = pd.date_range(start=start_of_week, end=end_of_week+timedelta(hours=24)).date
-    print(start_of_week, end_of_week)
+    # Create date range for the selected week
+    dates = pd.date_range(start=start_date, end=end_date+timedelta(hours=24)).date
+    print(start_date, end_date)
 
-    boxscore_number_team1, home_or_away_team1 = get_team_boxscore_number(league, team1, current_matchup_period)
-    boxscore_number_team2, home_or_away_team2 = get_team_boxscore_number(league, team2, current_matchup_period)
+    boxscore_number_team1, home_or_away_team1 = get_team_boxscore_number(league, team1, selected_matchup_period)
+    boxscore_number_team2, home_or_away_team2 = get_team_boxscore_number(league, team2, selected_matchup_period)
 
     # Get Weekly Box Scores for Both Teams
     team1_box_score_list = []
     team2_box_score_list = []
 
-    matchup_periods = db_utils.get_matchup_periods(league, current_matchup_period)
-    for matchup_period in matchup_periods:
-        # Note: calling box_scores 14 times (7 for each team) is what makes the loading slow
-        for i, date in enumerate(dates):
-            if date < today_minus_8:
-                scoring_period = i+(matchup_period-1)*7
-                #print(matchup_period, scoring_period)
-                box_scores = league.box_scores(matchup_period = current_matchup_period, scoring_period=scoring_period, matchup_total=False)
+    # Get scoring periods from week_data if available
+    if week_data and 'matchup_data' in week_data:
+        scoring_periods = week_data['matchup_data']['scoring_periods']
+    else:
+        matchup_periods = db_utils.get_matchup_periods(league, selected_matchup_period)
+        scoring_periods = []
+        for matchup_period in matchup_periods:
+            for i, date in enumerate(dates):
+                scoring_periods.append(i + (matchup_period - 1) * 7)
+
+    # Initialize box score lists with zeros
+    team1_box_score_list = [0] * len(dates)
+    team2_box_score_list = [0] * len(dates)
+
+    # Get historical data for dates that have already passed
+    for i, date in enumerate(dates):
+        if date < today_minus_8:
+            try:
+                # Use scoring period from the matchup_data if available
+                scoring_period = scoring_periods[i] if i < len(scoring_periods) else i + (selected_matchup_period - 1) * 7
+                
+                box_scores = league.box_scores(matchup_period=selected_matchup_period, 
+                                              scoring_period=scoring_period, 
+                                              matchup_total=False)
+                
                 if home_or_away_team1 == "home":
-                    team1_box_score_list.append(box_scores[boxscore_number_team1].home_stats)
-                if home_or_away_team1 == "away":
-                    team1_box_score_list.append(box_scores[boxscore_number_team1].away_stats)
+                    team1_box_score_list[i] = box_scores[boxscore_number_team1].home_stats
+                elif home_or_away_team1 == "away":
+                    team1_box_score_list[i] = box_scores[boxscore_number_team1].away_stats
+                    
                 if home_or_away_team2 == "home":
-                    team2_box_score_list.append(box_scores[boxscore_number_team2].home_stats)
-                if home_or_away_team2 == "away":
-                    team2_box_score_list.append(box_scores[boxscore_number_team2].away_stats)
-            else:
-                team1_box_score_list.append(0)
-                team2_box_score_list.append(0)
-
-            # team1_box_score_list and team2_box_score_list are now lists containing stats like this for each day of the week, with days in the future being 0
-            # box scores for a stat can be accessed with team1_box_score_list[day][category]['value]
-
-            # example output:
-            # {
-            # 'PTS': {'value': 559.0, 'result': 'LOSS'}, 
-            # 'BLK': {'value': 23.0, 'result': 'WIN'}, 
-            # 'STL': {'value': 31.0, 'result': 'LOSS'}, 
-            # 'AST': {'value': 139.0, 'result': 'LOSS'}, 
-            # 'REB': {'value': 189.0, 'result': 'LOSS'}, 
-            # 'TO': {'value': 89.0, 'result': 'LOSS'}, 
-            # 'FGM': {'value': 204.0, 'result': None}, 
-            # 'FGA': {'value': 483.0, 'result': None}, 
-            # 'FTM': {'value': 72.0, 'result': None}, 
-            # 'FTA': {'value': 84.0, 'result': None}, 
-            # '3PM': {'value': 79.0, 'result': 'WIN'}, 
-            # 'FG%': {'value': 0.42236025, 'result': 'LOSS'}, 
-            # 'FT%': {'value': 0.85714286, 'result': 'WIN'}
-            # }
-
-    #print(team1_box_score_list)
+                    team2_box_score_list[i] = box_scores[boxscore_number_team2].home_stats
+                elif home_or_away_team2 == "away":
+                    team2_box_score_list[i] = box_scores[boxscore_number_team2].away_stats
+            except (IndexError, AttributeError):
+                # Handle errors gracefully if box score data is not available
+                pass
 
     cats = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
     # categories have different names when used in flask due to "to" being a keyword and number not being allowed
@@ -340,7 +375,7 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
         
         # Update Predicted Values with Box Scores
         for index, date in enumerate(dates):
-            if date < today_minus_8:
+            if date < today_minus_8 and isinstance(team1_box_score_list[index], dict) and cat in team1_box_score_list[index]:
                 predicted_values_from_present_team1[cat][index] = team1_box_score_list[index][cat]['value']
                 predicted_values_from_present_team2[cat][index] = team2_box_score_list[index][cat]['value']
 
@@ -423,20 +458,10 @@ def calculate_cat_predictions(dates, today_minus_8, team1, team2, team1_player_d
     
     return predicted_values_team1, predicted_values_from_present_team1, predicted_values_team2, predicted_values_from_present_team2
 
-def get_current_score(league, team):
-
-    for boxscore in league.box_scores():
-        if team == boxscore.home_team:
-            return boxscore.home_score 
-
-        elif team == boxscore.away_team:  
-            return boxscore.away_score 
-
-    return "error"
 
 def get_team_boxscore_number(league, team, matchup_period=None):
 
-    for index, boxscore in enumerate(league.box_scores(matchup_total=False)):
+    for index, boxscore in enumerate(league.box_scores(matchup_period=matchup_period, matchup_total=False)):
         if team == boxscore.home_team:
             return index, "home"
 

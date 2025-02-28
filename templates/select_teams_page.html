@@ -94,11 +94,13 @@
         {% endwith %}
         <div class="dropdown-container">
             <div class="dropdown">
-                <button type="button" class="dropbtn" id="weekButton">Week X (Hover to change)</button>
+                <button type="button" class="dropbtn" id="weekButton">Week {{ current_matchup }} (Hover to change)</button>
                 <div class="dropdown-content">
-                    <a href="javascript:void(0)" onclick="selectWeek(1)">Week 1</a>
-                    <a href="javascript:void(0)" onclick="selectWeek(2)">Week 2</a>
-                    <a href="javascript:void(0)" onclick="selectWeek(3)">Week 3</a>
+                    {% for week_key, week_data in matchup_data_dict.items() %}
+                    <a href="javascript:void(0)" onclick="selectWeek({{ week_data.matchup_period }})">
+                        Week {{ week_data.matchup_period }} ({{ week_data.start_date }} to {{ week_data.end_date }})
+                    </a>
+                    {% endfor %}
                 </div>
             </div>
         </div>
@@ -184,13 +186,14 @@
             <input type="hidden" name="espn_s2" value="{{ espn_s2 }}">
             <input type="hidden" name="swid" value="{{ swid }}">
             <input type="hidden" name="scoring_type" value="{{ scoring_type }}">
+            <input type="hidden" name="matchup_data_dict" value="{{ matchup_data_dict }}">
 
             <!-- Hidden inputs for selected teams -->
             <input type="hidden" id="myTeamInput" name="myTeam" value="">
             <input type="hidden" id="opponentsTeamInput" name="opponentsTeam" value="">
 
             <!-- Hidden input for week-->
-            <input type="hidden" id="selectedWeek" name="week_num" value="">
+            <input type="hidden" id="selectedWeek" name="week_num" value="{{ current_matchup }}">
 
             <!-- Submit button -->
             <button type="button" onclick="compareTeams()">Compare Teams</button>

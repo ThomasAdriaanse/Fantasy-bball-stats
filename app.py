@@ -21,6 +21,63 @@ app = Flask(__name__)
 
 app.secret_key = os.urandom(24)
 
+# Define the get_matchup_dates function at the global level so it can be used by multiple routes
+def get_matchup_dates(league):
+    """Generate matchup date data for all matchup periods in the league"""
+    today = datetime.today()
+    season_start = today - timedelta(days=league.scoringPeriodId)
+    
+    matchupperiods = league.settings.matchup_periods
+    first_scoring_period = league.firstScoringPeriod    
+
+    #print(playoff_matchup_period_length)
+    #print(vars(playoff_matchup_period_length))
+
+    matchup_date_data = {}
+    
+    matchup_period_keys = [int(k) for k in matchupperiods.keys()]
+    max_matchup_period = max(matchup_period_keys)
+    
+    prev_end_date = None  # Initialize prev_end_date variable
+    scoring_period_multiplier = 0
+
+    #print(matchupperiods)
+    #print(matchupperiods.items())
+
+    for matchup_period_number, matchup_periods in matchupperiods.items():
+        matchup_period_number = int(matchup_period_number)
+        
+        matchup_length = len(matchup_periods)
+
+        if matchup_period_number == (18 - first_scoring_period):
+            matchup_length += 1
+
+        if matchup_period_number == 1:
+            start_date = season_start
+            end_date = start_date + timedelta(days=6) + timedelta(days=7)*(matchup_length-1)  # First week is one day shorter
+
+        else:
+            start_date = prev_end_date + timedelta(days=1)
+            end_date = start_date + timedelta(days=6)+ timedelta(days=7)*(matchup_length-1)  # Regular weeks are 7 days
+
+
+
+        scoring_periods = [i + (matchup_period_number - 1 + scoring_period_multiplier) * 7 for i in range((end_date - start_date).days + 1)]
+        
+        matchup_date_data[f'matchup_{matchup_period_number}'] = {
+            'matchup_period': matchup_period_number,
+            'scoring_periods': scoring_periods,
+            'start_date': start_date.strftime('%Y-%m-%d'),
+            'end_date': end_date.strftime('%Y-%m-%d')
+        }
+        
+        # we have to adjust the scoring period for past matchups with multiple weeks
+        scoring_period_multiplier += matchup_length-1
+
+        prev_end_date = end_date
+    print(matchup_date_data)
+    return matchup_date_data
+
 @app.route('/')
 def entry_page():
     error_message = request.args.get('error_message', '')
@@ -213,15 +270,20 @@ def compare_page():
     swid = request.form.get('swid')
     scoring_type = request.form.get('scoring_type')
     week_num = int(request.form.get('week_num'))
-
-    #week_data = {
-    #    "selected_week": week_num
-     #   "current_week":   
-
-#    }
-
+    
     try:
         league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
+        
+        # Create matchup data dictionary
+        matchup_data_dict = get_matchup_dates(league)
+        
+        # Create week_data dictionary with the selected matchup period info
+        selected_week_key = f'matchup_{week_num}'
+        week_data = {
+            "selected_week": week_num,
+            "current_week": league.currentMatchupPeriod,
+            "matchup_data": matchup_data_dict.get(selected_week_key, {})
+        }
     except ESPNUnknownError:
         return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
 
@@ -245,6 +307,7 @@ def compare_page():
     player_data_column_names = ['player_name', 'min', 'fgm', 'fga', 'fg%', 'ftm', 'fta', 'ft%', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts', 'inj', 'fpts', 'games']
 
     if scoring_type == "H2H_POINTS":
+        print(week_data)
 
         team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, year, league_scoring_rules, week_data)
         team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, year, league_scoring_rules, week_data)
@@ -272,26 +335,27 @@ def compare_page():
                                 data_team_stats_1=team1_data, 
                                 data_team_stats_2=team2_data,
                                 combined_json=combined_json,
-                                scoring_type="H2H_POINTS")
+                                scoring_type="H2H_POINTS",
+                                week_data=week_data)
     
     elif scoring_type == "H2H_CATEGORY":
         # Retrieve player data for both teams
         team1_player_data = cpd.get_team_player_data(
-            league, team1_index, player_data_column_names, year, league_scoring_rules
+            league, team1_index, player_data_column_names, year, league_scoring_rules, week_data
         )
         team2_player_data = cpd.get_team_player_data(
-            league, team2_index, player_data_column_names, year, league_scoring_rules
+            league, team2_index, player_data_column_names, year, league_scoring_rules, week_data
         )
         
         # Get team stats for categories
         team1_data, team2_data = tsd.get_team_stats_categories(
             league, team1_index, team1_player_data, team2_index, team2_player_data, 
-            league_scoring_rules, year
+            league_scoring_rules, year, week_data
         )
         
         # Generate comparison graphs for each category
         combined_dfs = cpd.get_compare_graphs_categories(
-            league, team1_index, team1_player_data, team2_index, team2_player_data, year
+            league, team1_index, team1_player_data, team2_index, team2_player_data, year, week_data
         )
         
         combined_jsons = {cat: df.to_dict(orient='records') for cat, df in combined_dfs.items()}
@@ -304,8 +368,8 @@ def compare_page():
         team2_data = team2_data.to_dict(orient='records')
 
         #print(combined_jsons)
-        print(league.teams[team1_index].schedule)
-        print(len(league.teams[team1_index].schedule))
+        #print(league.teams[team1_index].schedule)
+        #print(len(league.teams[team1_index].schedule))
         return render_template(
             'compare_page_cat.html', 
             data_team_players_1=team1_player_data, 
@@ -313,7 +377,8 @@ def compare_page():
             data_team_stats_1=team1_data, 
             data_team_stats_2=team2_data,
             combined_jsons=combined_jsons,
-            scoring_type="H2H_CATEGORY"
+            scoring_type="H2H_CATEGORY",
+            week_data=week_data
         )
 
 @app.route('/select_teams_page')
@@ -359,8 +424,6 @@ def select_teams_page():
     #if league.settings.scoring_type == "H2H_CATEGORY":
     #    return redirect(url_for('entry_page', error_message="League must be Points, not Categories"))
 
-
-
     # here i need to determine which week it currently is, and the start and end dates for each week, and period data
 
     # dates should be a data object, and dict should look like this:
@@ -382,54 +445,9 @@ def select_teams_page():
     # for example
 
     #print(vars(league.settings))
-
-    
-    def get_matchup_dates(league):
-        today = datetime.today()
-        season_start = today - timedelta(days=league.scoringPeriodId)
-        
-        matchupperiods = league.settings.matchup_periods
-        first_scoring_period = league.firstScoringPeriod
-        playoff_length = league.settings.playoff_matchup_period_length * 7  # Convert weeks to days
-        
-        matchup_date_data = {}
-        
-        matchup_period_keys = [int(k) for k in matchupperiods.keys()]
-        max_matchup_period = max(matchup_period_keys)
-        
-        for matchup_period, scoring_periods in matchupperiods.items():
-            matchup_period = int(matchup_period)
-            
-            if matchup_period == 1:
-                start_date = season_start
-                end_date = start_date + timedelta(days=6)  # First week is one day shorter
-            elif matchup_period == first_scoring_period:
-                start_date = prev_end_date + timedelta(days=1)
-                end_date = start_date + timedelta(days=13)  # All-Star break (7 days longer)
-            else:
-                start_date = prev_end_date + timedelta(days=1)
-                end_date = start_date + timedelta(days=6)  # Regular weeks are 7 days
-            
-            # Playoffs (last matchup periods)
-            if matchup_period >= max_matchup_period - (playoff_length // 7 - 1):
-                end_date = start_date + timedelta(days=playoff_length - 1)
-            
-            scoring_periods = [i + (matchup_period - 1) * 7 for i in range((end_date - start_date).days + 1)]
-            
-            matchup_date_data[f'week_{matchup_period}'] = {
-                'matchup_period': matchup_period,
-                'scoring_periods': scoring_periods,
-                'start_date': start_date.strftime('%Y-%m-%d'),
-                'end_date': end_date.strftime('%Y-%m-%d')
-            }
-            
-            prev_end_date = end_date
-        
-        return matchup_date_data
-
     
     matchup_date_data = get_matchup_dates(league)
-    print(matchup_date_data)
+    #print(matchup_date_data)
 
     #print(league.player_map)
     #print(league.scoringPeriodId)    
@@ -442,7 +460,13 @@ def select_teams_page():
 
     form_data = session.pop('form_data', {})
 
-    return render_template('select_teams_page.html', info_list=teams_list, **league_details, form_data = form_data, scoring_type=league.settings.scoring_type)
+    return render_template('select_teams_page.html', 
+                          info_list=teams_list, 
+                          **league_details, 
+                          form_data=form_data, 
+                          scoring_type=league.settings.scoring_type,
+                          matchup_data_dict=matchup_date_data,
+                          current_matchup=league.currentMatchupPeriod)
 
 @app.route('/process', methods=['POST'])
 def process_information():
