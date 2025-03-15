@@ -56,9 +56,10 @@
                         http://fantasy.espn.com. You should be able to find your swid and espn_s2 values there. They remain the
                         same through different sessions.
                     </p>
-                    <p><b>If you want to test this tool out, click the button below to use an example league:</b></p>
+                    <p><b>If you want to test this tool out, click one of the buttons below to use an example league:</b></p>
                     <div class="button-wrapper">
-                        <button id="exampleButton" onclick="fillAndSubmitForm()">Use Example League</button>
+                        <button id="examplePointsButton" onclick="fillPointsLeague()">Use Example Points League</button>
+                        <button id="exampleCatButton" onclick="fillCatLeague()">Use Example Categories League</button>
                     </div>                
                 </div>
             </div>
@@ -66,9 +67,20 @@
     </div>
 
     <script>
-        function fillAndSubmitForm() {
-            // Set the form field values with example data
+        function fillPointsLeague() {
+            // Set the form field values with example points league data
             document.getElementById('league_id').value = '32144018';
+            document.getElementById('year').value = '2025';
+            document.getElementById('espn_s2').value = ''; // Leave blank
+            document.getElementById('swid').value = ''; // Leave blank
+
+            // Submit the form
+            document.getElementById('matchupForm').submit();
+        }
+
+        function fillCatLeague() {
+            // Set the form field values with example categories league data
+            document.getElementById('league_id').value = '2116212845';
             document.getElementById('year').value = '2025';
             document.getElementById('espn_s2').value = ''; // Leave blank
             document.getElementById('swid').value = ''; // Leave blank
