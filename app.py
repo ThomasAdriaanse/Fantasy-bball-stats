@@ -343,7 +343,7 @@ def compare_page():
                             scoring_type="H2H_POINTS",
                             week_data=week_data)
     
-    elif scoring_type == "H2H_CATEGORY":
+    elif scoring_type in ["H2H_CATEGORY", "H2H_MOST_CATEGORIES"]:  # Support both category types
         # Retrieve player data for both teams
         team1_player_data = cpd.get_team_player_data(
             league, team1_index, player_data_column_names, year, league_scoring_rules, week_data
@@ -365,7 +365,6 @@ def compare_page():
         
         combined_jsons = {cat: df.to_dict(orient='records') for cat, df in combined_dfs.items()}
 
-        #print(combined_jsons['REB'])
         # Convert DataFrames to lists of dictionaries for rendering
         team1_player_data = team1_player_data.to_dict(orient='records')
         team2_player_data = team2_player_data.to_dict(orient='records')
@@ -384,9 +383,13 @@ def compare_page():
             team1_win_pct_data=team1_win_pct_data,
             team2_win_pct_data=team2_win_pct_data,
             combined_jsons=combined_jsons,
-            scoring_type="H2H_CATEGORY",
+            scoring_type=scoring_type,  # Pass through the actual scoring type
             week_data=week_data
         )
+    
+    # Default case if scoring_type is not recognized
+    print(f"Unrecognized scoring type: {scoring_type}")
+    return redirect(url_for('entry_page', error_message=f"Unsupported scoring type: {scoring_type}"))
 
 @app.route('/select_teams_page')
 def select_teams_page():
