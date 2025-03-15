@@ -106,6 +106,7 @@ def get_team_player_data(league, team_num, columns, year, league_scoring_rules, 
             games_in_week = [game for game in list_schedule if 
                             start_date <= (game['date']-timedelta(hours=5)).date() <= end_date]
         else:
+            print("error: not using proper week data")
             # Fall back to current week if no week_data provided
             today_minus_8 = (datetime.today()-timedelta(hours=8)).date()
             start_of_week, end_of_week = db_utils.range_of_current_week(today_minus_8)

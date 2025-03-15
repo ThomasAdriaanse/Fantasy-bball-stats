@@ -117,23 +117,21 @@
                     {% endfor %}
                 </tbody>
             </table>
-            <!-- Team Stats Table -->
+            <!-- Team Win Percentage Stats Table -->
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Team Average FPTS</th>
-                        <th>Expected Total FPTS</th>
-                        <th>% Chance of winning</th>
+                        {% for key in team1_win_pct_data[0].keys() %}
+                            <th>{{ key }}</th>
+                        {% endfor %}
                     </tr>
                 </thead>
                 <tbody>
-                    {% for row in data_team_stats_1 %}
                     <tr>
-                        <td>{{ row['team_avg_fpts'] }}</td>
-                        <td>{{ row['team_expected_points'] }}</td>
-                        <td>{{ row['team_chance_of_winning'] }}</td>
+                        {% for key, value in team1_win_pct_data[0].items() %}
+                            <td>{{ value }}</td>
+                        {% endfor %}
                     </tr>
-                    {% endfor %}
                 </tbody>
             </table>
         </div>
@@ -184,23 +182,21 @@
                     {% endfor %}
                 </tbody>
             </table>
-            <!-- Team Stats Table -->
+            <!-- Team Win Percentage Stats Table -->
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Team Average FPTS</th>
-                        <th>Expected Total FPTS</th>
-                        <th>% Chance of winning</th>
+                        {% for key in team2_win_pct_data[0].keys() %}
+                            <th>{{ key }}</th>
+                        {% endfor %}
                     </tr>
                 </thead>
                 <tbody>
-                    {% for row in data_team_stats_2 %}
                     <tr>
-                        <td>{{ row['team_avg_fpts'] }}</td>
-                        <td>{{ row['team_expected_points'] }}</td>
-                        <td>{{ row['team_chance_of_winning'] }}</td>
+                        {% for key, value in team2_win_pct_data[0].items() %}
+                            <td>{{ value }}</td>
+                        {% endfor %}
                     </tr>
-                    {% endfor %}
                 </tbody>
             </table>
         </div>

@@ -236,66 +236,83 @@ def get_team_stats_categories(league, team_num, team_player_data, opponent_num, 
     else:
         opponent_current_stats = league.box_scores(matchup_period=selected_matchup_period)[opponent_boxscore_num].away_stats
     
-    team_expected = []
-    opponent_expected = []
-    team_win_percentage = []
-    opponent_win_percentage = []
+    team_expected = {cat: [] for cat in cats}
+    opponent_expected = {cat: [] for cat in cats}
+    team_win_percentage = {cat: [] for cat in cats}
+    opponent_win_percentage = {cat: [] for cat in cats}
 
     for cat, espn_cat in zip(cats, espn_cats):
 
         texp, opexp, twin, opwin = get_cat_stats(cat, espn_cat, team_player_data, opponent_player_data, team_current_stats, opponent_current_stats)
-        team_expected.append(texp)
-        opponent_expected.append(opexp)
-        team_win_percentage.append(twin)
-        opponent_win_percentage.append(opwin)
+        team_expected[cat] = texp
+        opponent_expected[cat] = opexp
+        team_win_percentage[cat] = twin
+        opponent_win_percentage[cat] = opwin
 
-    df = pd.DataFrame(team_expected)
-    opponent_df = pd.DataFrame(opponent_expected)
+    win_pct_df = pd.DataFrame([team_win_percentage])
+    opponent_pct_df = pd.DataFrame([opponent_win_percentage])
+    
+    #team_expected['team_name'].append(team.team_name)
+    #opponent_expected['opponent_name'].append(opponent.team_name)
 
-    #print("team 1 df:", df)
+    df = pd.DataFrame([team_expected])
+    opponent_df = pd.DataFrame([opponent_expected])
+
+    print("team 1 df:", df)
     #print("team 2 df:", opponent_df)
 
-    return df, opponent_df
-
+    return df, opponent_df, win_pct_df, opponent_pct_df
 
 def get_cat_stats(cat, espn_cat, team_player_data, opponent_player_data, team_current_stats, opponent_current_stats):
+    if cat in ['fg%', 'ft%']:
+        # Determine the correct stat keys
+        made_stat = 'fgm' if cat == 'fg%' else 'ftm'
+        attempt_stat = 'fga' if cat == 'fg%' else 'fta'
 
-        # fg% and ft% are messed up, ill fix them later
-        team_expected_remaining = sum(team_player_data[cat] * team_player_data['games'])
-        opponent_expected_remaining = sum(opponent_player_data[cat] * opponent_player_data['games'])
+        # Calculate expected makes and attempts for team and opponent
+        team_expected_makes = sum(team_player_data[made_stat] * team_player_data['games'])
+        team_expected_attempts = sum(team_player_data[attempt_stat] * team_player_data['games'])
+        opponent_expected_makes = sum(opponent_player_data[made_stat] * opponent_player_data['games'])
+        opponent_expected_attempts = sum(opponent_player_data[attempt_stat] * opponent_player_data['games'])
 
-        if espn_cat in team_current_stats and espn_cat in opponent_current_stats:
-            team_expected = team_current_stats[espn_cat].get('value', 0) + team_expected_remaining
-            opponent_expected = opponent_current_stats[espn_cat].get('value', 0) + opponent_expected_remaining
+        # Add current season stats
+        team_current_makes = team_current_stats.get(made_stat, {}).get('value', 0)
+        team_current_attempts = team_current_stats.get(attempt_stat, {}).get('value', 0)
+        opponent_current_makes = opponent_current_stats.get(made_stat, {}).get('value', 0)
+        opponent_current_attempts = opponent_current_stats.get(attempt_stat, {}).get('value', 0)
 
-        else:
-            print("error")
+        # Compute final FG% or FT%
+        team_total_makes = team_current_makes + team_expected_makes
+        team_total_attempts = team_current_attempts + team_expected_attempts
+        opponent_total_makes = opponent_current_makes + opponent_expected_makes
+        opponent_total_attempts = opponent_current_attempts + opponent_expected_attempts
 
-        expected_difference = team_expected - opponent_expected
+        # Avoid division by zero
+        team_expected = (team_total_makes / team_total_attempts) * 100 if team_total_attempts > 0 else 0
+        opponent_expected = (opponent_total_makes / opponent_total_attempts) * 100 if opponent_total_attempts > 0 else 0
+    else:
+        # Normal counting stat calculations
+        team_expected = team_current_stats.get(espn_cat, {}).get('value', 0) + sum(team_player_data[cat] * team_player_data['games'])
+        opponent_expected = opponent_current_stats.get(espn_cat, {}).get('value', 0) + sum(opponent_player_data[cat] * opponent_player_data['games'])
 
-        player_std_dev = 0.40
+    # Calculate expected difference
+    expected_difference = team_expected - opponent_expected
+    player_std_dev = 0.40  # Assumed standard deviation per player
 
-        team_stats_variance_by_player = (team_player_data[cat]*player_std_dev*team_player_data['games'])
-        team_total_std = team_stats_variance_by_player**0.5
+    # Variance calculation
+    team_variance = sum((team_player_data[cat] * player_std_dev * team_player_data['games'])**2)
+    opponent_variance = sum((opponent_player_data[cat] * player_std_dev * opponent_player_data['games'])**2)
 
-        opponent_stats_variance_by_player = (opponent_player_data[cat]*player_std_dev*opponent_player_data['games'])
-        opponent_total_std = opponent_stats_variance_by_player**0.5
+    # Standard deviation
+    team_total_std = team_variance**0.5
+    opponent_total_std = opponent_variance**0.5
 
-        try:
-            z_score = expected_difference / ((opponent_total_std**2 + team_total_std**2)**0.5)
-            team_win_percentage = norm.cdf(z_score)
-            #print(z_score)
-            #print(team_win_percentage)
-        except ZeroDivisionError:            
-            z_score = float('inf')
-            if expected_difference > 0:
-                team_win_percentage = 1.0  
-            else:
-                team_win_percentage = 0.0
-            
-            if expected_difference == 0:
-                team_win_percentage = 0.5
-            
-        opponent_win_percentage = 100-team_win_percentage
+    try:
+        z_score = expected_difference / ((opponent_total_std**2 + team_total_std**2)**0.5)
+        team_win_percentage = norm.cdf(z_score) * 100  # Convert to percentage
+    except ZeroDivisionError:
+        team_win_percentage = 100.0 if expected_difference > 0 else 0.0 if expected_difference < 0 else 50.0
 
-        return team_expected, opponent_expected, team_win_percentage, opponent_win_percentage
+    opponent_win_percentage = 100 - team_win_percentage
+
+    return round(team_expected, 2), round(opponent_expected, 2), round(team_win_percentage, 2), round(opponent_win_percentage, 2)

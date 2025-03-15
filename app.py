@@ -28,7 +28,7 @@ def get_matchup_dates(league):
     season_start = today - timedelta(days=league.scoringPeriodId)
     
     matchupperiods = league.settings.matchup_periods
-    first_scoring_period = league.firstScoringPeriod    
+    first_scoring_period = league.firstScoringPeriod
 
     #print(playoff_matchup_period_length)
     #print(vars(playoff_matchup_period_length))
@@ -60,8 +60,6 @@ def get_matchup_dates(league):
             start_date = prev_end_date + timedelta(days=1)
             end_date = start_date + timedelta(days=6)+ timedelta(days=7)*(matchup_length-1)  # Regular weeks are 7 days
 
-
-
         scoring_periods = [i + (matchup_period_number - 1 + scoring_period_multiplier) * 7 for i in range((end_date - start_date).days + 1)]
         
         matchup_date_data[f'matchup_{matchup_period_number}'] = {
@@ -70,12 +68,12 @@ def get_matchup_dates(league):
             'start_date': start_date.strftime('%Y-%m-%d'),
             'end_date': end_date.strftime('%Y-%m-%d')
         }
-        
+
         # we have to adjust the scoring period for past matchups with multiple weeks
         scoring_period_multiplier += matchup_length-1
 
         prev_end_date = end_date
-    print(matchup_date_data)
+    #print(matchup_date_data)
     return matchup_date_data
 
 @app.route('/')
@@ -307,8 +305,6 @@ def compare_page():
     player_data_column_names = ['player_name', 'min', 'fgm', 'fga', 'fg%', 'ftm', 'fta', 'ft%', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts', 'inj', 'fpts', 'games']
 
     if scoring_type == "H2H_POINTS":
-        print(week_data)
-
         team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, year, league_scoring_rules, week_data)
         team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, year, league_scoring_rules, week_data)
 
@@ -348,7 +344,7 @@ def compare_page():
         )
         
         # Get team stats for categories
-        team1_data, team2_data = tsd.get_team_stats_categories(
+        team1_data, team2_data, team1_win_pcts, team2_win_pcts = tsd.get_team_stats_categories(
             league, team1_index, team1_player_data, team2_index, team2_player_data, 
             league_scoring_rules, year, week_data
         )
@@ -359,7 +355,7 @@ def compare_page():
         )
         
         combined_jsons = {cat: df.to_dict(orient='records') for cat, df in combined_dfs.items()}
-        
+
         #print(combined_jsons['REB'])
         # Convert DataFrames to lists of dictionaries for rendering
         team1_player_data = team1_player_data.to_dict(orient='records')
@@ -367,15 +363,17 @@ def compare_page():
         team1_data = team1_data.to_dict(orient='records')
         team2_data = team2_data.to_dict(orient='records')
 
-        #print(combined_jsons)
-        #print(league.teams[team1_index].schedule)
-        #print(len(league.teams[team1_index].schedule))
+        team1_win_pct_data = team1_win_pcts.to_dict(orient='records')
+        team2_win_pct_data = team2_win_pcts.to_dict(orient='records')
+
         return render_template(
             'compare_page_cat.html', 
             data_team_players_1=team1_player_data, 
             data_team_players_2=team2_player_data, 
             data_team_stats_1=team1_data, 
             data_team_stats_2=team2_data,
+            team1_win_pct_data=team1_win_pct_data,
+            team2_win_pct_data=team2_win_pct_data,
             combined_jsons=combined_jsons,
             scoring_type="H2H_CATEGORY",
             week_data=week_data
@@ -447,13 +445,6 @@ def select_teams_page():
     #print(vars(league.settings))
     
     matchup_date_data = get_matchup_dates(league)
-    #print(matchup_date_data)
-
-    #print(league.player_map)
-    #print(league.scoringPeriodId)    
-    #print(league.currentMatchupPeriod)
-    #print()
-    #print(db_utils.get_matchup_periods(league, league.currentMatchupPeriod))
 
 
     teams_list = [team.team_name for team in league.teams]
