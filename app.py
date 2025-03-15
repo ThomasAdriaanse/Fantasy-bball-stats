@@ -270,11 +270,16 @@ def compare_page():
     scoring_type = request.form.get('scoring_type')
     week_num = int(request.form.get('week_num'))
     
+    print(f"Processing league with scoring type: {scoring_type}")
+    
     try:
         if espn_s2 and swid:
             league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
         else:
             league = League(league_id=league_id, year=year)
+            
+        print(f"League settings scoring type: {league.settings.scoring_type}")
+        print(f"League settings: {vars(league.settings)}")
             
         # Create matchup data dictionary
         matchup_data_dict = get_matchup_dates(league)
@@ -292,6 +297,7 @@ def compare_page():
             error_message = "This is a private league. Please provide ESPN S2 and SWID credentials."
         return redirect(url_for('entry_page', error_message=error_message))
     except Exception as e:
+        print(f"Error initializing league: {str(e)}")
         return redirect(url_for('entry_page', error_message=str(e)))
 
     team1_index = -1
@@ -314,6 +320,7 @@ def compare_page():
     player_data_column_names = ['player_name', 'min', 'fgm', 'fga', 'fg%', 'ftm', 'fta', 'ft%', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts', 'inj', 'fpts', 'games']
 
     try:
+        print(f"Processing data for scoring type: {scoring_type}")
         if scoring_type == "H2H_POINTS":
             team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, year, league_scoring_rules, week_data)
             team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, year, league_scoring_rules, week_data)
@@ -340,7 +347,8 @@ def compare_page():
                                 scoring_type="H2H_POINTS",
                                 week_data=week_data)
         
-        elif scoring_type == "H2H_CATEGORY":
+        elif scoring_type in ["H2H_CATEGORY", "H2H_MOST_CATEGORIES"]:  # Handle both category types
+            print(f"Processing category-based scoring type: {scoring_type}")
             # Retrieve player data for both teams
             team1_player_data = cpd.get_team_player_data(
                 league, team1_index, player_data_column_names, year, league_scoring_rules, week_data
@@ -349,16 +357,22 @@ def compare_page():
                 league, team2_index, player_data_column_names, year, league_scoring_rules, week_data
             )
             
+            print("Successfully retrieved player data")
+            
             # Get team stats for categories
             team1_data, team2_data = tsd.get_team_stats_categories(
                 league, team1_index, team1_player_data, team2_index, team2_player_data, 
                 league_scoring_rules, year, week_data
             )
             
+            print("Successfully calculated team stats")
+            
             # Generate comparison graphs for each category
             combined_dfs = cpd.get_compare_graphs_categories(
                 league, team1_index, team1_player_data, team2_index, team2_player_data, year, week_data
             )
+            
+            print("Successfully generated comparison graphs")
             
             combined_jsons = {cat: df.to_dict(orient='records') for cat, df in combined_dfs.items()}
             
@@ -375,13 +389,17 @@ def compare_page():
                 data_team_stats_1=team1_data, 
                 data_team_stats_2=team2_data,
                 combined_jsons=combined_jsons,
-                scoring_type="H2H_CATEGORY",
+                scoring_type=scoring_type,  # Pass the actual scoring type
                 week_data=week_data
             )
         else:
+            print(f"Unsupported scoring type encountered: {scoring_type}")
             return redirect(url_for('entry_page', error_message=f"Unsupported scoring type: {scoring_type}"))
     except Exception as e:
         print(f"Error processing data: {str(e)}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        print(f"Full traceback: {traceback.format_exc()}")
         return redirect(url_for('entry_page', error_message=f"Error processing data: {str(e)}"))
 
 @app.route('/select_teams_page')
