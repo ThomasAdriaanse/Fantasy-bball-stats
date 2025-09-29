@@ -258,7 +258,7 @@ def get_team_stats_categories(league, team_num, team_player_data, opponent_num, 
     df = pd.DataFrame([team_expected])
     opponent_df = pd.DataFrame([opponent_expected])
 
-    print("team 1 df:", df)
+    #print("team 1 df:", df)
     #print("team 2 df:", opponent_df)
 
     return df, opponent_df, win_pct_df, opponent_pct_df
@@ -352,10 +352,10 @@ def get_cat_stats(cat, espn_cat, team_player_data, opponent_player_data, team_cu
 
     opponent_win_percentage = 100 - team_win_percentage
     
-    print(f"Category: {cat}")
-    print(f"Team expected: {team_expected:.2f}")
-    print(f"Opponent expected: {opponent_expected:.2f}")
-    print(f"Team win %: {team_win_percentage:.2f}")
-    print(f"Opponent win %: {opponent_win_percentage:.2f}")
+    #print(f"Category: {cat}")
+    #print(f"Team expected: {team_expected:.2f}")
+    #print(f"Opponent expected: {opponent_expected:.2f}")
+    #print(f"Team win %: {team_win_percentage:.2f}")
+    #print(f"Opponent win %: {opponent_win_percentage:.2f}")
     
     return round(team_expected, 2), round(opponent_expected, 2), round(team_win_percentage, 2), round(opponent_win_percentage, 2)

@@ -29,6 +29,22 @@ Replace the environment variables with your actual database credentials:
 - `your_db_user`: Database username
 - `your_db_pass`: Database password
 
+## Alternative: Use project default image tag
+
+If you prefer the image tag used elsewhere in this repo (`fantasy-scraper-website`), you can build and run with port 5000:5000 like this:
+
+```bash
+docker build -t fantasy-scraper-website .
+```
+
+```bash
+docker run -p 5000:5000 --name fantasy-scraper-website-app fantasy-scraper-website
+```
+
+- Access the app at: http://localhost:5000
+- Run detached (optional): add `-d`
+- Pass environment variables (optional): add `-e KEY=value`
+
 ## Useful Docker Commands
 
 - Check container status: `docker ps`

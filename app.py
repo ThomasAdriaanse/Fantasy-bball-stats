@@ -25,7 +25,12 @@ app.secret_key = os.urandom(24)
 def get_matchup_dates(league):
     """Generate matchup date data for all matchup periods in the league"""
     today = datetime.today()
-    season_start = today - timedelta(days=league.scoringPeriodId)
+    current_year = today.year
+
+    if today > datetime(current_year, 3, 30) and today < datetime(current_year, 10, 20):
+        season_start = datetime(2025, 3, 30).date() - timedelta(days=league.scoringPeriodId)
+    else:
+        season_start = today - timedelta(days=league.scoringPeriodId)
     
     matchupperiods = league.settings.matchup_periods
     first_scoring_period = league.firstScoringPeriod
@@ -276,8 +281,8 @@ def compare_page():
         else:
             league = League(league_id=league_id, year=year)
             
-        print(f"League settings scoring type: {league.settings.scoring_type}")
-        print(f"League settings: {vars(league.settings)}")
+        #print(f"League settings scoring type: {league.settings.scoring_type}")
+        #(f"League settings: {vars(league.settings)}")
             
         # Create matchup data dictionary
         matchup_data_dict = get_matchup_dates(league)
@@ -363,7 +368,7 @@ def compare_page():
             league, team1_index, team1_player_data, team2_index, team2_player_data, year, week_data
         )
         
-        combined_jsons = {cat: df.to_dict(orient='records') for cat, df in combined_dfs.items()}
+        combined_dicts = {cat: df.to_dict(orient='records') for cat, df in combined_dfs.items()}
 
         # Convert DataFrames to lists of dictionaries for rendering
         team1_player_data = team1_player_data.to_dict(orient='records')
@@ -373,7 +378,7 @@ def compare_page():
 
         team1_win_pct_data = team1_win_pcts.to_dict(orient='records')
         team2_win_pct_data = team2_win_pcts.to_dict(orient='records')
-
+        #print(combined_dicts)
         return render_template(
             'compare_page_cat.html', 
             data_team_players_1=team1_player_data, 
@@ -382,8 +387,8 @@ def compare_page():
             data_team_stats_2=team2_data,
             team1_win_pct_data=team1_win_pct_data,
             team2_win_pct_data=team2_win_pct_data,
-            combined_jsons=combined_jsons,
-            scoring_type=scoring_type,  # Pass through the actual scoring type
+            combined_jsons=combined_dicts,
+            scoring_type=scoring_type,
             week_data=week_data
         )
     

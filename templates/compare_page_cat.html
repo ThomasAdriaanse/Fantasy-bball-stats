@@ -231,8 +231,8 @@
             // Parse JSON data for the current category
             const graphData = combinedJsons[cat].map(d => ({
                 date: new Date(d.date), // Ensure date parsing matches the old page
-                predicted_fpts: +d.predicted_fpts,
-                predicted_fpts_from_present: +d.predicted_fpts_from_present,
+                predicted_cat: +d.predicted_cat,
+                predicted_cat_from_present: +d.predicted_cat_from_present,
                 team: d.team,
                 category: d.category
             }));
@@ -288,7 +288,7 @@
     
             // Add Y axis
             const y = d3.scaleLinear()
-                .domain([0, d3.max(graphData, d => Math.max(d.predicted_fpts, d.predicted_fpts_from_present))])
+                .domain([0, d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present))])
                 .nice()
                 .range([height, 0]);
             svg.append("g")
@@ -297,7 +297,7 @@
             // Define line generators
             const lineActual = d3.line()
                 .x(d => x(d.date))
-                .y(d => y(d.predicted_fpts_from_present));
+                .y(d => y(d.predicted_cat_from_present));
     
             // Add the actual line for Team 1 (blue, solid for past)
             svg.append("path")

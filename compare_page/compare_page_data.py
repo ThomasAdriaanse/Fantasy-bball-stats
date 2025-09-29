@@ -116,7 +116,7 @@ def get_team_player_data(league, team_num, columns, year, league_scoring_rules, 
                             today_minus_8 <= (game['date']-timedelta(hours=5)).date() <= end_of_week]
         
         # Add number of games to the database
-        team_data['games'].append(len(games_in_week))
+        team_data['games'].append(len(games_in_week)) 
 
     df = pd.DataFrame(team_data)
     return df
@@ -253,8 +253,8 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
     del predicted_values_team1[-1]
     del predicted_values_team2[-1]
 
-    print(real_and_predicted_scores_team1)
-    print(predicted_values_team1)
+    #print(real_and_predicted_scores_team1)
+    #print(predicted_values_team1)
     #Convert Predicted Values into DataFrames
     team1_df = pd.DataFrame({
         'date': dates,
@@ -400,16 +400,16 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
         # Create DataFrame for Team 1 and Team 2 for the current category
         team1_df = pd.DataFrame({
             'date': dates,
-            'predicted_fpts': predicted_values_team1[cat],
-            'predicted_fpts_from_present': predicted_values_from_present_team1[cat],
+            'predicted_cat': predicted_values_team1[cat],
+            'predicted_cat_from_present': predicted_values_from_present_team1[cat],
             'team': 'Team 1',
             'category': cat
         })
 
         team2_df = pd.DataFrame({
             'date': dates,
-            'predicted_fpts': predicted_values_team2[cat],
-            'predicted_fpts_from_present': predicted_values_from_present_team2[cat],
+            'predicted_cat': predicted_values_team2[cat],
+            'predicted_cat_from_present': predicted_values_from_present_team2[cat],
             'team': 'Team 2',
             'category': cat
         })
@@ -431,7 +431,7 @@ def calculate_cat_predictions(dates, today_minus_8, team1, team2, team1_player_d
     predicted_values_team2 = [0] * len(dates)
     predicted_values_from_present_team2 = [0] * len(dates)
 
-    def calculate_fpts_for_team(team, team_player_data, predicted_values, predicted_values_from_present, dates_dict):
+    def calculate_cat_for_team(team, team_player_data, predicted_values, predicted_values_from_present, dates_dict):
         for player in team.roster:
             player_name = player.name
             player_row = team_player_data[team_player_data['player_name'] == player_name]
@@ -452,12 +452,18 @@ def calculate_cat_predictions(dates, today_minus_8, team1, team2, team1_player_d
                         if game_date >= today_minus_8:
                             predicted_values_from_present[dates_dict[game_date]] += avg_stat
 
-    # Calculate FPTS for both teams
-    calculate_fpts_for_team(team1, team1_player_data, predicted_values_team1, predicted_values_from_present_team1, dates_dict)
-    calculate_fpts_for_team(team2, team2_player_data, predicted_values_team2, predicted_values_from_present_team2, dates_dict)
+
+    # Calculate cats for both teams
+    calculate_cat_for_team(team1, team1_player_data, predicted_values_team1, predicted_values_from_present_team1, dates_dict)
+    calculate_cat_for_team(team2, team2_player_data, predicted_values_team2, predicted_values_from_present_team2, dates_dict)
 
     
-    return predicted_values_team1, predicted_values_from_present_team1, predicted_values_team2, predicted_values_from_present_team2
+    return (
+        [round(val, 2) for val in predicted_values_team1],
+        [round(val, 2) for val in predicted_values_from_present_team1],
+        [round(val, 2) for val in predicted_values_team2],
+        [round(val, 2) for val in predicted_values_from_present_team2]
+    )
 
 
 def get_team_boxscore_number(league, team, matchup_period=None):
