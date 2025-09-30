@@ -349,9 +349,17 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
             "BLK": raw_totals.get("BLK", 0),
             "TO":  raw_totals.get("TO", 0),
             "PTS": raw_totals.get("PTS", 0),
+
+            # >>> add base counters so the update loop can overwrite predictions with ACTUALS
+            "FGM": fgm,
+            "FGA": fga,
+            "FTM": ftm,
+            "FTA": fta,
         }
-        # Wrap to match your downstream access pattern: team_box_score_list[i][cat]['value']
+        # Wrap to match downstream access pattern: team_box_score_list[i][cat]['value']
         return {k: {"value": v} for k, v in cat_vals.items()}
+
+
 
     for i, date in enumerate(dates):
         if date < today_minus_8:

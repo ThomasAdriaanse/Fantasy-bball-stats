@@ -16,8 +16,10 @@
         }
 
         .graph-wrapper {
-            border: 1px solid #ccc;
+            border: 1px solid #ddd;
+            border-radius: 6px;
             padding: 10px;
+            background: #f5f5f5;
         }
 
         .graph-title {
@@ -26,10 +28,10 @@
             margin-bottom: 10px;
         }
 
-        /* Ensure SVG fills the container */
+
         .chart-svg {
             width: 100%;
-            height: 300px;
+            height: 220px;
         }
 
         /* Responsive adjustments */
@@ -261,8 +263,8 @@
             const team2FutureData = team2Data.filter(d => d.date >= today);
     
             // Set the dimensions and margins for the graph
-            const margin = { top: 20, right: 30, bottom: 30, left: 40 },
-                width = 300 - margin.left - margin.right,
+            const margin = { top: 20, right: 30, bottom: 48, left: 40 },
+                width  = 300 - margin.left - margin.right,
                 height = 200 - margin.top - margin.bottom;
     
             // Append the svg object to the corresponding chart div
@@ -288,12 +290,20 @@
                 .style("text-anchor", "end");
     
             // Add Y axis
+            const isPct = (cat === 'FG%' || cat === 'FT%');
+            const yMin = isPct
+            ? Math.max(0, d3.min(graphData, d => Math.min(d.predicted_cat, d.predicted_cat_from_present)) - 0.10)
+            : 0;
+            const yMax = isPct
+            ? Math.min(1, d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present)) + 0.20)
+            : d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present));
+
             const y = d3.scaleLinear()
-                .domain([0, d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present))])
-                .nice()
-                .range([height, 0]);
-            svg.append("g")
-                .call(d3.axisLeft(y));
+            .domain([yMin, yMax])
+            .nice()
+            .range([height, 0]);
+
+            svg.append("g").call(d3.axisLeft(y));
     
             // Define line generators
             const lineActual = d3.line()
