@@ -294,6 +294,7 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
     today = datetime.today()
     today_minus_8 = (today-timedelta(hours=8)).date()  
 
+
     # Create date range for the selected week
     dates = pd.date_range(start=start_date, end=end_date+timedelta(hours=24)).date
     print(start_date, end_date)
@@ -320,28 +321,71 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
     team2_box_score_list = [0] * len(dates)
 
     # Get historical data for dates that have already passed
+    def _sum_starter_raw(lineup):
+        EXCLUDE_SLOTS = {"BE", "IL", ""}  # adjust if your league uses other non-scoring slots
+        totals = {}
+        for p in lineup or []:
+            slot = getattr(p, "slot_position", getattr(p, "lineupSlot", ""))
+            if slot in EXCLUDE_SLOTS:
+                continue
+            for k, v in (getattr(p, "points_breakdown", {}) or {}).items():
+                totals[k] = totals.get(k, 0) + v
+        return totals
+
+    def _to_cat_values(raw_totals):
+        # Compute FG% / FT% from makes/attempts if available; others are additive
+        fgm = raw_totals.get("FGM", 0)
+        fga = raw_totals.get("FGA", 0)
+        ftm = raw_totals.get("FTM", 0)
+        fta = raw_totals.get("FTA", 0)
+
+        cat_vals = {
+            "FG%": (fgm / fga) if fga else 0.0,
+            "FT%": (ftm / fta) if fta else 0.0,
+            "3PM": raw_totals.get("3PM", raw_totals.get("FG3M", 0)),
+            "REB": raw_totals.get("REB", 0),
+            "AST": raw_totals.get("AST", 0),
+            "STL": raw_totals.get("STL", 0),
+            "BLK": raw_totals.get("BLK", 0),
+            "TO":  raw_totals.get("TO", 0),
+            "PTS": raw_totals.get("PTS", 0),
+        }
+        # Wrap to match your downstream access pattern: team_box_score_list[i][cat]['value']
+        return {k: {"value": v} for k, v in cat_vals.items()}
+
     for i, date in enumerate(dates):
         if date < today_minus_8:
             try:
                 # Use scoring period from the matchup_data if available
                 scoring_period = scoring_periods[i] if i < len(scoring_periods) else i + (selected_matchup_period - 1) * 7
-                
-                box_scores = league.box_scores(matchup_period=selected_matchup_period, 
-                                              scoring_period=scoring_period, 
-                                              matchup_total=False)
-                
+
+                boxes = league.box_scores(
+                    matchup_period=selected_matchup_period,
+                    scoring_period=scoring_period,
+                    matchup_total=False
+                )
+
+                # pick the correct matchup for each team
+                box_team1 = boxes[boxscore_number_team1]
+                box_team2 = boxes[boxscore_number_team2]
+
+                # choose home/away, sum starters only, convert to category values
                 if home_or_away_team1 == "home":
-                    team1_box_score_list[i] = box_scores[boxscore_number_team1].home_stats
-                elif home_or_away_team1 == "away":
-                    team1_box_score_list[i] = box_scores[boxscore_number_team1].away_stats
-                    
+                    raw1 = _sum_starter_raw(box_team1.home_lineup)
+                else:
+                    raw1 = _sum_starter_raw(box_team1.away_lineup)
+                team1_box_score_list[i] = _to_cat_values(raw1)
+
                 if home_or_away_team2 == "home":
-                    team2_box_score_list[i] = box_scores[boxscore_number_team2].home_stats
-                elif home_or_away_team2 == "away":
-                    team2_box_score_list[i] = box_scores[boxscore_number_team2].away_stats
+                    raw2 = _sum_starter_raw(box_team2.home_lineup)
+                else:
+                    raw2 = _sum_starter_raw(box_team2.away_lineup)
+                team2_box_score_list[i] = _to_cat_values(raw2)
+
             except (IndexError, AttributeError):
                 # Handle errors gracefully if box score data is not available
                 pass
+
 
     cats = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
     # categories have different names when used in flask due to "to" being a keyword and number not being allowed

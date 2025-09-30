@@ -298,6 +298,10 @@
             const lineActual = d3.line()
                 .x(d => x(d.date))
                 .y(d => y(d.predicted_cat_from_present));
+            
+            const linePredicted = d3.line()
+                .x(d => x(d.date))
+                .y(d => y(d.predicted_cat));
     
             // Add the actual line for Team 1 (blue, solid for past)
             svg.append("path")
@@ -332,6 +336,24 @@
                 .attr("stroke-width", 1.5)
                 .style("stroke-dasharray", ("5, 5"))
                 .attr("d", lineActual);
+            
+            // Add the predicted_cat line for Team 1 (light blue, dashed)
+            svg.append("path")
+                .datum(team1Data)
+                .attr("fill", "none")
+                .attr("stroke", "blue")
+                .attr("stroke-width", 1.5)
+                .style("stroke-dasharray", ("3, 3"))
+                .attr("d", linePredicted);
+            
+            // Add the predicted_cat line for Team 2 (light red, dashed)
+            svg.append("path")
+                .datum(team2Data)
+                .attr("fill", "none")
+                .attr("stroke", "red")
+                .attr("stroke-width", 1.5)
+                .style("stroke-dasharray", ("3, 3"))
+                .attr("d", linePredicted);
     
             // Add Legend
             const legend = svg.append("g")
@@ -351,7 +373,7 @@
                 .attr("alignment-baseline", "middle")
                 .attr("font-size", "10px");
     
-            legend.append("line")
+            /*legend.append("line")
                 .attr("x1", 0)
                 .attr("y1", 25)
                 .attr("x2", 20)
@@ -365,7 +387,7 @@
                 .text(`${team1Name} (Predicted)`)
                 .attr("alignment-baseline", "middle")
                 .attr("font-size", "10px");
-    
+            */
             legend.append("line")
                 .attr("x1", 0)
                 .attr("y1", 40)
@@ -380,7 +402,7 @@
                 .attr("alignment-baseline", "middle")
                 .attr("font-size", "10px");
     
-            legend.append("line")
+            /*legend.append("line")
                 .attr("x1", 0)
                 .attr("y1", 55)
                 .attr("x2", 20)
@@ -392,6 +414,37 @@
                 .attr("x", 25)
                 .attr("y", 55)
                 .text(`${team2Name} (Predicted)`)
+                .attr("alignment-baseline", "middle")
+                .attr("font-size", "10px");
+            */
+            // Add legend entries for predicted_cat lines
+            legend.append("line")
+                .attr("x1", 0)
+                .attr("y1", 25)
+                .attr("x2", 20)
+                .attr("y2", 25)
+                .attr("stroke", "blue")
+                .attr("stroke-width", 1.5)
+                .style("stroke-dasharray", ("3, 3"));
+            legend.append("text")
+                .attr("x", 25)
+                .attr("y", 70)
+                .text(`${team1Name} (Full Predicted)`)
+                .attr("alignment-baseline", "middle")
+                .attr("font-size", "10px");
+            
+            legend.append("line")
+                .attr("x1", 0)
+                .attr("y1", 55)
+                .attr("x2", 20)
+                .attr("y2", 55)
+                .attr("stroke", "red")
+                .attr("stroke-width", 1.5)
+                .style("stroke-dasharray", ("3, 3"));
+            legend.append("text")
+                .attr("x", 25)
+                .attr("y", 85)
+                .text(`${team2Name} (Full Predicted)`)
                 .attr("alignment-baseline", "middle")
                 .attr("font-size", "10px");
         });
