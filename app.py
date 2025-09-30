@@ -28,7 +28,7 @@ def get_matchup_dates(league):
     current_year = today.year
 
     if today > datetime(current_year, 3, 30) and today < datetime(current_year, 10, 20):
-        season_start = datetime(2025, 3, 30).date() - timedelta(days=league.scoringPeriodId)
+        season_start = datetime(2025, 4, 13).date() - timedelta(days=league.scoringPeriodId)
     else:
         season_start = today - timedelta(days=league.scoringPeriodId)
     
@@ -363,52 +363,14 @@ def compare_page():
             league_scoring_rules, year, week_data
         )
         
+        print(week_data)
+
         # Generate comparison graphs for each category
         combined_dfs = cpd.get_compare_graphs_categories(
             league, team1_index, team1_player_data, team2_index, team2_player_data, year, week_data
         )
 
-        print(combined_dfs)
-
-        ''' def sum_lineup_stats_starters(lineup):
-            EXCLUDE_SLOTS = {"BE", "IL", ""}  # bench, injured list, or unmapped/empty
-            totals = {}
-
-            for p in lineup or []:
-                # Works for both BoxPlayer (slot_position) and Player (lineupSlot)
-                slot = getattr(p, "slot_position", getattr(p, "lineupSlot", ""))
-                if slot in EXCLUDE_SLOTS:
-                    continue
-
-                for k, v in (getattr(p, "points_breakdown", {}) or {}).items():
-                    totals[k] = totals.get(k, 0) + v
-
-            return totals
-
-
-        MATCHUP_PERIOD = 22
-        for sp in range(154, 161):  # 154..160 inclusive
-            box = league.box_scores(
-                matchup_period=MATCHUP_PERIOD,
-                scoring_period=sp,
-                matchup_total=False  # per scoring-period lineups
-            )[1]
-
-            home_totals = sum_lineup_stats_starters(box.home_lineup)
-            away_totals = sum_lineup_stats_starters(box.away_lineup)
-
-            # ---- OUTPUT: only stat totals per team for this scoring period ----
-            print(f"SP {sp} | {getattr(box.home_team, 'team_name', box.home_team)}")
-            for stat in sorted(home_totals.keys()):
-                print(f"{stat}: {home_totals[stat]}")
-
-            print(f"SP {sp} | {getattr(box.away_team, 'team_name', box.away_team)}")
-            for stat in sorted(away_totals.keys()):
-                print(f"{stat}: {away_totals[stat]}")'''
-
-
-
-
+        #print(combined_dfs)
         
         combined_dicts = {cat: df.to_dict(orient='records') for cat, df in combined_dfs.items()}
 

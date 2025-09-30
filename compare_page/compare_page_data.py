@@ -469,13 +469,6 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
 
 def calculate_cat_predictions(dates, today_minus_8, team1, team2, team1_player_data, team2_player_data, mapped_cat):
 
-    #with pd.option_context(
-    #    'display.max_rows', None,
-    #    'display.max_columns', None,
-    #    'display.max_colwidth', None,
-    #    'display.width', 0
-    #):
-    #    print(team1_player_data.to_string(index=False))
 
     # Step 3: Initialize Dictionaries for Predicted Values
     dates_dict = {date: i for i, date in enumerate(dates)}
@@ -509,9 +502,6 @@ def calculate_cat_predictions(dates, today_minus_8, team1, team2, team1_player_d
     # Calculate cats for both teams
     calculate_cat_for_team(team1, team1_player_data, predicted_values_team1, predicted_values_from_present_team1, dates_dict)
     calculate_cat_for_team(team2, team2_player_data, predicted_values_team2, predicted_values_from_present_team2, dates_dict)
-
-    if mapped_cat == 'reb':
-        print(predicted_values_team1)
 
     return (
         [round(val, 2) for val in predicted_values_team1],
