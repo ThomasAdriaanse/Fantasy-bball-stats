@@ -298,7 +298,6 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
 
     # Create date range for the selected week
     dates = pd.date_range(start=start_date, end=end_date+timedelta(hours=24)).date
-    print(start_date, end_date)
 
     boxscore_number_team1, home_or_away_team1 = get_team_boxscore_number(league, team1, selected_matchup_period)
     boxscore_number_team2, home_or_away_team2 = get_team_boxscore_number(league, team2, selected_matchup_period)
@@ -387,7 +386,9 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
                 # Handle errors gracefully if box score data is not available
                 pass
 
-    cats = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
+    percentage_cats = []
+
+    cats = ['3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS', 'FTM', 'FTA', 'FGM', 'FGA']
     # categories have different names when used in flask due to "to" being a keyword and number not being allowed
     category_mapping = {
         'FG%': 'fg%',
@@ -398,7 +399,11 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
         'STL': 'stl',
         'BLK': 'blk',
         'TO': 'turno',
-        'PTS': 'pts'
+        'PTS': 'pts',
+        'FTM': 'ftm',
+        'FTA': 'fta',
+        'FGM': 'fgm',
+        'FGA': 'fga'
     }
 
     predicted_values_team1 = {}
@@ -408,9 +413,9 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
 
     # grab the predictions for each cat, stored in predicted_values_from_present_team1, predicted_values_from_present_team2
     for cat in cats:
-        mapped_cat = category_mapping[cat]
+        mapped_cats = category_mapping[cat]
         predicted_values_team1[cat], predicted_values_from_present_team1[cat], predicted_values_team2[cat], predicted_values_from_present_team2[cat] = calculate_cat_predictions(
-            dates, today_minus_8, team1, team2, team1_player_data, team2_player_data, mapped_cat
+            dates, today_minus_8, team1, team2, team1_player_data, team2_player_data, mapped_cats
         )
 
     combined_category_dataframes = {}
@@ -441,6 +446,7 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
         del predicted_values_team1[cat][-1]
         del predicted_values_team2[cat][-1]
 
+        
         # Create DataFrame for Team 1 and Team 2 for the current category
         team1_df = pd.DataFrame({
             'date': dates,
@@ -464,13 +470,57 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
         # Store the combined DataFrame in the dictionary using the category as the key
         combined_category_dataframes[cat] = combined_df
 
+    # --- Compute FG% / FT% from cumulative makes/attempts, set nice baselines, and put them FIRST ---
+    def _ratio_list(num, den):
+        return [(float(n) / float(d) if float(d) != 0 else 0.0) for n, d in zip(num, den)]
+
+    # element-wise ratios from the (already cumulative) counters
+    fgp1  = _ratio_list(predicted_values_team1['FGM'], predicted_values_team1['FGA'])
+    fgp2  = _ratio_list(predicted_values_team2['FGM'], predicted_values_team2['FGA'])
+    fgp1p = _ratio_list(predicted_values_from_present_team1['FGM'], predicted_values_from_present_team1['FGA'])
+    fgp2p = _ratio_list(predicted_values_from_present_team2['FGM'], predicted_values_from_present_team2['FGA'])
+
+    ftp1  = _ratio_list(predicted_values_team1['FTM'], predicted_values_team1['FTA'])
+    ftp2  = _ratio_list(predicted_values_team2['FTM'], predicted_values_team2['FTA'])
+    ftp1p = _ratio_list(predicted_values_from_present_team1['FTM'], predicted_values_from_present_team1['FTA'])
+    ftp2p = _ratio_list(predicted_values_from_present_team2['FTM'], predicted_values_from_present_team2['FTA'])
+
+    # set starting element baselines (FG% -> 0.47, FT% -> 0.78)
+    FG_BASE, FT_BASE =  0.47, 0.78
+    for seq in (fgp1, fgp2, fgp1p, fgp2p):
+        if seq: seq[0] = FG_BASE
+    for seq in (ftp1, ftp2, ftp1p, ftp2p):
+        if seq: seq[0] = FT_BASE
+
+    def _mk_df(cat, t1, t1p, t2, t2p):
+        t1df = pd.DataFrame({'date': dates, 'predicted_cat': t1,  'predicted_cat_from_present': t1p,
+                            'team': 'Team 1', 'category': cat})
+        t2df = pd.DataFrame({'date': dates, 'predicted_cat': t2,  'predicted_cat_from_present': t2p,
+                            'team': 'Team 2', 'category': cat})
+        return pd.concat([t1df, t2df], ignore_index=True)
+
+    fg_df = _mk_df('FG%', fgp1, fgp1p, fgp2, fgp2p)
+    ft_df = _mk_df('FT%', ftp1, ftp1p, ftp2, ftp2p)
+
+    # remove helper counters so they don't render as charts
+    for k in ('FTM', 'FTA', 'FGM', 'FGA'):
+        combined_category_dataframes.pop(k, None)
+
+    # rebuild dict so FG%, FT% are first
+    ordered_combined = {'FG%': fg_df, 'FT%': ft_df}
+    for k in ['3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']:
+        if k in combined_category_dataframes:
+            ordered_combined[k] = combined_category_dataframes[k]
+
+    combined_category_dataframes = ordered_combined
+
     # Return the dictionary of DataFrames
     return combined_category_dataframes
 
 def calculate_cat_predictions(dates, today_minus_8, team1, team2, team1_player_data, team2_player_data, mapped_cat):
 
 
-    # Step 3: Initialize Dictionaries for Predicted Values
+    # Initialize Dictionaries for Predicted Values
     dates_dict = {date: i for i, date in enumerate(dates)}
     predicted_values_team1 = [0] * len(dates)
     predicted_values_from_present_team1 = [0] * len(dates)
