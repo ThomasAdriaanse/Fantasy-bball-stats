@@ -248,3 +248,65 @@ h2 {
     display: inline-block; /* Ensure it takes up only the necessary space */
     width: 45px;
 }
+
+/* Center the dropdown container */
+.dropdown-container {
+    text-align: center;
+    margin: 20px 0; /* Adjust if needed for spacing */
+  }
+  
+  /* The dropdown itself is inline-block so it can be centered easily */
+  .dropdown {
+    display: inline-block;
+    position: relative;
+  }
+  
+  /* Dropdown button with fixed width */
+  .dropbtn {
+    width: 200px;              /* Adjust as needed */
+    background-color: #ff4c4c; 
+    color: #fff;
+    padding: 10px;
+    font-size: 18px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.3s;
+    text-align: center;
+  }
+  
+  .dropbtn:hover {
+    background-color: #e04343;
+  }
+  
+  /* The dropdown menu is initially hidden */
+  .dropdown-content {
+    display: none;
+    position: absolute;   /* Positioned relative to the .dropdown */
+    top: 100%;            /* Appear directly below the button */
+    left: 0;             /* Left-align with the button */
+    width: 200px;         /* Match the button width */
+    background-color: #333;
+    border-radius: 5px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+    z-index: 999;         /* Ensure it's on top of other elements */
+  }
+  
+  /* Each menu link */
+  .dropdown-content a {
+    display: block;
+    color: #f5f5f5;
+    padding: 12px 16px;
+    text-decoration: none;
+  }
+  
+  /* Hover effect for the menu items */
+  .dropdown-content a:hover {
+    background-color: #555;
+  }
+  
+  /* Show the dropdown on .dropdown hover */
+  .dropdown:hover .dropdown-content {
+    display: block;
+  }
+  
