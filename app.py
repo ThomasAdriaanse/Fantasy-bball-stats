@@ -367,6 +367,48 @@ def compare_page():
         combined_dfs = cpd.get_compare_graphs_categories(
             league, team1_index, team1_player_data, team2_index, team2_player_data, year, week_data
         )
+
+        print(combined_dfs)
+
+        ''' def sum_lineup_stats_starters(lineup):
+            EXCLUDE_SLOTS = {"BE", "IL", ""}  # bench, injured list, or unmapped/empty
+            totals = {}
+
+            for p in lineup or []:
+                # Works for both BoxPlayer (slot_position) and Player (lineupSlot)
+                slot = getattr(p, "slot_position", getattr(p, "lineupSlot", ""))
+                if slot in EXCLUDE_SLOTS:
+                    continue
+
+                for k, v in (getattr(p, "points_breakdown", {}) or {}).items():
+                    totals[k] = totals.get(k, 0) + v
+
+            return totals
+
+
+        MATCHUP_PERIOD = 22
+        for sp in range(154, 161):  # 154..160 inclusive
+            box = league.box_scores(
+                matchup_period=MATCHUP_PERIOD,
+                scoring_period=sp,
+                matchup_total=False  # per scoring-period lineups
+            )[1]
+
+            home_totals = sum_lineup_stats_starters(box.home_lineup)
+            away_totals = sum_lineup_stats_starters(box.away_lineup)
+
+            # ---- OUTPUT: only stat totals per team for this scoring period ----
+            print(f"SP {sp} | {getattr(box.home_team, 'team_name', box.home_team)}")
+            for stat in sorted(home_totals.keys()):
+                print(f"{stat}: {home_totals[stat]}")
+
+            print(f"SP {sp} | {getattr(box.away_team, 'team_name', box.away_team)}")
+            for stat in sorted(away_totals.keys()):
+                print(f"{stat}: {away_totals[stat]}")'''
+
+
+
+
         
         combined_dicts = {cat: df.to_dict(orient='records') for cat, df in combined_dfs.items()}
 

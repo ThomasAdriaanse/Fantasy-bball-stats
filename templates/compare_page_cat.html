@@ -209,7 +209,7 @@
             {% for cat in combined_jsons.keys() %}
             <div class="graph-wrapper">
                 <div class="graph-title">{{ cat }}</div>
-                <div id="chart-{{ loop.index }}" class="chart-svg"></div>
+                <div id="chart-{{ (cat|replace('%','pct')|replace('3PM','3pm')|lower) }}" class="chart-svg"></div>
             </div>
             {% endfor %}
         </div>
@@ -222,6 +222,7 @@
         // Parse combinedJsons from Flask
         const combinedJsons = {{ combined_jsons | tojson }};
         const categories = Object.keys(combinedJsons);
+        const slug = c => c.replace('%','pct').replace('3PM','3pm').toLowerCase();
     
         // Team names
         const team1Name = "{{ data_team_stats_1[0]['team_name'] }}";
@@ -265,7 +266,7 @@
                 height = 200 - margin.top - margin.bottom;
     
             // Append the svg object to the corresponding chart div
-            const svg = d3.select("#chart-" + (index + 1))
+            const svg = d3.select("#chart-" + slug(cat))
                 .append("svg")
                 .attr("width", width + margin.left + margin.right)
                 .attr("height", height + margin.top + margin.bottom)
@@ -428,7 +429,7 @@
                 .style("stroke-dasharray", ("3, 3"));
             legend.append("text")
                 .attr("x", 25)
-                .attr("y", 70)
+                .attr("y", 25)
                 .text(`${team1Name} (Full Predicted)`)
                 .attr("alignment-baseline", "middle")
                 .attr("font-size", "10px");
@@ -443,7 +444,7 @@
                 .style("stroke-dasharray", ("3, 3"));
             legend.append("text")
                 .attr("x", 25)
-                .attr("y", 85)
+                .attr("y", 55)
                 .text(`${team2Name} (Full Predicted)`)
                 .attr("alignment-baseline", "middle")
                 .attr("font-size", "10px");

@@ -275,7 +275,8 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
     return combined_df
 
 def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_index, team2_player_data, year, week_data=None):
-    
+
+
     # Use selected week data if provided, otherwise use current week
     if week_data and 'matchup_data' in week_data:
         # Use the selected week's date range and matchup period
@@ -386,7 +387,6 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
                 # Handle errors gracefully if box score data is not available
                 pass
 
-
     cats = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
     # categories have different names when used in flask due to "to" being a keyword and number not being allowed
     category_mapping = {
@@ -468,6 +468,15 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
     return combined_category_dataframes
 
 def calculate_cat_predictions(dates, today_minus_8, team1, team2, team1_player_data, team2_player_data, mapped_cat):
+
+    #with pd.option_context(
+    #    'display.max_rows', None,
+    #    'display.max_columns', None,
+    #    'display.max_colwidth', None,
+    #    'display.width', 0
+    #):
+    #    print(team1_player_data.to_string(index=False))
+
     # Step 3: Initialize Dictionaries for Predicted Values
     dates_dict = {date: i for i, date in enumerate(dates)}
     predicted_values_team1 = [0] * len(dates)
@@ -501,7 +510,9 @@ def calculate_cat_predictions(dates, today_minus_8, team1, team2, team1_player_d
     calculate_cat_for_team(team1, team1_player_data, predicted_values_team1, predicted_values_from_present_team1, dates_dict)
     calculate_cat_for_team(team2, team2_player_data, predicted_values_team2, predicted_values_from_present_team2, dates_dict)
 
-    
+    if mapped_cat == 'reb':
+        print(predicted_values_team1)
+
     return (
         [round(val, 2) for val in predicted_values_team1],
         [round(val, 2) for val in predicted_values_from_present_team1],
