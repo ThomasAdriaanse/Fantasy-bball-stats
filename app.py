@@ -9,7 +9,7 @@ from espn_api.basketball import League
 from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, ESPNInvalidLeague
 import pandas as pd
 import db_utils
-from nba_api.stats.endpoints import playergamelog
+from nba_api.stats.endpoints import playergamelog, playercareerstats
 from nba_api.stats.static import players
 import json
 import time
@@ -96,9 +96,11 @@ def player_stats():
     elif request.method == 'POST':
         selected_player = request.form.get('player_name', 'Bol Bol')  # Default player if no input
         num_games = int(request.form.get('num_games', num_games))  # Update based on user input
+
+    
     
     # Take this away when pushing
-    #generate_json_file(selected_player, num_games)  # Generate JSON file with specified player and number of games
+    generate_json_file(selected_player, num_games)  # Generate JSON file with specified player and number of games
 
     # Get the list of all active players for the dropdown
     active_players = players.get_active_players()
@@ -126,19 +128,22 @@ def generate_json_file(player_name, num_games):
 
     all_seasons_df = pd.DataFrame()
 
-    year = 2023
+    year = 2024
     while year >= 1999:
         seasons_checked = 0
         while seasons_checked < 3:
-            season = str(year)
+            # Construct season string in format YYYY-YY (e.g., 2024-25)
+            next_two = str((year + 1) % 100).zfill(2)
+            season = f"{year}-{next_two}"
             print(f"Fetching data for season {season}...")
 
-            game_log = playergamelog.PlayerGameLog(player_id, season=season, season_type_all_star="Regular Season").get_dict()
+            try:
+                df = playergamelog.PlayerGameLog(player_id, season=season, season_type_all_star="Regular Season").get_data_frames()[0]
+            except Exception as e:
+                print(f"Error fetching {season}: {e}")
+                df = pd.DataFrame()
 
-            if game_log['resultSets'][0]['rowSet']:
-                games = game_log['resultSets'][0]['rowSet']
-                df = pd.DataFrame(games, columns=game_log['resultSets'][0]['headers'])
-
+            if not df.empty:
                 all_seasons_df = pd.concat([all_seasons_df, df], ignore_index=True)
                 break
             else:
