@@ -88,38 +88,43 @@ def entry_page():
 
 @app.route('/player_stats', methods=['GET', 'POST'])
 def player_stats():
-    num_games = 20  # Default window
-    selected_stat = 'FPTS'  # Default stat
+    num_games = 20  # default
+    selected_player = 'Bol Bol'
+    selected_stat = 'FPTS'
 
     if request.method == 'GET':
-        selected_player = request.args.get('player_name', 'Bol Bol')
-        selected_stat   = request.args.get('stat', selected_stat)
+        selected_player = request.args.get('player_name', selected_player)
+        num_games = int(request.args.get('num_games', num_games))
+        selected_stat = request.args.get('stat', selected_stat)
     else:  # POST
-        selected_player = request.form.get('player_name', 'Bol Bol')
-        num_games       = int(request.form.get('num_games', num_games))
-        selected_stat   = request.form.get('stat', selected_stat)
+        selected_player = request.form.get('player_name', selected_player)
+        num_games = int(request.form.get('num_games', num_games))
+        selected_stat = request.form.get('stat', selected_stat)
 
-    # Build/update the JSON the chart reads
-    generate_json_file(selected_player, num_games, selected_stat)
-
-    # Players list for dropdown
-    active_players = players.get_active_players()
-    active_players.sort(key=lambda x: x['full_name'])
-
-    # Expose stat options to the template (template can ignore for now)
+    # Base stats + z-score stats for the dropdown
     stat_options = [
+        # base
         'FPTS','PTS','REB','AST','STL','BLK','TOV',
         'FGM','FGA','FG_PCT','FG3M','FG3A','FG3_PCT',
-        'FTM','FTA','FT_PCT','MIN','PLUS_MINUS'
+        'FTM','FTA','FT_PCT','MIN','PLUS_MINUS',
+        # z-scores
+        'AVG_Z','Z_PTS','Z_FG3M','Z_REB','Z_AST','Z_STL','Z_BLK','Z_FG_PCT','Z_FT_PCT','Z_TOV'
     ]
+
+    # generate the JSON for the chosen stat
+    generate_json_file(selected_player, num_games, stat=selected_stat)
+
+    # players for dropdown
+    active_players = players.get_active_players()
+    active_players.sort(key=lambda x: x['full_name'])
 
     return render_template(
         'player_stats.html',
         players=active_players,
         selected_player=selected_player,
         num_games=num_games,
-        selected_stat=selected_stat,
-        stat_options=stat_options
+        stat_options=stat_options,
+        selected_stat=selected_stat
     )
 
 
@@ -137,6 +142,7 @@ def generate_json_file(player_name, num_games, stat='FPTS'):
     player_id = player_info[0]['id']
     print(f"Fetching ALL regular-season games for: {player_name} (ID: {player_id}), stat={stat}")
 
+    # Pull all regular-season games in one request
     try:
         lgf = leaguegamefinder.LeagueGameFinder(
             player_id_nullable=player_id,
@@ -152,7 +158,7 @@ def generate_json_file(player_name, num_games, stat='FPTS'):
         print("No data available for the specified player.")
         return
 
-    # Coerce numerics
+    # ---------- Coerce numerics we will use ----------
     numeric_cols = [
         "FGM","FGA","FG3M","FG3A","FTM","FTA",
         "REB","AST","STL","BLK","TOV","PTS","MIN",
@@ -160,9 +166,9 @@ def generate_json_file(player_name, num_games, stat='FPTS'):
     ]
     for c in numeric_cols:
         if c in all_seasons_df.columns:
-            all_seasons_df[c] = pd.to_numeric(all_seasons_df[c], errors="coerce")
+            all_seasons_df[c] = pd.to_numeric(all_seasons_df[c], errors="coerce").fillna(0)
 
-    # Fantasy points (always compute; used if stat == 'FPTS')
+    # ---------- Fantasy points (always compute) ----------
     league_scoring_rules = {
         'fgm': 2, 'fga': -1, 'ftm': 1, 'fta': -1,
         'threeptm': 1, 'reb': 1, 'ast': 2, 'stl': 4,
@@ -186,40 +192,97 @@ def generate_json_file(player_name, num_games, stat='FPTS'):
 
     all_seasons_df['FPTS'] = all_seasons_df.apply(calculate_fp_row, axis=1)
 
-    # Dates & ordering
+    # ---------- Dates / ordering / season labels ----------
     all_seasons_df['Game_Date'] = pd.to_datetime(all_seasons_df['GAME_DATE'], errors="coerce")
     all_seasons_df = all_seasons_df.sort_values('Game_Date').reset_index(drop=True)
     all_seasons_df['Game_Number'] = all_seasons_df.index + 1
 
-    # Season label helpers
     all_seasons_df['SEASON_ID'] = all_seasons_df['SEASON_ID'].astype(str)
     all_seasons_df['SEASON_START'] = all_seasons_df['SEASON_ID'].str[-4:].astype(int)
     all_seasons_df['SEASON'] = all_seasons_df['SEASON_START'].map(
         lambda y: f"{y}-{str((y+1) % 100).zfill(2)}"
     )
 
-    # Which column to average?
-    # Allow only known safe columns; fall back to FPTS if unknown
-    allowed = set([
+    # ---------- Hardcoded league means / std devs ----------
+    # Base 7 cats + components needed for % impact
+    league_means = {
+        'PTS': 16.714, 'FG3M': 1.876, 'REB': 6.000, 'AST': 3.825,
+        'STL': 0.970,  'BLK': 0.680, 'TOV': 1.883,
+        'FGM': 5.711,  'FGA': 11.943,
+        'FTM': 2.497,  'FTA': 3.126,
+    }
+    league_stds = {
+        'PTS': 6.078, 'FG3M': 0.588, 'REB': 2.500, 'AST': 2.077,
+        'STL': 0.435, 'BLK': 0.571, 'TOV': 0.891,  # positive; we invert TOV separately
+        'FGM': 2.110, 'FGA': 4.494, 'FTM': 1.615, 'FTA': 1.947,
+    }
+
+    # League-average percentages implied by the base means
+    lg_fg_pct = league_means['FGM'] / league_means['FGA'] if league_means['FGA'] else 0.0
+    lg_ft_pct = league_means['FTM'] / league_means['FTA'] if league_means['FTA'] else 0.0
+
+    # Your new (%-diff × volume) impact distribution params
+    FG_IMPACT_MEAN = -0.087797348
+    FG_IMPACT_STD  =  0.690900598
+    FT_IMPACT_MEAN =  0.029394472
+    FT_IMPACT_STD  =  0.303514900
+
+    # ---------- Per-game z-scores ----------
+    def _z(series, mean, std, invert=False):
+        std = abs(float(std)) if std else 0.0
+        if std == 0:
+            return pd.Series(pd.NA, index=series.index if hasattr(series, "index") else all_seasons_df.index)
+        z = (series - mean) / std
+        return -z if invert else z
+
+    z_cols = []
+
+    # 6 positive cats + TOV (lower is better → invert)
+    for base, invert in [
+        ('PTS', False), ('FG3M', False), ('REB', False),
+        ('AST', False), ('STL', False), ('BLK', False),
+        ('TOV', True),
+    ]:
+        all_seasons_df[f'Z_{base}'] = _z(all_seasons_df[base], league_means[base], league_stds[base], invert=invert)
+        z_cols.append(f'Z_{base}')
+
+    # ---- Percentage impact z-scores (your method) ----
+    # FG impact = (FG% - league_fg%) * FGA  == FGM - league_fg% * FGA
+    fg_impact = all_seasons_df['FGM'] - (lg_fg_pct * all_seasons_df['FGA'])
+    all_seasons_df['Z_FG_PCT'] = _z(fg_impact, FG_IMPACT_MEAN, FG_IMPACT_STD, invert=False)
+    z_cols.append('Z_FG_PCT')
+
+    # FT impact = (FT% - league_ft%) * FTA  == FTM - league_ft% * FTA
+    ft_impact = all_seasons_df['FTM'] - (lg_ft_pct * all_seasons_df['FTA'])
+    all_seasons_df['Z_FT_PCT'] = _z(ft_impact, FT_IMPACT_MEAN, FT_IMPACT_STD, invert=False)
+    z_cols.append('Z_FT_PCT')
+
+    # Average z across the 9 cats (skip NaNs)
+    all_seasons_df['AVG_Z'] = all_seasons_df[z_cols].mean(axis=1, skipna=True)
+
+    # ---------- Which column to plot ----------
+    base_allowed = {
         'FPTS','PTS','REB','AST','STL','BLK','TOV',
         'FGM','FGA','FG_PCT','FG3M','FG3A','FG3_PCT',
         'FTM','FTA','FT_PCT','MIN','PLUS_MINUS'
-    ])
-    value_col = stat if stat in allowed else 'FPTS'
+    }
+    z_allowed = {'AVG_Z'} | {f'Z_{k}' for k in [
+        'PTS','FG3M','REB','AST','STL','BLK','FG_PCT','FT_PCT','TOV'
+    ]}
 
-    # Centered moving average of the chosen stat
+    value_col = stat if stat in (base_allowed | z_allowed) else 'FPTS'
+
+    # ---------- Centered moving average ----------
     def centered_average(idx, half_window):
         start = max(0, idx - half_window)
         end   = min(len(all_seasons_df), idx + half_window + 1)
         return all_seasons_df[value_col].iloc[start:end].mean()
 
-    all_seasons_df['Centered_Avg'] = all_seasons_df.index.map(
-        lambda i: centered_average(i, num_games)
-    )
+    all_seasons_df['Centered_Avg'] = all_seasons_df.index.map(lambda i: centered_average(i, num_games))
 
-    # Prepare export (keep original key names for your current front-end)
+    # ---------- Export for the front-end ----------
     result_df = all_seasons_df[['Game_Number', 'MATCHUP', 'SEASON', 'SEASON_ID', 'Centered_Avg']].copy()
-    result_df['Centered_Avg_Stat'] = pd.to_numeric(result_df['Centered_Avg'], errors='coerce').round(2)
+    result_df['Centered_Avg_Stat'] = pd.to_numeric(result_df['Centered_Avg'], errors='coerce').round(3)
     result_df['STAT'] = value_col
     result_df = result_df.dropna(subset=['Centered_Avg_Stat'])
 
@@ -227,12 +290,15 @@ def generate_json_file(player_name, num_games, stat='FPTS'):
 
     output_dir = os.path.join(app.root_path, 'static')
     os.makedirs(output_dir, exist_ok=True)
-    output_file = os.path.join(output_dir, 'player_stats.json')  # same path your HTML reads
+    output_file = os.path.join(output_dir, 'player_stats.json')
 
     with open(output_file, 'w') as f:
         json.dump(data, f, indent=4)
 
     print(f"Data saved to {output_file} (rows: {len(result_df)}) for stat={value_col}")
+
+
+
 
 
 

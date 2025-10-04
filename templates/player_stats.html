@@ -190,38 +190,41 @@
           .domain([1, d3.max(data, (d) => +d.Game_Number)])
           .range([0, width]);
 
-        // ==== Smarter Y domain based on stat/value distribution ====
-        const vals = data.map(getVal).filter(v => Number.isFinite(v));
-        let minV = d3.min(vals), maxV = d3.max(vals);
+// ==== Smarter Y domain based on stat/value distribution ====
+const vals = data.map(getVal).filter(v => Number.isFinite(v));
+let minV = d3.min(vals), maxV = d3.max(vals);
 
-        // Handle degenerate case
-        if (minV === maxV) {
-          const pad = (Math.abs(maxV) || 1) * 0.1;
-          minV -= pad; maxV += pad;
-        }
+// Handle degenerate case
+if (minV === maxV) {
+  const pad = (Math.abs(maxV) || 1) * 0.1;
+  minV -= pad; maxV += pad;
+}
 
-        const labelUpper = statLabel.toUpperCase();
+const labelUpper = statLabel.toUpperCase();
+const isZ = labelUpper.startsWith('Z_') || labelUpper === 'AVG_Z';
 
-        // If it's obviously a percentage (values in 0..1 OR label indicates %), clamp to [0,1] with small padding
-        const looksLikePct = (maxV <= 1.2 && minV >= -0.1) || /(FG_PCT|FT_PCT|FG3_PCT|PCT|%)/.test(labelUpper);
-        let yDomain;
-        if (looksLikePct) {
-          const pad = 0.03;
-          yDomain = [Math.max(0, minV - pad), Math.min(1, maxV + pad)];
-        } else {
-          // If data include negatives (e.g., PLUS_MINUS), allow symmetric-ish padding around min/max
-          const spread = Math.max(1e-6, maxV - minV);
-          const pad = spread * 0.1;
+// Only treat as a percentage if it's one of the *actual* pct stats and NOT a z-score
+const isPctStat =
+  !isZ && (/^(FG_PCT|FT_PCT|FG3_PCT)$/.test(labelUpper) ||
+           (maxV <= 1.2 && minV >= -0.1));
 
-          // Many box-score stats are non-negative; if min >= 0, start at 0 for nicer baseline unless the range is tiny
-          if (minV >= 0) {
-            yDomain = [0, maxV + pad];
-          } else {
-            yDomain = [minV - pad, maxV + pad];
-          }
-        }
+let yDomain;
+if (isPctStat) {
+  const pad = 0.03;
+  // clamp to [0,1] with a little padding
+  yDomain = [Math.max(0, minV - pad), Math.min(1, maxV + pad)];
+} else {
+  // generic numeric (supports negatives, e.g., PLUS_MINUS and all Z_* stats)
+  const spread = Math.max(1e-6, maxV - minV);
+  const pad = spread * 0.1;
+  yDomain = [minV - pad, maxV + pad];
 
-        const y = d3.scaleLinear().domain(yDomain).nice().range([height, 0]);
+  // For strictly non-negative stats, anchor at 0 (nice baseline)
+  if (minV >= 0) yDomain[0] = 0;
+}
+
+const y = d3.scaleLinear().domain(yDomain).nice().range([height, 0]);
+
 
         // Axes
         const xAxisG = svg
