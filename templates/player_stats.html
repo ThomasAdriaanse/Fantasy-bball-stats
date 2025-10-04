@@ -1,127 +1,363 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico">
-    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/defaultstyle.css') }}">
-    <title>{{ selected_player }} - Past X-Game Average Fantasy Points</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
-        }
-        #chart {
-            margin-top: 20px;
-        }
-        #form-container {
-            margin-bottom: 20px;
-        }
-    </style>
-</head>
-<body>
-    <h2>{{ selected_player }} - Moving Average FPTS</h2>
-    
-    <div id="form-container">
-        <form method="POST" action="/player_stats">
-            <label for="player_name">Select Player:</label>
-            <select id="player_name" name="player_name">
-                {% for player in players %}
-                    <option value="{{ player['full_name'] }}" {% if player['full_name'] == selected_player %}selected{% endif %}>
-                        {{ player['full_name'] }}
-                    </option>
-                {% endfor %}
-            </select>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+  <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico" />
+  <link
+    rel="stylesheet"
+    type="text/css"
+    href="{{ url_for('static', filename='css/select_teams_page.css') }}"
+  />
+  <title>{{ selected_player }} - Moving Average {{ selected_stat }}</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
 
-            <label for="num_games">Number of games on each side for moving average:</label>
-            <input type="number" id="num_games" name="num_games" value="{{ num_games }}">
+  <style>
+    .body-container { max-width: 96vw; margin: 0 auto; }
+
+    .controls-card, .chart-card {
+      background: #10131a;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 16px 18px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+      margin-bottom: 18px;
+    }
+
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 280px 240px auto;
+      gap: 28px;
+      align-items: end;
+    }
+    .controls-grid label {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 6px;
+      opacity: 0.9;
+    }
+    .controls-grid select,
+    .controls-grid input[type="number"] {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: #0b0e14;
+      color: #e8eefc;
+      font-size: 15px;
+    }
+
+    /* Red action button */
+    .controls-grid button {
+      padding: 13px 18px;
+      border-radius: 10px;
+      border: 1px solid #b32626;
+      background: linear-gradient(180deg, #ff4d4d, #d62828);
+      color: #fff;
+      cursor: pointer;
+      transition: transform .2s ease, box-shadow .2s ease, filter .15s ease;
+      font-size: 15px;
+      letter-spacing: .2px;
+    }
+    .controls-grid button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 25px rgba(214,40,40,.35);
+      filter: brightness(1.05);
+    }
+
+    #chart svg { display: block; width: 100%; height: auto; }
+
+    /* Larger axis/tick text */
+    #chart .axis text { font-size: 18px; fill: #e8eefc; }
+    #chart .axis path, #chart .axis line { stroke: rgba(255,255,255,.35); stroke-width: 1.25; }
+
+    .season-lines line { shape-rendering: crispEdges; }
+    .season-lines text { font-size: 24px; fill: #1bb01b; }
+    .team-ticks line { shape-rendering: crispEdges; }
+
+    .legend {
+      display: flex;
+      gap: 22px;
+      align-items: center;
+      margin-top: 12px;
+      opacity: 0.95;
+      font-size: 16px;
+      flex-wrap: wrap;
+    }
+    .legend .swatch { width: 26px; height: 4px; border-radius: 2px; display: inline-block; }
+    .legend .swatch.blue  { background: steelblue; }
+    .legend .swatch.green { background: #1bb01b; height: 14px; width: 3px; }
+    .legend .swatch.red   { background: red; height: 14px; width: 3px; }
+  </style>
+</head>
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-EZ4LV1SKJ1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-EZ4LV1SKJ1');
+</script>
+
+<body>
+  <a id="back-button" href="{{ url_for('entry_page') }}" class="back-button">Back</a>
+
+  <div class="body-container">
+    <h1 style="font-size:28px">{{ selected_player }} — Moving Average {{ selected_stat }}</h1>
+
+    <!-- Controls -->
+    <div class="controls-card">
+      <form method="POST" action="/player_stats">
+        <div class="controls-grid">
+          <div>
+            <label for="player_name">Select Player</label>
+            <select id="player_name" name="player_name">
+              {% for player in players %}
+              <option value="{{ player['full_name'] }}" {% if player['full_name'] == selected_player %}selected{% endif %}>
+                {{ player['full_name'] }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label for="num_games">Moving Avg (games each side)</label>
+            <input type="number" id="num_games" name="num_games" value="{{ num_games }}" min="1" />
+          </div>
+
+          <div>
+            <label for="stat">Stat</label>
+            <select id="stat" name="stat">
+              {% for s in stat_options %}
+              <option value="{{ s }}" {% if s == selected_stat %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div style="align-self: end;">
             <button type="submit">Update</button>
-        </form>
+          </div>
+        </div>
+      </form>
     </div>
 
-    <div id="chart"></div>
+    <!-- Chart -->
+    <div class="chart-card">
+      <div id="chart"></div>
+      <div class="legend">
+        <span><span class="swatch blue"></span> Moving Avg <span id="legend-stat">{{ selected_stat }}</span></span>
+        <span><span class="swatch green"></span> Season Change</span>
+        <span><span class="swatch red"></span> Team Change</span>
+      </div>
+    </div>
+  </div>
 
-    <script>
-        d3.json("/static/player_fpts.json").then(function(data) {
-            if (data.length === 0) {
-                d3.select("#chart").append("p").text("No data available for this selection.");
-                return;
+  <script>
+    d3.json("/static/player_stats.json")
+      .then(function (data) {
+        if (!data || data.length === 0) {
+          d3.select("#chart").append("p").text("No data available for this selection.");
+          return;
+        }
+
+        // Support new JSON shape (Centered_Avg_Value + STAT) and older (Centered_Avg_Stat)
+        const getVal = d =>
+          (d.Centered_Avg_Value !== undefined ? +d.Centered_Avg_Value : +d.Centered_Avg_Stat);
+
+        const statLabel = (data[0] && (data[0].STAT || "{{ selected_stat }}")) || "{{ selected_stat }}";
+        d3.select("#legend-stat").text(statLabel);
+
+        // Big chart
+        const margin = { top: 90, right: 50, bottom: 80, left: 90 },
+              width  = 2200 - margin.left - margin.right,
+              height = 1100 - margin.top  - margin.bottom;
+
+        const svg = d3
+          .select("#chart")
+          .append("svg")
+          .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+          .attr("preserveAspectRatio", "xMidYMid meet")
+          .append("g")
+          .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+        // X scale (game number)
+        const x = d3
+          .scaleLinear()
+          .domain([1, d3.max(data, (d) => +d.Game_Number)])
+          .range([0, width]);
+
+// ==== Smarter Y domain based on stat/value distribution ====
+const vals = data.map(getVal).filter(v => Number.isFinite(v));
+let minV = d3.min(vals), maxV = d3.max(vals);
+
+// Handle degenerate case
+if (minV === maxV) {
+  const pad = (Math.abs(maxV) || 1) * 0.1;
+  minV -= pad; maxV += pad;
+}
+
+const labelUpper = statLabel.toUpperCase();
+const isZ = labelUpper.startsWith('Z_') || labelUpper === 'AVG_Z';
+
+// Only treat as a percentage if it's one of the *actual* pct stats and NOT a z-score
+const isPctStat =
+  !isZ && (/^(FG_PCT|FT_PCT|FG3_PCT)$/.test(labelUpper) ||
+           (maxV <= 1.2 && minV >= -0.1));
+
+let yDomain;
+if (isPctStat) {
+  const pad = 0.03;
+  // clamp to [0,1] with a little padding
+  yDomain = [Math.max(0, minV - pad), Math.min(1, maxV + pad)];
+} else {
+  // generic numeric (supports negatives, e.g., PLUS_MINUS and all Z_* stats)
+  const spread = Math.max(1e-6, maxV - minV);
+  const pad = spread * 0.1;
+  yDomain = [minV - pad, maxV + pad];
+
+  // For strictly non-negative stats, anchor at 0 (nice baseline)
+  if (minV >= 0) yDomain[0] = 0;
+}
+
+const y = d3.scaleLinear().domain(yDomain).nice().range([height, 0]);
+
+
+        // Axes
+        const xAxisG = svg
+          .append("g")
+          .attr("class", "axis axis--x")
+          .attr("transform", "translate(0," + height + ")")
+          .call(d3.axisBottom(x).ticks(12));
+
+        xAxisG.selectAll("text").style("font-size", "24px");
+        xAxisG
+          .append("text")
+          .attr("x", width / 2)
+          .attr("y", 56)
+          .attr("fill", "#e8eefc")
+          .style("font-size", "20px")
+          .attr("text-anchor", "middle")
+          .text("Game Number");
+
+        const yAxisG = svg.append("g").attr("class", "axis axis--y").call(d3.axisLeft(y).ticks(12));
+        yAxisG.selectAll("text").style("font-size", "24px");
+        yAxisG
+          .append("text")
+          .attr("transform", "rotate(-90)")
+          .attr("x", -height / 2)
+          .attr("y", -68)
+          .attr("fill", "#e8eefc")
+          .style("font-size", "20px")
+          .attr("text-anchor", "middle")
+          .text(`Average ${statLabel}`);
+
+        // Main line — slightly thinner now
+        const line = d3
+          .line()
+          .x((d) => x(+d.Game_Number))
+          .y((d) => y(getVal(d)));
+
+        svg
+          .append("path")
+          .datum(data)
+          .attr("fill", "none")
+          .attr("stroke", "steelblue")
+          .attr("stroke-width", 2.2)               /* thinner */
+          .attr("vector-effect", "non-scaling-stroke")
+          .attr("d", line);
+
+        // Season boundaries — slightly thinner green full-height lines + label
+        const seasonKey =
+          "SEASON" in data[0]
+            ? "SEASON"
+            : "SEASON_ID" in data[0]
+            ? "SEASON_ID"
+            : null;
+
+        if (seasonKey) {
+          let prevSeason = String(data[0][seasonKey]);
+          const boundaries = [];
+
+          for (let i = 1; i < data.length; i++) {
+            const s = String(data[i][seasonKey]);
+            if (s !== prevSeason) {
+              const label =
+                "SEASON" in data[i]
+                  ? String(data[i].SEASON)
+                  : String(data[i].SEASON_ID).slice(-4) +
+                    "-" +
+                    String((+String(data[i].SEASON_ID).slice(-4) + 1) % 100).padStart(2, "0");
+
+              boundaries.push({ g: +data[i].Game_Number, label });
+              prevSeason = s;
             }
+          }
 
-            const margin = {top: 50, right: 30, bottom: 50, left: 60},
-                  width = 800 - margin.left - margin.right,
-                  height = 400 - margin.top - margin.bottom;
+          const seasonG = svg.append("g").attr("class", "season-lines");
 
-            const svg = d3.select("#chart")
-                .append("svg")
-                .attr("width", width + margin.left + margin.right)
-                .attr("height", height + margin.top + margin.bottom)
-                .append("g")
-                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+          seasonG
+            .selectAll("line")
+            .data(boundaries)
+            .enter()
+            .append("line")
+            .attr("x1", (d) => x(d.g))
+            .attr("x2", (d) => x(d.g))
+            .attr("y1", 0)
+            .attr("y2", height)
+            .attr("stroke", "#1bb01b")
+            .attr("stroke-width", 1.6)             /* thinner */
+            .attr("vector-effect", "non-scaling-stroke")
+            .attr("opacity", 0.9);
 
-            const x = d3.scaleLinear()
-                .domain([1, d3.max(data, d => d.Game_Number)])
-                .range([0, width]);
+          seasonG
+            .selectAll("text")
+            .data(boundaries)
+            .enter()
+            .append("text")
+            .attr("x", (d) => x(d.g))
+            .attr("y", -16)
+            .attr("text-anchor", "middle")
+            .style("font-size", "16px")
+            .text((d) => d.label);
+        }
 
-            svg.append("g")
-                .attr("transform", "translate(0," + height + ")")
-                .call(d3.axisBottom(x))
-                .append("text")
-                .attr("x", width / 2)
-                .attr("y", 40)
-                .attr("fill", "#fff") 
-                .attr("text-anchor", "middle")
-                .text("Game Number");
-
-            const y = d3.scaleLinear()
-                .domain([0, d3.max(data, d => d.Centered_Avg_FPTS) + 5])
-                .range([height, 0]);
-
-            svg.append("g")
-                .call(d3.axisLeft(y))
-                .append("text")
-                .attr("transform", "rotate(-90)")
-                .attr("x", -height / 2)
-                .attr("y", -50)
-                .attr("fill", "#fff") 
-                .attr("text-anchor", "middle")
-                .text("Average FPTS");
-
-            svg.append("path")
-                .datum(data)
-                .attr("fill", "none")
-                .attr("stroke", "steelblue")
-                .attr("stroke-width", 2)
-                .attr("d", d3.line()
-                    .x(d => x(d.Game_Number))
-                    .y(d => y(d.Centered_Avg_FPTS))
-                );
-
-            // Detect team changes and add vertical red lines
-            let lastTeam = null;
-            data.forEach(d => {
-                const currentTeam = d.MATCHUP.split(' ')[0];  // Assuming team abbreviation is the first part of MATCHUP
-                console.log("Current team:", currentTeam, "Last team:", lastTeam);  // Debugging: Log team changes
-
-                if (lastTeam && lastTeam !== currentTeam) {
-                    // Add vertical line when the team changes
-                    svg.append("line")
-                        .attr("x1", x(d.Game_Number))
-                        .attr("x2", x(d.Game_Number))
-                        .attr("y1", 0)
-                        .attr("y2", height)
-                        .attr("stroke", "red")
-                        .attr("stroke-width", 2)
-                        .attr("stroke-dasharray", "4 4");  // Optional: makes the line dashed
-                }
-                lastTeam = currentTeam;
+        // Team changes — red tick intersecting the line (slightly thinner)
+        const teamTicks = [];
+        let lastTeam = null;
+        data.forEach((d) => {
+          const currentTeam = (d.MATCHUP || "").split(" ")[0];
+          if (lastTeam && currentTeam && lastTeam !== currentTeam) {
+            teamTicks.push({
+              g: +d.Game_Number,
+              y: getVal(d)
             });
-
-        }).catch(function(error){
-            console.error('Error loading the JSON data:', error);
-            d3.select("#chart").append("p").text("Failed to load data.");
+          }
+          if (currentTeam) lastTeam = currentTeam;
         });
-    </script>
+
+        svg
+          .append("g")
+          .attr("class", "team-ticks")
+          .selectAll("line")
+          .data(teamTicks)
+          .enter()
+          .append("line")
+          .attr("x1", (d) => x(d.g))
+          .attr("x2", (d) => x(d.g))
+          .attr("y1", (d) => y(d.y) - 8)
+          .attr("y2", (d) => y(d.y) + 8)
+          .attr("stroke", "red")
+          .attr("stroke-width", 1.6) 
+          .attr("vector-effect", "non-scaling-stroke");
+      })
+      .catch(function (error) {
+        console.error("Error loading the JSON data:", error);
+        d3.select("#chart").append("p").text("Failed to load data.");
+      });
+  </script>
 </body>
 </html>
