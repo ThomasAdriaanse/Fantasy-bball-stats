@@ -1,52 +1,126 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Basketball Data - Categories Comparison</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico">
-    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/compare_page.css') }}">
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <style>
-        /* Grid layout for 3x3 graphs */
-        .grid-container {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-gap: 20px;
-            padding: 20px;
-        }
+  <title>Basketball Data - Categories Comparison</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico" />
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/compare_page.css') }}" />
+  <script src="https://d3js.org/d3.v7.min.js"></script>
 
-        .graph-wrapper {
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            padding: 10px;
-            background: #f5f5f5;
-        }
+  <style>
+    /* ====== Borrowed vibe from player stats page ====== */
+    body { background: #0b0e14; color: #e8eefc; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
+    .body-container { max-width: 96vw; margin: 0 auto; padding: 14px 0 32px; }
 
-        .graph-title {
-            text-align: center;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
+    .card {
+      background: #10131a;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 16px 18px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+      margin-bottom: 18px;
+    }
 
+    /* Header strip with team names & current points */
+    .teams-header {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      align-items: stretch;
+    }
+    .team-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-radius: 10px;
+      background: #0b0e14;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .team-pill.left  { box-shadow: inset 0 0 0 1px rgba(70,130,180,0.35); }  /* steelblue border */
+    .team-pill.right { box-shadow: inset 0 0 0 1px rgba(255,0,0,0.35); }     /* red border */
 
-        .chart-svg {
-            width: 100%;
-            height: 220px;
-        }
+    .team-name {
+      font-size: 18px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .team-name.left  { color: #63a0d4; }   /* blue-ish */
+    .team-name.right { color: #ff7a7a; }   /* red-ish */
 
-        /* Responsive adjustments */
-        @media (max-width: 1200px) {
-            .grid-container {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
+    .team-points {
+      font-size: 16px;
+      opacity: 0.9;
+    }
 
-        @media (max-width: 800px) {
-            .grid-container {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+    /* Tables */
+    .table-container { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .table-wrapper { overflow: auto; }
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      color: #e8eefc;
+      font-size: 14px;
+      background: #0b0e14;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    table.data-table th, table.data-table td {
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding: 8px 10px;
+      text-align: right;
+      white-space: nowrap;
+    }
+    table.data-table th:first-child, table.data-table td:first-child { text-align: left; }
+    table.data-table thead th { background: #121722; font-weight: 600; }
+    .player-out { color: #ff6b6b; }
+    .player-dtd { color: #ffd166; }
+
+    /* Charts grid */
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-gap: 20px;
+    }
+    @media (max-width: 1200px) { .grid-container { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 800px)  { .grid-container { grid-template-columns: 1fr; } }
+
+    .graph-wrapper {
+      background: #0b0e14;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 12px 12px 4px 12px;
+    }
+    .graph-title {
+      text-align: center;
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 8px;
+      opacity: 0.95;
+    }
+    .chart-svg { width: 100%; height: 220px; }
+
+    /* Axis styling like player page */
+    .axis text { font-size: 12px; fill: #e8eefc; }
+    .axis path, .axis line { stroke: rgba(255,255,255,.35); stroke-width: 1.0; }
+
+    /* Legend lines (kept per-chart, compact) */
+    .legend text { font-size: 10px; fill: #e8eefc; }
+
+    /* Back button vibe parity */
+    #back-button {
+      display: inline-block;
+      margin: 10px 0 8px 10px;
+      color: #e8eefc;
+      text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 8px;
+      padding: 8px 12px;
+      background: #0b0e14;
+    }
+    #back-button:hover { filter: brightness(1.1); }
+  </style>
 </head>
 
 <!-- Google tag (gtag.js) -->
@@ -55,415 +129,308 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-
   gtag('config', 'G-EZ4LV1SKJ1');
 </script>
 
 <body>
-    <button id="back-button" onclick="window.history.back()">Back</button>
-    <div class="team-names">
-        <div class="team-name-left">
-            <span>{{ data_team_stats_1[0]['team_name'] }}</span>
-            <span>&nbsp;&nbsp;&nbsp;{{ data_team_stats_1[0]['team_current_points'] }}</span>
-        </div>
-        <div class="team-name-right">
-            <span>{{ data_team_stats_2[0]['team_current_points'] }}&nbsp;&nbsp;&nbsp;</span>
-            <span>{{ data_team_stats_2[0]['team_name'] }}</span>
-        </div>
-    </div>         
-    <div class="table-container">
-        <!-- Player and Team Stats Tables (Same as in points.html) -->
-        <!-- First Team Tables -->
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Player Name</th>
-                        <th>MIN</th>
-                        <th>FGM</th>
-                        <th>FGA</th>
-                        <th>FTM</th>
-                        <th>FTA</th>
-                        <th>3PTM</th>
-                        <th>REB</th>
-                        <th>AST</th>
-                        <th>STL</th>
-                        <th>BLK</th>
-                        <th>TO</th>
-                        <th>PTS</th>
-                        <th>FPTS</th>
-                        <th>Games Left</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in data_team_players_1 %}
-                    <tr>
-                        <td class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">
-                            {{ row['player_name'] }}
-                        </td>
-                        <td>{{ row['min'] }}</td>
-                        <td>{{ row['fgm'] }}</td>
-                        <td>{{ row['fga'] }}</td>
-                        <td>{{ row['ftm'] }}</td>
-                        <td>{{ row['fta'] }}</td>
-                        <td>{{ row['threeptm'] }}</td>
-                        <td>{{ row['reb'] }}</td>
-                        <td>{{ row['ast'] }}</td>
-                        <td>{{ row['stl'] }}</td>
-                        <td>{{ row['blk'] }}</td>
-                        <td>{{ row['turno'] }}</td>
-                        <td>{{ row['pts'] }}</td>
-                        <td>{{ row['fpts'] }}</td>
-                        <td>{{ row['games'] }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            <!-- Team Win Percentage Stats Table -->
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        {% for key in team1_win_pct_data[0].keys() %}
-                            <th>{{ key }}</th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        {% for key, value in team1_win_pct_data[0].items() %}
-                            <td>{{ value }}</td>
-                        {% endfor %}
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+  <a id="back-button" href="javascript:history.back()">Back</a>
 
-        <!-- Second Team Tables -->
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Player Name</th>
-                        <th>MIN</th>
-                        <th>FGM</th>
-                        <th>FGA</th>
-                        <th>FTM</th>
-                        <th>FTA</th>
-                        <th>3PTM</th>
-                        <th>REB</th>
-                        <th>AST</th>
-                        <th>STL</th>
-                        <th>BLK</th>
-                        <th>TO</th>
-                        <th>PTS</th>
-                        <th>FPTS</th>
-                        <th>Games Left</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in data_team_players_2 %}
-                    <tr>
-                        <td class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">
-                            {{ row['player_name'] }}
-                        </td>
-                        <td>{{ row['min'] }}</td>
-                        <td>{{ row['fgm'] }}</td>
-                        <td>{{ row['fga'] }}</td>
-                        <td>{{ row['ftm'] }}</td>
-                        <td>{{ row['fta'] }}</td>
-                        <td>{{ row['threeptm'] }}</td>
-                        <td>{{ row['reb'] }}</td>
-                        <td>{{ row['ast'] }}</td>
-                        <td>{{ row['stl'] }}</td>
-                        <td>{{ row['blk'] }}</td>
-                        <td>{{ row['turno'] }}</td>
-                        <td>{{ row['pts'] }}</td>
-                        <td>{{ row['fpts'] }}</td>
-                        <td>{{ row['games'] }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            <!-- Team Win Percentage Stats Table -->
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        {% for key in team2_win_pct_data[0].keys() %}
-                            <th>{{ key }}</th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        {% for key, value in team2_win_pct_data[0].items() %}
-                            <td>{{ value }}</td>
-                        {% endfor %}
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+  <div class="body-container">
+    <!-- Team header (blue left, red right) -->
+    {% set t1 = data_team_stats_1|default([{'team_name':'Team 1','team_current_points':''}], true) %}
+    {% set t2 = data_team_stats_2|default([{'team_name':'Team 2','team_current_points':''}], true) %}
+
+    <div class="card teams-header">
+      <div class="team-pill left">
+        <div class="team-name left">{{ t1[0]['team_name'] }}</div>
+        <div class="team-points">{{ t1[0]['team_current_points'] }}</div>
+      </div>
+      <div class="team-pill right">
+        <div class="team-points">{{ t2[0]['team_current_points'] }}</div>
+        <div class="team-name right">{{ t2[0]['team_name'] }}</div>
+      </div>
     </div>
 
-    <div id="graph-container">
-        <p>Graphs update at end of day (PST)</p>  
-        <h2>Team Comparison - Projected Categories</h2>
-        <div class="grid-container">
-            {% for cat in combined_jsons.keys() %}
-            <div class="graph-wrapper">
-                <div class="graph-title">{{ cat }}</div>
-                <div id="chart-{{ (cat|replace('%','pct')|replace('3PM','3pm')|lower) }}" class="chart-svg"></div>
-            </div>
-            {% endfor %}
+    <!-- Tables -->
+    <div class="card">
+      <div class="table-container">
+        <!-- Team 1 tables -->
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Player Name</th>
+                <th>MIN</th><th>FGM</th><th>FGA</th><th>FTM</th><th>FTA</th>
+                <th>3PTM</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th>
+                <th>TO</th><th>PTS</th><th>FPTS</th><th>Games Left</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in data_team_players_1 %}
+              <tr>
+                <td class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">
+                  {{ row['player_name'] }}
+                </td>
+                <td>{{ row['min'] }}</td>
+                <td>{{ row['fgm'] }}</td>
+                <td>{{ row['fga'] }}</td>
+                <td>{{ row['ftm'] }}</td>
+                <td>{{ row['fta'] }}</td>
+                <td>{{ row['threeptm'] }}</td>
+                <td>{{ row['reb'] }}</td>
+                <td>{{ row['ast'] }}</td>
+                <td>{{ row['stl'] }}</td>
+                <td>{{ row['blk'] }}</td>
+                <td>{{ row['turno'] }}</td>
+                <td>{{ row['pts'] }}</td>
+                <td>{{ row['fpts'] }}</td>
+                <td>{{ row['games'] }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          <table class="data-table" style="margin-top:12px">
+            <thead>
+              <tr>
+                {% for key in team1_win_pct_data[0].keys() %}
+                  <th>{{ key }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {% for key, value in team1_win_pct_data[0].items() %}
+                  <td>{{ value }}</td>
+                {% endfor %}
+              </tr>
+            </tbody>
+          </table>
         </div>
+
+        <!-- Team 2 tables -->
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Player Name</th>
+                <th>MIN</th><th>FGM</th><th>FGA</th><th>FTM</th><th>FTA</th>
+                <th>3PTM</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th>
+                <th>TO</th><th>PTS</th><th>FPTS</th><th>Games Left</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in data_team_players_2 %}
+              <tr>
+                <td class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">
+                  {{ row['player_name'] }}
+                </td>
+                <td>{{ row['min'] }}</td>
+                <td>{{ row['fgm'] }}</td>
+                <td>{{ row['fga'] }}</td>
+                <td>{{ row['ftm'] }}</td>
+                <td>{{ row['fta'] }}</td>
+                <td>{{ row['threeptm'] }}</td>
+                <td>{{ row['reb'] }}</td>
+                <td>{{ row['ast'] }}</td>
+                <td>{{ row['stl'] }}</td>
+                <td>{{ row['blk'] }}</td>
+                <td>{{ row['turno'] }}</td>
+                <td>{{ row['pts'] }}</td>
+                <td>{{ row['fpts'] }}</td>
+                <td>{{ row['games'] }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          <table class="data-table" style="margin-top:12px">
+            <thead>
+              <tr>
+                {% for key in team2_win_pct_data[0].keys() %}
+                  <th>{{ key }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {% for key, value in team2_win_pct_data[0].items() %}
+                  <td>{{ value }}</td>
+                {% endfor %}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
-    <script>
-        // Tracking time for graph to load
-        const graphRenderStart = performance.now();
-    
-        // Parse combinedJsons from Flask
-        const combinedJsons = {{ combined_jsons | tojson }};
-        const categories = Object.keys(combinedJsons);
-        const slug = c => c.replace('%','pct').replace('3PM','3pm').toLowerCase();
-    
-        // Team names
-        const team1Name = "{{ data_team_stats_1[0]['team_name'] }}";
-        const team2Name = "{{ data_team_stats_2[0]['team_name'] }}";
-    
-        categories.forEach((cat, index) => {
-            // Parse JSON data for the current category
-            const graphData = combinedJsons[cat].map(d => ({
-                date: new Date(d.date), // Ensure date parsing matches the old page
-                predicted_cat: +d.predicted_cat,
-                predicted_cat_from_present: +d.predicted_cat_from_present,
-                team: d.team,
-                category: d.category
-            }));
-    
-            // Normalize all dates to midnight to match the old graph logic
-            graphData.forEach(d => {
-                d.date.setDate(d.date.getDate()+1);
-                d.date.setHours(0, 0, 0, 0);
-            });
-    
-            // Get today's date to differentiate between past and future
-            const today = new Date();
-            today.setHours(0, 0, 0, 0); // Set to midnight for accurate comparison
-    
-            // Split data into Team 1 and Team 2 based on the team field
-            const team1Data = graphData.filter(d => d.team === "Team 1");
-            const team2Data = graphData.filter(d => d.team === "Team 2");
-    
-            // Split Team 1 data into past and future segments based on today
-            const team1PastData = team1Data.filter(d => d.date <= today);
-            const team1FutureData = team1Data.filter(d => d.date >= today);
-    
-            // Split Team 2 data into past and future segments based on today
-            const team2PastData = team2Data.filter(d => d.date <= today);
-            const team2FutureData = team2Data.filter(d => d.date >= today);
-    
-            // Set the dimensions and margins for the graph
-            const margin = { top: 20, right: 30, bottom: 48, left: 40 },
-                width  = 300 - margin.left - margin.right,
-                height = 200 - margin.top - margin.bottom;
-    
-            // Append the svg object to the corresponding chart div
-            const svg = d3.select("#chart-" + slug(cat))
-                .append("svg")
-                .attr("width", width + margin.left + margin.right)
-                .attr("height", height + margin.top + margin.bottom)
-                .append("g")
-                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-    
-            // Add X axis
-            const x = d3.scaleTime()
-                .domain(d3.extent(graphData, d => d.date))
-                .range([0, width]);
-            svg.append("g")
-                .attr("transform", "translate(0," + height + ")")
-                .call(d3.axisBottom(x)
-                    .ticks(d3.timeDay.every(1)) // One tick per day
-                    .tickFormat(d3.timeFormat("%b %d")) // Format ticks as "Month Day"
-                )
-                .selectAll("text")
-                .attr("transform", "rotate(-45)")
-                .style("text-anchor", "end");
-    
-            // Add Y axis
-            const isPct = (cat === 'FG%' || cat === 'FT%');
-            const yMin = isPct
-            ? Math.max(0, d3.min(graphData, d => Math.min(d.predicted_cat, d.predicted_cat_from_present)) - 0.10)
-            : 0;
-            const yMax = isPct
-            ? Math.min(1, d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present)) + 0.20)
-            : d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present));
+    <!-- Charts -->
+    <div class="card">
+      <p style="margin:0 0 8px 2px; opacity:.8;">Graphs update at end of day (PST)</p>
+      <h2 style="margin: 0 0 14px 2px; font-size: 22px;">Team Comparison — Projected Categories</h2>
 
-            const y = d3.scaleLinear()
-            .domain([yMin, yMax])
-            .nice()
-            .range([height, 0]);
+      <div class="grid-container">
+        {% for cat in combined_jsons.keys() %}
+        <div class="graph-wrapper">
+          <div class="graph-title">{{ cat }}</div>
+          <div id="chart-{{ (cat|replace('%','pct')|replace('3PM','3pm')|lower) }}" class="chart-svg"></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
 
-            svg.append("g").call(d3.axisLeft(y));
-    
-            // Define line generators
-            const lineActual = d3.line()
-                .x(d => x(d.date))
-                .y(d => y(d.predicted_cat_from_present));
-            
-            const linePredicted = d3.line()
-                .x(d => x(d.date))
-                .y(d => y(d.predicted_cat));
-    
-            // Add the actual line for Team 1 (blue, solid for past)
-            svg.append("path")
-                .datum(team1PastData)
-                .attr("fill", "none")
-                .attr("stroke", "blue")
-                .attr("stroke-width", 1.5)
-                .attr("d", lineActual);
-    
-            // Add the predicted part of the actual line for Team 1 (dotted for future)
-            svg.append("path")
-                .datum(team1FutureData)
-                .attr("fill", "none")
-                .attr("stroke", "blue")
-                .attr("stroke-width", 1.5)
-                .style("stroke-dasharray", ("5, 5"))
-                .attr("d", lineActual);
-    
-            // Add the actual line for Team 2 (red, solid for past)
-            svg.append("path")
-                .datum(team2PastData)
-                .attr("fill", "none")
-                .attr("stroke", "red")
-                .attr("stroke-width", 1.5)
-                .attr("d", lineActual);
-    
-            // Add the predicted part of the actual line for Team 2 (dotted for future)
-            svg.append("path")
-                .datum(team2FutureData)
-                .attr("fill", "none")
-                .attr("stroke", "red")
-                .attr("stroke-width", 1.5)
-                .style("stroke-dasharray", ("5, 5"))
-                .attr("d", lineActual);
-            
-            // Add the predicted_cat line for Team 1 (light blue, dashed)
-            svg.append("path")
-                .datum(team1Data)
-                .attr("fill", "none")
-                .attr("stroke", "blue")
-                .attr("stroke-width", 1.5)
-                .style("stroke-dasharray", ("3, 3"))
-                .attr("d", linePredicted);
-            
-            // Add the predicted_cat line for Team 2 (light red, dashed)
-            svg.append("path")
-                .datum(team2Data)
-                .attr("fill", "none")
-                .attr("stroke", "red")
-                .attr("stroke-width", 1.5)
-                .style("stroke-dasharray", ("3, 3"))
-                .attr("d", linePredicted);
-    
-            // Add Legend
-            const legend = svg.append("g")
-                .attr("transform", "translate(0, -10)");
-    
-            legend.append("line")
-                .attr("x1", 0)
-                .attr("y1", 10)
-                .attr("x2", 20)
-                .attr("y2", 10)
-                .attr("stroke", "blue")
-                .attr("stroke-width", 1.5);
-            legend.append("text")
-                .attr("x", 25)
-                .attr("y", 10)
-                .text(`${team1Name} (Actual)`)
-                .attr("alignment-baseline", "middle")
-                .attr("font-size", "10px");
-    
-            /*legend.append("line")
-                .attr("x1", 0)
-                .attr("y1", 25)
-                .attr("x2", 20)
-                .attr("y2", 25)
-                .attr("stroke", "blue")
-                .attr("stroke-width", 1.5)
-                .style("stroke-dasharray", ("5, 5"));
-            legend.append("text")
-                .attr("x", 25)
-                .attr("y", 25)
-                .text(`${team1Name} (Predicted)`)
-                .attr("alignment-baseline", "middle")
-                .attr("font-size", "10px");
-            */
-            legend.append("line")
-                .attr("x1", 0)
-                .attr("y1", 40)
-                .attr("x2", 20)
-                .attr("y2", 40)
-                .attr("stroke", "red")
-                .attr("stroke-width", 1.5);
-            legend.append("text")
-                .attr("x", 25)
-                .attr("y", 40)
-                .text(`${team2Name} (Actual)`)
-                .attr("alignment-baseline", "middle")
-                .attr("font-size", "10px");
-    
-            /*legend.append("line")
-                .attr("x1", 0)
-                .attr("y1", 55)
-                .attr("x2", 20)
-                .attr("y2", 55)
-                .attr("stroke", "red")
-                .attr("stroke-width", 1.5)
-                .style("stroke-dasharray", ("5, 5"));
-            legend.append("text")
-                .attr("x", 25)
-                .attr("y", 55)
-                .text(`${team2Name} (Predicted)`)
-                .attr("alignment-baseline", "middle")
-                .attr("font-size", "10px");
-            */
-            // Add legend entries for predicted_cat lines
-            legend.append("line")
-                .attr("x1", 0)
-                .attr("y1", 25)
-                .attr("x2", 20)
-                .attr("y2", 25)
-                .attr("stroke", "blue")
-                .attr("stroke-width", 1.5)
-                .style("stroke-dasharray", ("3, 3"));
-            legend.append("text")
-                .attr("x", 25)
-                .attr("y", 25)
-                .text(`${team1Name} (Full Predicted)`)
-                .attr("alignment-baseline", "middle")
-                .attr("font-size", "10px");
-            
-            legend.append("line")
-                .attr("x1", 0)
-                .attr("y1", 55)
-                .attr("x2", 20)
-                .attr("y2", 55)
-                .attr("stroke", "red")
-                .attr("stroke-width", 1.5)
-                .style("stroke-dasharray", ("3, 3"));
-            legend.append("text")
-                .attr("x", 25)
-                .attr("y", 55)
-                .text(`${team2Name} (Full Predicted)`)
-                .attr("alignment-baseline", "middle")
-                .attr("font-size", "10px");
-        });
-    
-        const graphRenderEnd = performance.now();
-        console.log(`Graphs render time: ${(graphRenderEnd - graphRenderStart).toFixed(2)} ms`);
-    </script>
-    
+  <script>
+    // Tracking time for graph to load
+    const graphRenderStart = performance.now();
 
+    // Parse combinedJsons from Flask safely
+    const combinedJsons = {{ combined_jsons|default({}, true)|tojson }};
+    const categories = Object.keys(combinedJsons);
+    const slug = c => c.replace('%','pct').replace('3PM','3pm').toLowerCase();
+
+    // Team names (safe defaults)
+    const team1Name = {{ t1[0]['team_name']|tojson }};
+    const team2Name = {{ t2[0]['team_name']|tojson }};
+
+    categories.forEach((cat) => {
+      const graphData = combinedJsons[cat].map(d => ({
+        date: new Date(d.date),
+        predicted_cat: +d.predicted_cat,
+        predicted_cat_from_present: +d.predicted_cat_from_present,
+        team: d.team,
+        category: d.category
+      }));
+
+      // Normalize dates to midnight
+      graphData.forEach(d => {
+        d.date.setDate(d.date.getDate() + 1);
+        d.date.setHours(0,0,0,0);
+      });
+
+      // Today boundary
+      const today = new Date();
+      today.setHours(0,0,0,0);
+
+      // Team splits
+      const team1Data = graphData.filter(d => d.team === "Team 1");
+      const team2Data = graphData.filter(d => d.team === "Team 2");
+
+      const team1PastData    = team1Data.filter(d => d.date <= today);
+      const team1FutureData  = team1Data.filter(d => d.date >= today);
+      const team2PastData    = team2Data.filter(d => d.date <= today);
+      const team2FutureData  = team2Data.filter(d => d.date >= today);
+
+      // Dimensions
+      const margin = { top: 10, right: 14, bottom: 44, left: 32 },
+            width  = 320 - margin.left - margin.right,
+            height = 210 - margin.top  - margin.bottom;
+
+      const svg = d3.select("#chart-" + slug(cat))
+        .append("svg")
+        .attr("width",  width + margin.left + margin.right)
+        .attr("height", height + margin.top  + margin.bottom)
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      // X axis
+      const x = d3.scaleTime()
+        .domain(d3.extent(graphData, d => d.date))
+        .range([0, width]);
+
+      const xAxis = d3.axisBottom(x)
+        .ticks(d3.timeDay.every(1))
+        .tickFormat(d3.timeFormat("%b %d"));
+
+      svg.append("g")
+        .attr("class", "axis axis--x")
+        .attr("transform", `translate(0,${height})`)
+        .call(xAxis)
+        .selectAll("text")
+        .attr("transform", "rotate(-45)")
+        .style("text-anchor", "end");
+
+      // Y axis
+      const isPct = (cat === 'FG%' || cat === 'FT%');
+      const yMin = isPct
+        ? Math.max(0, d3.min(graphData, d => Math.min(d.predicted_cat, d.predicted_cat_from_present)) - 0.10)
+        : 0;
+      const yMax = isPct
+        ? Math.min(1, d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present)) + 0.20)
+        : d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present));
+
+      const y = d3.scaleLinear().domain([yMin, yMax]).nice().range([height, 0]);
+      svg.append("g").attr("class", "axis axis--y").call(d3.axisLeft(y));
+
+      // Lines
+      const lineActual = d3.line()
+        .x(d => x(d.date))
+        .y(d => y(d.predicted_cat_from_present));
+
+      const linePredicted = d3.line()
+        .x(d => x(d.date))
+        .y(d => y(d.predicted_cat));
+
+      // Team 1: blue
+      svg.append("path").datum(team1PastData)
+        .attr("fill", "none").attr("stroke", "steelblue")
+        .attr("stroke-width", 1.8).attr("d", lineActual);
+
+      svg.append("path").datum(team1FutureData)
+        .attr("fill", "none").attr("stroke", "steelblue")
+        .attr("stroke-width", 1.8).style("stroke-dasharray", ("5, 5"))
+        .attr("d", lineActual);
+
+      svg.append("path").datum(team1Data)
+        .attr("fill", "none").attr("stroke", "steelblue")
+        .attr("stroke-width", 1.4).style("stroke-dasharray", ("3, 3"))
+        .attr("d", linePredicted);
+
+      // Team 2: red
+      svg.append("path").datum(team2PastData)
+        .attr("fill", "none").attr("stroke", "red")
+        .attr("stroke-width", 1.8).attr("d", lineActual);
+
+      svg.append("path").datum(team2FutureData)
+        .attr("fill", "none").attr("stroke", "red")
+        .attr("stroke-width", 1.8).style("stroke-dasharray", ("5, 5"))
+        .attr("d", lineActual);
+
+      svg.append("path").datum(team2Data)
+        .attr("fill", "none").attr("stroke", "red")
+        .attr("stroke-width", 1.4).style("stroke-dasharray", ("3, 3"))
+        .attr("d", linePredicted);
+
+      // Compact legend
+      const legend = svg.append("g").attr("class", "legend").attr("transform", "translate(0,-6)");
+
+      // Blue actual
+      legend.append("line").attr("x1", 0).attr("y1", 10).attr("x2", 20).attr("y2", 10)
+        .attr("stroke", "steelblue").attr("stroke-width", 1.8);
+      legend.append("text").attr("x", 25).attr("y", 10).attr("alignment-baseline", "middle")
+        .text(`${team1Name} (Actual)`);
+
+      // Red actual
+      legend.append("line").attr("x1", 0).attr("y1", 26).attr("x2", 20).attr("y2", 26)
+        .attr("stroke", "red").attr("stroke-width", 1.8);
+      legend.append("text").attr("x", 25).attr("y", 26).attr("alignment-baseline", "middle")
+        .text(`${team2Name} (Actual)`);
+
+      // Blue predicted
+      legend.append("line").attr("x1", 160).attr("y1", 10).attr("x2", 180).attr("y2", 10)
+        .attr("stroke", "steelblue").attr("stroke-width", 1.4).style("stroke-dasharray", ("3,3"));
+      legend.append("text").attr("x", 185).attr("y", 10).attr("alignment-baseline", "middle")
+        .text(`${team1Name} (Pred)`);
+
+      // Red predicted
+      legend.append("line").attr("x1", 160).attr("y1", 26).attr("x2", 180).attr("y2", 26)
+        .attr("stroke", "red").attr("stroke-width", 1.4).style("stroke-dasharray", ("3,3"));
+      legend.append("text").attr("x", 185).attr("y", 26).attr("alignment-baseline", "middle")
+        .text(`${team2Name} (Pred)`);
+    });
+
+    const graphRenderEnd = performance.now();
+    console.log(`Graphs render time: ${(graphRenderEnd - graphRenderStart).toFixed(2)} ms`);
+  </script>
 </body>
 </html>
