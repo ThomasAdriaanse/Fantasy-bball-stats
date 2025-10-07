@@ -6,137 +6,19 @@
   <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico" />
   <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/compare_page.css') }}" />
   <script src="https://d3js.org/d3.v7.min.js"></script>
-
-  <style>
-    /* ====== Borrowed vibe from player stats page ====== */
-    body { background: #0b0e14; color: #e8eefc; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
-    .body-container { max-width: 96vw; margin: 0 auto; padding: 14px 0 32px; }
-
-    .card {
-      background: #10131a;
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      padding: 16px 18px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
-      margin-bottom: 18px;
-    }
-
-    /* Header strip with team names & current points */
-    .teams-header {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      align-items: stretch;
-    }
-    .team-pill {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 16px;
-      border-radius: 10px;
-      background: #0b0e14;
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-    .team-pill.left  { box-shadow: inset 0 0 0 1px rgba(70,130,180,0.35); }  /* steelblue border */
-    .team-pill.right { box-shadow: inset 0 0 0 1px rgba(255,0,0,0.35); }     /* red border */
-
-    .team-name {
-      font-size: 18px;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .team-name.left  { color: #63a0d4; }   /* blue-ish */
-    .team-name.right { color: #ff7a7a; }   /* red-ish */
-
-    .team-points {
-      font-size: 16px;
-      opacity: 0.9;
-    }
-
-    /* Tables */
-    .table-container { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    .table-wrapper { overflow: auto; }
-    table.data-table {
-      width: 100%;
-      border-collapse: collapse;
-      color: #e8eefc;
-      font-size: 14px;
-      background: #0b0e14;
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-    table.data-table th, table.data-table td {
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      padding: 8px 10px;
-      text-align: right;
-      white-space: nowrap;
-    }
-    table.data-table th:first-child, table.data-table td:first-child { text-align: left; }
-    table.data-table thead th { background: #121722; font-weight: 600; }
-    .player-out { color: #ff6b6b; }
-    .player-dtd { color: #ffd166; }
-
-    /* Charts grid */
-    .grid-container {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      grid-gap: 20px;
-    }
-    @media (max-width: 1200px) { .grid-container { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 800px)  { .grid-container { grid-template-columns: 1fr; } }
-
-    .graph-wrapper {
-      background: #0b0e14;
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      padding: 12px 12px 4px 12px;
-    }
-    .graph-title {
-      text-align: center;
-      font-weight: 600;
-      font-size: 16px;
-      margin-bottom: 8px;
-      opacity: 0.95;
-    }
-    .chart-svg { width: 100%; height: 220px; }
-
-    /* Axis styling like player page */
-    .axis text { font-size: 12px; fill: #e8eefc; }
-    .axis path, .axis line { stroke: rgba(255,255,255,.35); stroke-width: 1.0; }
-
-    /* Legend lines (kept per-chart, compact) */
-    .legend text { font-size: 10px; fill: #e8eefc; }
-
-    /* Back button vibe parity */
-    #back-button {
-      display: inline-block;
-      margin: 10px 0 8px 10px;
-      color: #e8eefc;
-      text-decoration: none;
-      border: 1px solid rgba(255,255,255,0.18);
-      border-radius: 8px;
-      padding: 8px 12px;
-      background: #0b0e14;
-    }
-    #back-button:hover { filter: brightness(1.1); }
-  </style>
 </head>
 
-<!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-EZ4LV1SKJ1"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-EZ4LV1SKJ1');
+  gtag('js', new Date()); gtag('config', 'G-EZ4LV1SKJ1');
 </script>
 
 <body>
   <a id="back-button" href="javascript:history.back()">Back</a>
 
   <div class="body-container">
-    <!-- Team header (blue left, red right) -->
     {% set t1 = data_team_stats_1|default([{'team_name':'Team 1','team_current_points':''}], true) %}
     {% set t2 = data_team_stats_2|default([{'team_name':'Team 2','team_current_points':''}], true) %}
 
@@ -151,10 +33,8 @@
       </div>
     </div>
 
-    <!-- Tables -->
     <div class="card">
       <div class="table-container">
-        <!-- Team 1 tables -->
         <div class="table-wrapper">
           <table class="data-table">
             <thead>
@@ -190,7 +70,7 @@
             </tbody>
           </table>
 
-          <table class="data-table" style="margin-top:12px">
+          <table class="data-table table-compact" style="margin-top:12px">
             <thead>
               <tr>
                 {% for key in team1_win_pct_data[0].keys() %}
@@ -208,7 +88,6 @@
           </table>
         </div>
 
-        <!-- Team 2 tables -->
         <div class="table-wrapper">
           <table class="data-table">
             <thead>
@@ -244,7 +123,7 @@
             </tbody>
           </table>
 
-          <table class="data-table" style="margin-top:12px">
+          <table class="data-table table-compact" style="margin-top:12px">
             <thead>
               <tr>
                 {% for key in team2_win_pct_data[0].keys() %}
@@ -264,15 +143,13 @@
       </div>
     </div>
 
-    <!-- Charts -->
-    <div class="card">
-      <p style="margin:0 0 8px 2px; opacity:.8;">Graphs update at end of day (PST)</p>
-      <h2 style="margin: 0 0 14px 2px; font-size: 22px;">Team Comparison — Projected Categories</h2>
-
-      <div class="grid-container">
+    <div id="graph-container" class="graph-section card">
+      <p>Graphs update at end of day (PST)</p>
+      <h2>Team Comparison — Projected Categories</h2>
+      <div class="grid-container chart-grid">
         {% for cat in combined_jsons.keys() %}
-        <div class="graph-wrapper">
-          <div class="graph-title">{{ cat }}</div>
+        <div class="graph-wrapper chart-card">
+          <div class="graph-title chart-title">{{ cat }}</div>
           <div id="chart-{{ (cat|replace('%','pct')|replace('3PM','3pm')|lower) }}" class="chart-svg"></div>
         </div>
         {% endfor %}
@@ -281,15 +158,12 @@
   </div>
 
   <script>
-    // Tracking time for graph to load
     const graphRenderStart = performance.now();
 
-    // Parse combinedJsons from Flask safely
     const combinedJsons = {{ combined_jsons|default({}, true)|tojson }};
     const categories = Object.keys(combinedJsons);
     const slug = c => c.replace('%','pct').replace('3PM','3pm').toLowerCase();
 
-    // Team names (safe defaults)
     const team1Name = {{ t1[0]['team_name']|tojson }};
     const team2Name = {{ t2[0]['team_name']|tojson }};
 
@@ -302,131 +176,69 @@
         category: d.category
       }));
 
-      // Normalize dates to midnight
-      graphData.forEach(d => {
-        d.date.setDate(d.date.getDate() + 1);
-        d.date.setHours(0,0,0,0);
-      });
+      graphData.forEach(d => { d.date.setDate(d.date.getDate()+1); d.date.setHours(0,0,0,0); });
 
-      // Today boundary
-      const today = new Date();
-      today.setHours(0,0,0,0);
+      const today = new Date(); today.setHours(0,0,0,0);
 
-      // Team splits
       const team1Data = graphData.filter(d => d.team === "Team 1");
       const team2Data = graphData.filter(d => d.team === "Team 2");
+      const team1PastData = team1Data.filter(d => d.date <= today);
+      const team1FutureData = team1Data.filter(d => d.date >= today);
+      const team2PastData = team2Data.filter(d => d.date <= today);
+      const team2FutureData = team2Data.filter(d => d.date >= today);
 
-      const team1PastData    = team1Data.filter(d => d.date <= today);
-      const team1FutureData  = team1Data.filter(d => d.date >= today);
-      const team2PastData    = team2Data.filter(d => d.date <= today);
-      const team2FutureData  = team2Data.filter(d => d.date >= today);
+      const containerNode = d3.select("#chart-" + slug(cat)).node();
+      const containerW = (containerNode && containerNode.clientWidth) ? containerNode.clientWidth : 320;
 
-      // Dimensions
-      const margin = { top: 10, right: 14, bottom: 44, left: 32 },
-            width  = 320 - margin.left - margin.right,
-            height = 210 - margin.top  - margin.bottom;
+      const rawMax = d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present));
+      const labelText = (cat === 'FG%' || cat === 'FT%') ? d3.format(".2f")(rawMax) : d3.format(",")(rawMax);
+      const leftMargin = Math.max(36, labelText.toString().length * 7 + 12);
+
+      const margin = { top: 10, right: 14, bottom: 44, left: leftMargin },
+            width  = containerW - margin.left - margin.right,
+            height = 210 - margin.top - margin.bottom;
 
       const svg = d3.select("#chart-" + slug(cat))
         .append("svg")
-        .attr("width",  width + margin.left + margin.right)
-        .attr("height", height + margin.top  + margin.bottom)
+        .attr("width",  containerW)
+        .attr("height", height + margin.top + margin.bottom)
         .append("g")
         .attr("transform", `translate(${margin.left},${margin.top})`);
 
-      // X axis
-      const x = d3.scaleTime()
-        .domain(d3.extent(graphData, d => d.date))
-        .range([0, width]);
+      const x = d3.scaleTime().domain(d3.extent(graphData, d => d.date)).range([0, width]);
+      const xAxis = d3.axisBottom(x).ticks(d3.timeDay.every(1)).tickFormat(d3.timeFormat("%b %d"));
+      svg.append("g").attr("class","axis axis--x").attr("transform", `translate(0,${height})`)
+        .call(xAxis).selectAll("text").attr("transform","rotate(-45)").style("text-anchor","end");
 
-      const xAxis = d3.axisBottom(x)
-        .ticks(d3.timeDay.every(1))
-        .tickFormat(d3.timeFormat("%b %d"));
-
-      svg.append("g")
-        .attr("class", "axis axis--x")
-        .attr("transform", `translate(0,${height})`)
-        .call(xAxis)
-        .selectAll("text")
-        .attr("transform", "rotate(-45)")
-        .style("text-anchor", "end");
-
-      // Y axis
       const isPct = (cat === 'FG%' || cat === 'FT%');
-      const yMin = isPct
-        ? Math.max(0, d3.min(graphData, d => Math.min(d.predicted_cat, d.predicted_cat_from_present)) - 0.10)
-        : 0;
-      const yMax = isPct
-        ? Math.min(1, d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present)) + 0.20)
-        : d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present));
-
+      const yMin = isPct ? Math.max(0, d3.min(graphData, d => Math.min(d.predicted_cat, d.predicted_cat_from_present)) - 0.10) : 0;
+      const yMax = isPct ? Math.min(1, d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present)) + 0.20)
+                         : d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present));
       const y = d3.scaleLinear().domain([yMin, yMax]).nice().range([height, 0]);
-      svg.append("g").attr("class", "axis axis--y").call(d3.axisLeft(y));
+      svg.append("g").attr("class","axis axis--y").call(d3.axisLeft(y));
 
-      // Lines
-      const lineActual = d3.line()
-        .x(d => x(d.date))
-        .y(d => y(d.predicted_cat_from_present));
+      const lineActual    = d3.line().x(d => x(d.date)).y(d => y(d.predicted_cat_from_present));
+      const linePredicted = d3.line().x(d => x(d.date)).y(d => y(d.predicted_cat));
 
-      const linePredicted = d3.line()
-        .x(d => x(d.date))
-        .y(d => y(d.predicted_cat));
+      svg.append("path").datum(team1PastData).attr("fill","none").attr("stroke","steelblue").attr("stroke-width",1.8).attr("d", lineActual);
+      svg.append("path").datum(team1FutureData).attr("fill","none").attr("stroke","steelblue").attr("stroke-width",1.8).style("stroke-dasharray","5, 5").attr("d", lineActual);
+      svg.append("path").datum(team1Data).attr("fill","none").attr("stroke","steelblue").attr("stroke-width",1.4).style("stroke-dasharray","3, 3").attr("d", linePredicted);
 
-      // Team 1: blue
-      svg.append("path").datum(team1PastData)
-        .attr("fill", "none").attr("stroke", "steelblue")
-        .attr("stroke-width", 1.8).attr("d", lineActual);
+      svg.append("path").datum(team2PastData).attr("fill","none").attr("stroke","red").attr("stroke-width",1.8).attr("d", lineActual);
+      svg.append("path").datum(team2FutureData).attr("fill","none").attr("stroke","red").attr("stroke-width",1.8).style("stroke-dasharray","5, 5").attr("d", lineActual);
+      svg.append("path").datum(team2Data).attr("fill","none").attr("stroke","red").attr("stroke-width",1.4).style("stroke-dasharray","3, 3").attr("d", linePredicted);
 
-      svg.append("path").datum(team1FutureData)
-        .attr("fill", "none").attr("stroke", "steelblue")
-        .attr("stroke-width", 1.8).style("stroke-dasharray", ("5, 5"))
-        .attr("d", lineActual);
-
-      svg.append("path").datum(team1Data)
-        .attr("fill", "none").attr("stroke", "steelblue")
-        .attr("stroke-width", 1.4).style("stroke-dasharray", ("3, 3"))
-        .attr("d", linePredicted);
-
-      // Team 2: red
-      svg.append("path").datum(team2PastData)
-        .attr("fill", "none").attr("stroke", "red")
-        .attr("stroke-width", 1.8).attr("d", lineActual);
-
-      svg.append("path").datum(team2FutureData)
-        .attr("fill", "none").attr("stroke", "red")
-        .attr("stroke-width", 1.8).style("stroke-dasharray", ("5, 5"))
-        .attr("d", lineActual);
-
-      svg.append("path").datum(team2Data)
-        .attr("fill", "none").attr("stroke", "red")
-        .attr("stroke-width", 1.4).style("stroke-dasharray", ("3, 3"))
-        .attr("d", linePredicted);
-
-      // Compact legend
-      const legend = svg.append("g").attr("class", "legend").attr("transform", "translate(0,-6)");
-
-      // Blue actual
-      legend.append("line").attr("x1", 0).attr("y1", 10).attr("x2", 20).attr("y2", 10)
-        .attr("stroke", "steelblue").attr("stroke-width", 1.8);
-      legend.append("text").attr("x", 25).attr("y", 10).attr("alignment-baseline", "middle")
-        .text(`${team1Name} (Actual)`);
-
-      // Red actual
-      legend.append("line").attr("x1", 0).attr("y1", 26).attr("x2", 20).attr("y2", 26)
-        .attr("stroke", "red").attr("stroke-width", 1.8);
-      legend.append("text").attr("x", 25).attr("y", 26).attr("alignment-baseline", "middle")
-        .text(`${team2Name} (Actual)`);
-
-      // Blue predicted
-      legend.append("line").attr("x1", 160).attr("y1", 10).attr("x2", 180).attr("y2", 10)
-        .attr("stroke", "steelblue").attr("stroke-width", 1.4).style("stroke-dasharray", ("3,3"));
-      legend.append("text").attr("x", 185).attr("y", 10).attr("alignment-baseline", "middle")
-        .text(`${team1Name} (Pred)`);
-
-      // Red predicted
-      legend.append("line").attr("x1", 160).attr("y1", 26).attr("x2", 180).attr("y2", 26)
-        .attr("stroke", "red").attr("stroke-width", 1.4).style("stroke-dasharray", ("3,3"));
-      legend.append("text").attr("x", 185).attr("y", 26).attr("alignment-baseline", "middle")
-        .text(`${team2Name} (Pred)`);
+      /* UNIFIED LEGEND (same as points page) — white text via .chart-legend */
+      const legend = svg.append("g").attr("class","chart-legend").attr("transform","translate(0,-6)");
+      legend.append("line").attr("x1",0).attr("y1",10).attr("x2",20).attr("y2",10).attr("stroke","steelblue").attr("stroke-width",1.8);
+      legend.append("text").attr("x",25).attr("y",10).attr("alignment-baseline","middle").text(`${team1Name} (Actual)`);
+      legend.append("line").attr("x1",0).attr("y1",26).attr("x2",20).attr("y2",26).attr("stroke","red").attr("stroke-width",1.8);
+      legend.append("text").attr("x",25).attr("y",26).attr("alignment-baseline","middle").text(`${team2Name} (Actual)`);
+      const col2x = 180;
+      legend.append("line").attr("x1",col2x).attr("y1",10).attr("x2",col2x+20).attr("y2",10).attr("stroke","steelblue").attr("stroke-width",1.4).style("stroke-dasharray","5,5");
+      legend.append("text").attr("x",col2x+25).attr("y",10).attr("alignment-baseline","middle").text(`${team1Name} (Pred)`);
+      legend.append("line").attr("x1",col2x).attr("y1",26).attr("x2",col2x+20).attr("y2",26).attr("stroke","red").attr("stroke-width",1.4).style("stroke-dasharray","5,5");
+      legend.append("text").attr("x",col2x+25).attr("y",26).attr("alignment-baseline","middle").text(`${team2Name} (Pred)`);
     });
 
     const graphRenderEnd = performance.now();
