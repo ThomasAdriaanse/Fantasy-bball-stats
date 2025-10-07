@@ -6,6 +6,12 @@
   <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico">
   <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/compare_page.css') }}">
   <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <!-- Ensure injury-colored cells keep their color even when the name is a link -->
+  <style>
+    .player-out a, .player-dtd a { color: inherit; text-decoration: none; }
+    .player-out a:hover, .player-dtd a:hover { text-decoration: underline; }
+  </style>
 </head>
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-EZ4LV1SKJ1"></script>

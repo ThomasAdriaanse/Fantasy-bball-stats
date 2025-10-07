@@ -6,6 +6,84 @@
   <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico" />
   <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/compare_page.css') }}" />
   <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <!-- Keep injury-colored links + current-cat styles + legend swatches -->
+  <style>
+    .player-out a, .player-dtd a { color: inherit; text-decoration: none; }
+    .player-out a:hover, .player-dtd a:hover { text-decoration: underline; }
+
+    /* ===== Current categories card (new) ===== */
+    .cat-snapshot.card { padding: 16px 18px; }
+    .snapshot-rows {
+      display: grid;
+      /* ORDER: Team1 | Cat | Team2 (cat in the middle) */
+      grid-template-columns: minmax(64px, 1fr) max-content minmax(64px, 1fr);
+      row-gap: 6px;
+      column-gap: 10px;
+      align-items: center;
+    }
+    @media (max-width: 700px) {
+      .snapshot-rows { grid-template-columns: minmax(56px,1fr) max-content minmax(56px,1fr); }
+    }
+    .snap-cell {
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: #0b0e14;
+      color: #e8eefc;
+      font-size: 13px;
+      line-height: 1.15;
+      min-height: 30px;
+      display: flex;
+      align-items: center;
+    }
+    .snap-cat  { justify-content: center; text-align: center; font-size: 12px; opacity: .85; padding-inline: 6px; }
+    .snap-t1   { justify-content: flex-end; text-align: right; }
+    .snap-t2   { justify-content: flex-start; text-align: left; }
+
+    /* Chart cards leave space for legend + larger axis like player_stats */
+    .chart-card { padding: 12px 12px 8px 12px; }
+    .chart-card .axis text { font-size: 16px; }
+
+    /* ===== Player-stats style legend (HTML swatches) — compact ===== */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 12px;            /* tighter horizontal & vertical gap */
+      align-items: center;
+      margin: 6px 2px 0;
+      opacity: .95;
+      font-size: 13px;
+    }
+    .legend-item {
+      display: inline-flex;     /* swatch + label sit close together */
+      align-items: center;
+      gap: 6px;                 /* distance between swatch and text */
+      white-space: nowrap;      /* no ugly mid-word wraps */
+    }
+    .legend .swatch {
+      width: 22px;
+      height: 2px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+    .swatch.solid.blue { background: steelblue; }
+    .swatch.solid.red  { background: red; }
+
+    /* Dash pattern matches stroke-dasharray: 3,3 used for (Pred) lines */
+    .swatch.dashed.blue {
+      background: repeating-linear-gradient(
+        to right,
+        steelblue 0 3px, transparent 3px 6px
+      );
+    }
+    .swatch.dashed.red {
+      background: repeating-linear-gradient(
+        to right,
+        red 0 3px, transparent 3px 6px
+      );
+    }
+  </style>
 </head>
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-EZ4LV1SKJ1"></script>
@@ -21,7 +99,9 @@
   <div class="body-container">
     {% set t1 = data_team_stats_1|default([{'team_name':'Team 1','team_current_points':''}], true) %}
     {% set t2 = data_team_stats_2|default([{'team_name':'Team 2','team_current_points':''}], true) %}
+    {% set cats = ['PTS','REB','AST','STL','BLK','3PM','FG%','FT%','TO'] %}
 
+    <!-- Header pills -->
     <div class="card teams-header">
       <div class="team-pill left">
         <div class="team-name left">{{ t1[0]['team_name'] }}</div>
@@ -32,6 +112,64 @@
         <div class="team-name right">{{ t2[0]['team_name'] }}</div>
       </div>
     </div>
+
+    <!-- ===== CURRENT CATEGORY SNAPSHOT ===== -->
+    <div class="card cat-snapshot">
+      <div class="snapshot-rows">
+        {% set scale_map = {
+          'PTS': 100, 'REB': 30, 'AST': 20, 'STL': 15, 'BLK': 10, '3PM': 15,
+          'FG%': 0.05, 'FT%': 0.05, 'TO' : 10
+        } %}
+        {% for c in cats %}
+          {% set s1 = team1_current_stats.get(c) if team1_current_stats is defined and team1_current_stats else None %}
+          {% set s2 = team2_current_stats.get(c) if team2_current_stats is defined and team2_current_stats else None %}
+          {% set v1 = (s1['value'] if s1 and 'value' in s1 else None) %}
+          {% set v2 = (s2['value'] if s2 and 'value' in s2 else None) %}
+
+          {% if v1 is not none and v2 is not none %}
+            {% if c == 'TO' %}
+              {% set t1_wins = v1 < v2 %}{% set t2_wins = v2 < v1 %}
+            {% else %}
+              {% set t1_wins = v1 > v2 %}{% set t2_wins = v2 > v1 %}
+            {% endif %}
+            {% set is_tie = (v1 == v2) %}
+          {% else %}
+            {% set t1_wins = false %}{% set t2_wins = false %}{% set is_tie = true %}
+          {% endif %}
+
+          {% set scale = scale_map.get(c, 10) %}
+          {% if v1 is not none and v2 is not none %}
+            {% set diff = (v1 - v2) if (v1 - v2) >= 0 else -(v1 - v2) %}
+            {% set intensity = diff / scale %}
+            {% if intensity > 1 %}{% set intensity = 1 %}{% endif %}
+            {% if intensity < 0 %}{% set intensity = 0 %}{% endif %}
+          {% else %}
+            {% set intensity = 0 %}
+          {% endif %}
+
+          {% set bga = 0.14 + 0.46 * intensity %}
+          {% set bda = 0.20 + 0.55 * intensity %}
+          {% set blue_bg  = "background: rgba(70,130,180," ~ ('%.3f' % bga) ~ "); border-color: rgba(70,130,180," ~ ('%.3f' % bda) ~ ");" %}
+          {% set red_bg   = "background: rgba(255,0,0,"     ~ ('%.3f' % bga) ~ "); border-color: rgba(255,0,0,"     ~ ('%.3f' % bda) ~ ");" %}
+          {% set t1_style = (blue_bg  if (t1_wins and not is_tie) else "") %}
+          {% set t2_style = (red_bg   if (t2_wins and not is_tie) else "") %}
+
+          {% if c in ['FG%','FT%'] %}
+            {% set disp1 = ('%.1f%%' % (((v1 or 0) * 100))) if v1 is not none else '-' %}
+            {% set disp2 = ('%.1f%%' % (((v2 or 0) * 100))) if v2 is not none else '-' %}
+          {% else %}
+            {% set disp1 = v1 if v1 is not none else '-' %}
+            {% set disp2 = v2 if v2 is not none else '-' %}
+          {% endif %}
+
+          <!-- One row: Team1 | Category | Team2 -->
+          <div class="snap-cell snap-t1" style="{{ t1_style }}">{{ disp1 }}</div>
+          <div class="snap-cell snap-cat">{{ c }}</div>
+          <div class="snap-cell snap-t2" style="{{ t2_style }}">{{ disp2 }}</div>
+        {% endfor %}
+      </div>
+    </div>
+    <!-- ===== END CURRENT CATEGORY SNAPSHOT ===== -->
 
     <div class="card">
       <div class="table-container">
@@ -49,7 +187,7 @@
               {% for row in data_team_players_1 %}
               <tr>
                 <td class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">
-                  {{ row['player_name'] }}
+                  <a href="{{ url_for('player_stats') }}?player_name={{ row['player_name'] }}">{{ row['player_name'] }}</a>
                 </td>
                 <td>{{ row['min'] }}</td>
                 <td>{{ row['fgm'] }}</td>
@@ -102,7 +240,7 @@
               {% for row in data_team_players_2 %}
               <tr>
                 <td class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">
-                  {{ row['player_name'] }}
+                  <a href="{{ url_for('player_stats') }}?player_name={{ row['player_name'] }}">{{ row['player_name'] }}</a>
                 </td>
                 <td>{{ row['min'] }}</td>
                 <td>{{ row['fgm'] }}</td>
@@ -151,6 +289,7 @@
         <div class="graph-wrapper chart-card">
           <div class="graph-title chart-title">{{ cat }}</div>
           <div id="chart-{{ (cat|replace('%','pct')|replace('3PM','3pm')|lower) }}" class="chart-svg"></div>
+          <!-- Per-chart legend appended here by D3 -->
         </div>
         {% endfor %}
       </div>
@@ -166,6 +305,9 @@
 
     const team1Name = {{ t1[0]['team_name']|tojson }};
     const team2Name = {{ t2[0]['team_name']|tojson }};
+
+    // shorten for narrow cards, keep tooltip with full name
+    const shorten = s => s && s.length > 18 ? (s.slice(0,16) + '…') : (s || '');
 
     categories.forEach((cat) => {
       const graphData = combinedJsons[cat].map(d => ({
@@ -187,7 +329,8 @@
       const team2PastData = team2Data.filter(d => d.date <= today);
       const team2FutureData = team2Data.filter(d => d.date >= today);
 
-      const containerNode = d3.select("#chart-" + slug(cat)).node();
+      const containerSel = d3.select("#chart-" + slug(cat));
+      const containerNode = containerSel.node();
       const containerW = (containerNode && containerNode.clientWidth) ? containerNode.clientWidth : 320;
 
       const rawMax = d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present));
@@ -198,7 +341,7 @@
             width  = containerW - margin.left - margin.right,
             height = 210 - margin.top - margin.bottom;
 
-      const svg = d3.select("#chart-" + slug(cat))
+      const svg = containerSel
         .append("svg")
         .attr("width",  containerW)
         .attr("height", height + margin.top + margin.bottom)
@@ -220,25 +363,38 @@
       const lineActual    = d3.line().x(d => x(d.date)).y(d => y(d.predicted_cat_from_present));
       const linePredicted = d3.line().x(d => x(d.date)).y(d => y(d.predicted_cat));
 
+      // Team 1 — actual & predicted
       svg.append("path").datum(team1PastData).attr("fill","none").attr("stroke","steelblue").attr("stroke-width",1.8).attr("d", lineActual);
-      svg.append("path").datum(team1FutureData).attr("fill","none").attr("stroke","steelblue").attr("stroke-width",1.8).style("stroke-dasharray","5, 5").attr("d", lineActual);
-      svg.append("path").datum(team1Data).attr("fill","none").attr("stroke","steelblue").attr("stroke-width",1.4).style("stroke-dasharray","3, 3").attr("d", linePredicted);
+      svg.append("path").datum(team1FutureData).attr("fill","none").attr("stroke","steelblue").attr("stroke-width",1.8).style("stroke-dasharray","5,5").attr("d", lineActual);
+      svg.append("path").datum(team1Data).attr("fill","none").attr("stroke","steelblue").attr("stroke-width",1.4).style("stroke-dasharray","3,3").attr("d", linePredicted);
 
+      // Team 2 — actual & predicted
       svg.append("path").datum(team2PastData).attr("fill","none").attr("stroke","red").attr("stroke-width",1.8).attr("d", lineActual);
-      svg.append("path").datum(team2FutureData).attr("fill","none").attr("stroke","red").attr("stroke-width",1.8).style("stroke-dasharray","5, 5").attr("d", lineActual);
-      svg.append("path").datum(team2Data).attr("fill","none").attr("stroke","red").attr("stroke-width",1.4).style("stroke-dasharray","3, 3").attr("d", linePredicted);
+      svg.append("path").datum(team2FutureData).attr("fill","none").attr("stroke","red").attr("stroke-width",1.8).style("stroke-dasharray","5,5").attr("d", lineActual);
+      svg.append("path").datum(team2Data).attr("fill","none").attr("stroke","red").attr("stroke-width",1.4).style("stroke-dasharray","3,3").attr("d", linePredicted);
 
-      /* UNIFIED LEGEND (same as points page) — white text via .chart-legend */
-      const legend = svg.append("g").attr("class","chart-legend").attr("transform","translate(0,-6)");
-      legend.append("line").attr("x1",0).attr("y1",10).attr("x2",20).attr("y2",10).attr("stroke","steelblue").attr("stroke-width",1.8);
-      legend.append("text").attr("x",25).attr("y",10).attr("alignment-baseline","middle").text(`${team1Name} (Actual)`);
-      legend.append("line").attr("x1",0).attr("y1",26).attr("x2",20).attr("y2",26).attr("stroke","red").attr("stroke-width",1.8);
-      legend.append("text").attr("x",25).attr("y",26).attr("alignment-baseline","middle").text(`${team2Name} (Actual)`);
-      const col2x = 180;
-      legend.append("line").attr("x1",col2x).attr("y1",10).attr("x2",col2x+20).attr("y2",10).attr("stroke","steelblue").attr("stroke-width",1.4).style("stroke-dasharray","5,5");
-      legend.append("text").attr("x",col2x+25).attr("y",10).attr("alignment-baseline","middle").text(`${team1Name} (Pred)`);
-      legend.append("line").attr("x1",col2x).attr("y1",26).attr("x2",col2x+20).attr("y2",26).attr("stroke","red").attr("stroke-width",1.4).style("stroke-dasharray","5,5");
-      legend.append("text").attr("x",col2x+25).attr("y",26).attr("alignment-baseline","middle").text(`${team2Name} (Pred)`);
+      // Player-stats style legend (HTML) under each mini-chart — unique per chart
+      const t1Short = shorten(team1Name);
+      const t2Short = shorten(team2Name);
+
+      const legend = d3.select(containerNode.parentNode)
+        .append("div")
+        .attr("class", "legend");
+
+      legend.html(`
+        <span class="legend-item" title="${team1Name}">
+          <span class="swatch solid blue"></span><span>${t1Short} (Actual)</span>
+        </span>
+        <span class="legend-item" title="${team2Name}">
+          <span class="swatch solid red"></span><span>${t2Short} (Actual)</span>
+        </span>
+        <span class="legend-item" title="${team1Name}">
+          <span class="swatch dashed blue"></span><span>${t1Short} (Predicted)</span>
+        </span>
+        <span class="legend-item" title="${team2Name}">
+          <span class="swatch dashed red"></span><span>${t2Short} (Predicted)</span>
+        </span>
+      `);
     });
 
     const graphRenderEnd = performance.now();

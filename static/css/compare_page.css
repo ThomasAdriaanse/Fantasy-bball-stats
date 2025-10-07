@@ -87,3 +87,44 @@ svg .domain, svg .tick line{ stroke:rgba(255,255,255,0.35); }
 
 /* NEW: unified legend look (white text) */
 .chart-legend text{ fill:#ffffff; font-size:12px; }
+
+/* Player-stats style legend (shared by both compare pages) */
+.legend{
+  display:flex;
+  gap:22px;
+  align-items:center;
+  margin-top:12px;
+  opacity:.95;
+  font-size:16px;
+  flex-wrap:wrap;
+}
+.legend .swatch{
+  width:26px;
+  height:4px;
+  border-radius:2px;
+  display:inline-block;
+}
+
+/* Solid swatches */
+.legend .swatch.blue-line{ background: steelblue; }
+.legend .swatch.red-line { background: red; }
+
+/* Dashed swatches to represent "Predicted" */
+.legend .swatch.blue-dashed{
+  background-image: linear-gradient(
+    to right,
+    steelblue 0 40%, transparent 40% 60%, steelblue 60% 100%
+  );
+  background-size: 10px 4px;
+  background-repeat: repeat-x;
+  background-color: transparent;
+}
+.legend .swatch.red-dashed{
+  background-image: linear-gradient(
+    to right,
+    red 0 40%, transparent 40% 60%, red 60% 100%
+  );
+  background-size: 10px 4px;
+  background-repeat: repeat-x;
+  background-color: transparent;
+}

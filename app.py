@@ -464,19 +464,19 @@ def compare_page():
         )
         
         # Get team stats for categories
-        team1_data, team2_data, team1_win_pcts, team2_win_pcts = tsd.get_team_stats_categories(
+        team1_data, team2_data, team1_win_pcts, team2_win_pcts, team1_current_stats, team2_current_stats = tsd.get_team_stats_categories(
             league, team1_index, team1_player_data, team2_index, team2_player_data, 
             league_scoring_rules, year, week_data
         )
         
-        print(week_data)
+
 
         # Generate comparison graphs for each category
         combined_dfs = cpd.get_compare_graphs_categories(
             league, team1_index, team1_player_data, team2_index, team2_player_data, year, week_data
         )
 
-        #print(combined_dfs)
+
         
         combined_dicts = {cat: df.to_dict(orient='records') for cat, df in combined_dfs.items()}
 
@@ -497,6 +497,8 @@ def compare_page():
             data_team_stats_2=team2_data,
             team1_win_pct_data=team1_win_pct_data,
             team2_win_pct_data=team2_win_pct_data,
+            team1_current_stats=team1_current_stats,
+            team2_current_stats=team2_current_stats,
             combined_jsons=combined_dicts,
             scoring_type=scoring_type,
             week_data=week_data
