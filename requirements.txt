@@ -8,3 +8,4 @@ pandas
 datetime
 gunicorn
 nba_api
+boto3

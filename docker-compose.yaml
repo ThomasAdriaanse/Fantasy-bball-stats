@@ -1,0 +1,23 @@
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    env_file: .env
+    environment:
+      # make sure the SDK reads ~/.aws/config for region/profile
+      AWS_SDK_LOAD_CONFIG: "1"
+      # expose the values from .env to the container
+      S3_BUCKET: ${S3_BUCKET}
+      S3_PREFIX: ${S3_PREFIX}
+      AWS_PROFILE: ${AWS_PROFILE}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+    volumes:
+      # app code + static
+      - .:/usr/src/app
+      - ./static:/usr/src/app/static
+      # mount your local AWS credentials/config, read-only
+      # WINDOWS:
+      - "${USERPROFILE}/.aws:/root/.aws:ro"
+      # (on mac/linux use ${HOME}/.aws)
+    command: gunicorn -w 4 -b 0.0.0.0:5000 app:app

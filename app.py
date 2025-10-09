@@ -9,7 +9,16 @@ from espn_api.basketball import League
 from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, ESPNInvalidLeague
 import pandas as pd
 import db_utils
-from nba_api.stats.endpoints import leaguegamefinder
+import boto3
+from botocore.exceptions import ClientError
+# nba_api.stats.endpoints import playergamelog, playercareerstats, leaguegamefinder
+from nba_api.stats.static import players
+
+# S3 config (env or defaults)
+S3_BUCKET = os.getenv("S3_BUCKET", "fantasy-stats-dev")
+S3_PREFIX = os.getenv("S3_PREFIX", "dev/players/")  # includes trailing slash
+AWS_REGION = os.getenv("AWS_REGION", "ca-central-1")
+
 from nba_api.stats.static import players
 import json
 import time
@@ -123,128 +132,77 @@ def player_stats():
 def serve_data(filename):
     return send_from_directory('static', filename)
 
-# ---------- Core: single-player chart JSON ----------
 
+def _safe_filename(name: str) -> str:
+    """lowercase-and-underscore a name to match your exported filenames"""
+    return ''.join(ch if ch.isalnum() else '_' for ch in name).strip('_').lower()
+
+def _load_player_dataset_from_s3(player_name: str) -> pd.DataFrame | None:
+    """
+    Loads the per-player JSON you exported earlier:
+      s3://<bucket>/<prefix>/<slug>.json
+    Returns a DataFrame with the 'rows' content from that JSON.
+    """
+    slug = _safe_filename(player_name)
+    key  = f"{S3_PREFIX}{slug}.json"
+
+    s3 = boto3.client("s3", region_name=AWS_REGION)
+
+    try:
+        obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
+    except ClientError as e:
+        code = e.response.get("Error", {}).get("Code", "Unknown")
+        print(f"[S3] get_object failed for s3://{S3_BUCKET}/{key} ({code})")
+        return None
+
+    try:
+        payload = json.loads(obj["Body"].read())
+    except Exception as e:
+        print(f"[S3] JSON decode error for {key}: {e}")
+        return None
+
+    rows = payload.get("rows", [])
+    if not rows:
+        print(f"[S3] No 'rows' in payload for {key}")
+        return None
+
+    df = pd.DataFrame(rows)
+
+    # Light numeric coercion (don’t clobber strings like MATCHUP/SEASON)
+    numeric_candidates = [c for c in df.columns if c not in ("MATCHUP","SEASON","SEASON_ID","GAME_DATE","GAME_DATE_TS")]
+    for c in numeric_candidates:
+        df[c] = pd.to_numeric(df[c], errors="ignore")
+
+    # Ensure ordering columns exist
+    if "Game_Number" not in df.columns and "GAME_DATE_TS" in df.columns:
+        df = df.sort_values("GAME_DATE_TS").reset_index(drop=True)
+        df["Game_Number"] = df.index + 1
+
+    return df
+
+# ---------- Core: single-player chart JSON ----------
 def generate_json_file(player_name, num_games, stat='FPTS'):
     """
-    Creates one output used by the front-end chart:
-      - static/player_stats.json  (selected stat only, with centered moving average)
+    Loads this player's FULL dataset from S3 (exported earlier),
+    then emits the compact chart JSON for the selected stat:
+      static/player_stats.json
     """
-    player_info = players.find_players_by_full_name(player_name)
-    if not player_info:
-        print(f"Player {player_name} not found.")
+    df = _load_player_dataset_from_s3(player_name)
+    if df is None or df.empty:
+        print(f"[S3] No data for {player_name}")
         return
 
-    player_id = player_info[0]['id']
-    print(f"Fetching ALL regular-season games for: {player_name} (ID: {player_id}), stat={stat}")
+    # Make sure these metadata columns exist (they were in your export)
+    required_meta = ["Game_Number", "MATCHUP", "SEASON", "SEASON_ID"]
+    for col in required_meta:
+        if col not in df.columns:
+            # Best-effort fallback
+            if col == "SEASON_ID" and "SEASON" in df.columns:
+                # ok, SEASON only
+                continue
+            df[col] = None
 
-    # Pull all regular-season games in one request
-    try:
-        lgf = leaguegamefinder.LeagueGameFinder(
-            player_id_nullable=player_id,
-            player_or_team_abbreviation="P",
-            season_type_nullable="Regular Season"
-        )
-        df = lgf.get_data_frames()[0]
-    except Exception as e:
-        print(f"LeagueGameFinder error: {e}")
-        return
-
-    if df.empty:
-        print("No data available for the specified player.")
-        return
-
-    # Coerce numerics needed
-    numeric_cols = [
-        "FGM","FGA","FG3M","FG3A","FTM","FTA",
-        "REB","AST","STL","BLK","TOV","PTS","MIN",
-        "FG_PCT","FG3_PCT","FT_PCT","PLUS_MINUS"
-    ]
-    for c in numeric_cols:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
-
-    # Fantasy points (for base option)
-    league_scoring_rules = {
-        'fgm': 2, 'fga': -1, 'ftm': 1, 'fta': -1,
-        'threeptm': 1, 'reb': 1, 'ast': 2, 'stl': 4,
-        'blk': 4, 'turno': -2, 'pts': 1
-    }
-
-    def calculate_fp_row(row):
-        return (
-            (row.get("FGM", 0) or 0)   * league_scoring_rules['fgm'] +
-            (row.get("FGA", 0) or 0)   * league_scoring_rules['fga'] +
-            (row.get("FTM", 0) or 0)   * league_scoring_rules['ftm'] +
-            (row.get("FTA", 0) or 0)   * league_scoring_rules['fta'] +
-            (row.get("FG3M", 0) or 0)  * league_scoring_rules['threeptm'] +
-            (row.get("REB", 0) or 0)   * league_scoring_rules['reb'] +
-            (row.get("AST", 0) or 0)   * league_scoring_rules['ast'] +
-            (row.get("STL", 0) or 0)   * league_scoring_rules['stl'] +
-            (row.get("BLK", 0) or 0)   * league_scoring_rules['blk'] +
-            (row.get("TOV", 0) or 0)   * league_scoring_rules['turno'] +
-            (row.get("PTS", 0) or 0)   * league_scoring_rules['pts']
-        )
-
-    df['FPTS'] = df.apply(calculate_fp_row, axis=1)
-
-    # Dates / ordering / season labels
-    df['Game_Date'] = pd.to_datetime(df['GAME_DATE'], errors="coerce")
-    df = df.sort_values('Game_Date').reset_index(drop=True)
-    df['Game_Number'] = df.index + 1
-
-    df['SEASON_ID'] = df['SEASON_ID'].astype(str)
-    df['SEASON_START'] = df['SEASON_ID'].str[-4:].astype(int)
-    df['SEASON'] = df['SEASON_START'].map(lambda y: f"{y}-{str((y+1) % 100).zfill(2)}")
-
-    # Z-score constants
-    league_means = {
-        'PTS': 16.714, 'FG3M': 1.876, 'REB': 6.000, 'AST': 3.825,
-        'STL': 0.970,  'BLK': 0.680, 'TOV': 1.883,
-        'FGM': 5.711,  'FGA': 11.943,
-        'FTM': 2.497,  'FTA': 3.126,
-    }
-    league_stds = {
-        'PTS': 6.078, 'FG3M': 0.588, 'REB': 2.500, 'AST': 2.077,
-        'STL': 0.435, 'BLK': 0.571, 'TOV': 0.891,
-        'FGM': 2.110, 'FGA': 4.494, 'FTM': 1.615, 'FTA': 1.947,
-    }
-
-    lg_fg_pct = league_means['FGM'] / league_means['FGA'] if league_means['FGA'] else 0.0
-    lg_ft_pct = league_means['FTM'] / league_means['FTA'] if league_means['FTA'] else 0.0
-
-    FG_IMPACT_MEAN = -0.087797348
-    FG_IMPACT_STD  =  0.690900598
-    FT_IMPACT_MEAN =  0.029394472
-    FT_IMPACT_STD  =  0.303514900
-
-    def _z(series, mean, std, invert=False):
-        std = abs(float(std)) if std else 0.0
-        if std == 0:
-            return pd.Series(pd.NA, index=series.index if hasattr(series, "index") else df.index)
-        z = (series - mean) / std
-        return -z if invert else z
-
-    z_cols = []
-    for base, invert in [
-        ('PTS', False), ('FG3M', False), ('REB', False),
-        ('AST', False), ('STL', False), ('BLK', False),
-        ('TOV', True),
-    ]:
-        df[f'Z_{base}'] = _z(df[base], league_means[base], league_stds[base], invert=invert)
-        z_cols.append(f'Z_{base}')
-
-    fg_impact = df['FGM'] - (lg_fg_pct * df['FGA'])
-    df['Z_FG_PCT'] = _z(fg_impact, FG_IMPACT_MEAN, FG_IMPACT_STD)
-    z_cols.append('Z_FG_PCT')
-
-    ft_impact = df['FTM'] - (lg_ft_pct * df['FTA'])
-    df['Z_FT_PCT'] = _z(ft_impact, FG_IMPACT_MEAN, FG_IMPACT_STD)
-    z_cols.append('Z_FT_PCT')
-
-    df['AVG_Z'] = df[z_cols].mean(axis=1, skipna=True)
-
-    # Which column to plot (selected)
+    # Which column to plot
     base_allowed = {
         'FPTS','PTS','REB','AST','STL','BLK','TOV',
         'FGM','FGA','FG_PCT','FG3M','FG3A','FG3_PCT',
@@ -255,12 +213,20 @@ def generate_json_file(player_name, num_games, stat='FPTS'):
     ]}
     value_col = stat if stat in (base_allowed | z_allowed) else 'FPTS'
 
-    # Centered moving average (selected stat)
+    if value_col not in df.columns:
+        print(f"[WARN] Column '{value_col}' not in dataset for {player_name}. Falling back to FPTS.")
+        value_col = "FPTS"
+        if value_col not in df.columns:
+            print("[ERROR] No FPTS in dataset — cannot draw chart.")
+            return
+
+    # Centered moving average on selected stat
     def centered_average(idx, half_window):
         start = max(0, idx - half_window)
         end   = min(len(df), idx + half_window + 1)
-        return df[value_col].iloc[start:end].mean()
+        return pd.to_numeric(df[value_col].iloc[start:end], errors="coerce").mean()
 
+    df = df.sort_values("Game_Number").reset_index(drop=True)
     df['Centered_Avg'] = df.index.map(lambda i: centered_average(i, num_games))
 
     chart_df = df[['Game_Number', 'MATCHUP', 'SEASON', 'SEASON_ID']].copy()
@@ -274,9 +240,12 @@ def generate_json_file(player_name, num_games, stat='FPTS'):
     chart_json_file = os.path.join(static_dir, 'player_stats.json')
 
     with open(chart_json_file, 'w', encoding='utf-8') as f:
-        json.dump(chart_df[['Game_Number','Centered_Avg_Stat','MATCHUP','SEASON','SEASON_ID','STAT']].to_dict(orient='records'), f, indent=4)
+        json.dump(
+            chart_df[['Game_Number','Centered_Avg_Stat','MATCHUP','SEASON','SEASON_ID','STAT']].to_dict(orient='records'),
+            f, indent=4
+        )
 
-    print(f"Chart data saved to {chart_json_file} (rows: {len(chart_df)}) for stat={value_col}")
+    print(f"[S3] Chart data saved to {chart_json_file} (rows: {len(chart_df)}) for stat={value_col}")
 
 # ---------- Compare page (unchanged) ----------
 
