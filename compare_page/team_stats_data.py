@@ -209,59 +209,82 @@ def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_pl
     opponent_df = pd.DataFrame(opponent_data)
     return df, opponent_df
 
-def get_team_stats_categories(league, team_num, team_player_data, opponent_num, opponent_player_data, league_scoring_rules, year, week_data=None):
+def get_team_stats_categories(
+    league,
+    team_num,
+    team_player_data,
+    opponent_num,
+    opponent_player_data,
+    league_scoring_rules,
+    year,
+    week_data=None
+):
+    import pandas as pd
+
     team = league.teams[team_num]
     opponent = league.teams[opponent_num]
 
     # Use selected week matchup period if available
     selected_matchup_period = week_data['selected_week'] if week_data else league.currentMatchupPeriod
-    team_boxscore_num, team_home_or_away = cpd.get_team_boxscore_number(league, team, selected_matchup_period)
-    opponent_boxscore_num, opponent_home_or_away = cpd.get_team_boxscore_number(league, opponent, selected_matchup_period)
 
-    # Calculate expected cat stats remaining
-    cats = ['fg%', 'ft%', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts']
-    espn_cats = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
-    team_expected_stats_remaining = {}
+    # Locate box scores (only needed to fetch "current" category totals if your get_cat_stats uses them)
+    try:
+        team_boxscore_num, team_home_or_away = cpd.get_team_boxscore_number(league, team, selected_matchup_period)
+        opponent_boxscore_num, opponent_home_or_away = cpd.get_team_boxscore_number(league, opponent, selected_matchup_period)
 
+        if team_home_or_away == "home":
+            team_current_stats = league.box_scores(matchup_period=selected_matchup_period)[team_boxscore_num].home_stats
+        else:
+            team_current_stats = league.box_scores(matchup_period=selected_matchup_period)[team_boxscore_num].away_stats
 
-    current_scoring_period = league.scoringPeriodId
+        if opponent_home_or_away == "home":
+            opponent_current_stats = league.box_scores(matchup_period=selected_matchup_period)[opponent_boxscore_num].home_stats
+        else:
+            opponent_current_stats = league.box_scores(matchup_period=selected_matchup_period)[opponent_boxscore_num].away_stats
+    except Exception:
+        # For future weeks / missing box scores, fall back to empty dicts
+        team_current_stats = {}
+        opponent_current_stats = {}
 
-    if team_home_or_away == "home":
-        team_current_stats = league.box_scores(matchup_period=selected_matchup_period)[team_boxscore_num].home_stats
-    else:
-        team_current_stats = league.box_scores(matchup_period=selected_matchup_period)[team_boxscore_num].away_stats
+    # Categories you project (left are your labels; right are ESPN stat keys)
+    cats      = ['fg%', 'ft%', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts']
+    espn_cats = ['FG%', 'FT%', '3PM',     'REB', 'AST', 'STL', 'BLK', 'TO',    'PTS']
 
-    if opponent_home_or_away == "home":
-        opponent_current_stats = league.box_scores(matchup_period=selected_matchup_period)[opponent_boxscore_num].home_stats
-    else:
-        opponent_current_stats = league.box_scores(matchup_period=selected_matchup_period)[opponent_boxscore_num].away_stats
-    
-    team_expected = {cat: [] for cat in cats}
-    opponent_expected = {cat: [] for cat in cats}
-    team_win_percentage = {cat: [] for cat in cats}
-    opponent_win_percentage = {cat: [] for cat in cats}
+    # Collect expected values and win % per category
+    team_expected           = {}
+    opponent_expected       = {}
+    team_win_percentage     = {}
+    opponent_win_percentage = {}
 
     for cat, espn_cat in zip(cats, espn_cats):
-
-        texp, opexp, twin, opwin = get_cat_stats(cat, espn_cat, team_player_data, opponent_player_data, team_current_stats, opponent_current_stats)
-        team_expected[cat] = texp
-        opponent_expected[cat] = opexp
-        team_win_percentage[cat] = twin
+        texp, opexp, twin, opwin = get_cat_stats(
+            cat, espn_cat,
+            team_player_data, opponent_player_data,
+            team_current_stats, opponent_current_stats
+        )
+        team_expected[cat]           = texp
+        opponent_expected[cat]       = opexp
+        team_win_percentage[cat]     = twin
         opponent_win_percentage[cat] = opwin
 
-    win_pct_df = pd.DataFrame([team_win_percentage])
-    opponent_pct_df = pd.DataFrame([opponent_win_percentage])
-    
-    #team_expected['team_name'].append(team.team_name)
-    #opponent_expected['opponent_name'].append(opponent.team_name)
+    # --- Add meta fields expected by the template ---
+    # Use the same keys the points view returns so Jinja can read them.
+    team_expected['team_name'] = team.team_name
+    opponent_expected['team_name'] = opponent.team_name
 
-    df = pd.DataFrame([team_expected])
-    opponent_df = pd.DataFrame([opponent_expected])
+    # Category page header shows "team_current_points"; there’s no single number here,
+    # so provide an empty string (or 0 if you prefer).
+    team_expected['team_current_points'] = ''
+    opponent_expected['team_current_points'] = ''
 
-    #print("team 1 df:", df)
-    #print("team 2 df:", opponent_df)
+    # Build 1-row DataFrames
+    df           = pd.DataFrame([team_expected])
+    opponent_df  = pd.DataFrame([opponent_expected])
+    win_pct_df        = pd.DataFrame([team_win_percentage])
+    opponent_pct_df   = pd.DataFrame([opponent_win_percentage])
 
-    return df, opponent_df, win_pct_df, opponent_pct_df
+    return df, opponent_df, win_pct_df, opponent_pct_df, team_current_stats, opponent_current_stats
+
 
 def get_cat_stats(cat, espn_cat, team_player_data, opponent_player_data, team_current_stats, opponent_current_stats):
     # Filter out non-numeric values and players who are OUT
@@ -357,5 +380,7 @@ def get_cat_stats(cat, espn_cat, team_player_data, opponent_player_data, team_cu
     #print(f"Opponent expected: {opponent_expected:.2f}")
     #print(f"Team win %: {team_win_percentage:.2f}")
     #print(f"Opponent win %: {opponent_win_percentage:.2f}")
+
+
     
     return round(team_expected, 2), round(opponent_expected, 2), round(team_win_percentage, 2), round(opponent_win_percentage, 2)

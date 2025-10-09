@@ -1,127 +1,130 @@
+/* =============== */
+/*  GLOBAL THEME   */
+/* =============== */
+:root { color-scheme: dark; }
 body {
-    /* Gradient from solid blue to transparent in the middle, then from transparent to solid red */
-    background: linear-gradient(to right, 
-                rgba(0, 0, 255, 0.4) 0%, 
-                rgba(0, 0, 255, 0) 50%, 
-                rgba(255, 0, 0, 0) 50%, 
-                rgba(255, 0, 0, 0.4) 100%);
-    min-height: 100vh; /* This ensures that the gradient covers the whole page even if the content is shorter */
-    font-family: Arial, sans-serif;
+  margin: 0;
+  background: #0b0e14;
+  color: #e8eefc;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
+#back-button{
+  display:inline-block;
+  margin:10px;
+  color:#e8eefc;
+  text-decoration:none;
+  border:1px solid rgba(255,255,255,0.18);
+  border-radius:8px;
+  padding:8px 12px;
+  background:#10131a;
+}
+#back-button:hover{ filter:brightness(1.1); }
 
-#graph-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin: 40px 0; /* Add some space between tables and graph */
-}
-#graph {
-    display: flex;  /* Use Flexbox */
-    justify-content: center;  /* Center the chart horizontally */
-    width: 100%;  /* Make the container take up the full width */
-    margin-top: 20px;
-}
-#chart {
-    background-color: #f5f5f5;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    max-width: 800px;  /* Max width of the chart */
-    width: 100%;  /* Chart will take up full width up to 800px */
-}
-.axis-label {
-    font-size: 12px;
-    fill: #333;
-}
-.back-button {
-    background-color: #ff4c4c;
-    color: white;
-    padding: 10px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 18px;
-    transition: background-color 0.3s, transform 0.3s;
-    margin-top: 20px; /* Added margin-top for buttons */
+.card{
+  background:#10131a;
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:10px;
+  padding:16px 18px;
+  box-shadow:0 6px 18px rgba(0,0,0,0.25);
+  margin: 10px;
 }
 
-.table-container {
-    display: flex;
-    flex-wrap: wrap; 
-    gap: 10px;
+.body-container{ max-width:96vw; margin:0 auto; padding:14px 0 32px; }
+
+/* Header */
+.teams-header{ display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:stretch; }
+.team-pill{ display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-radius:10px; background:#0b0e14; border:1px solid rgba(255,255,255,0.08); }
+.team-pill.left{ box-shadow: inset 0 0 0 1px rgba(70,130,180,0.35); }
+.team-pill.right{ box-shadow: inset 0 0 0 1px rgba(255,0,0,0.35); }
+.team-name{ font-size:18px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.team-name.left{ color:#63a0d4; }
+.team-name.right{ color:#ff7a7a; }
+.team-points{ font-size:16px; opacity:0.9; }
+
+/* Tables */
+.table-container{ display:grid; grid-template-columns:1fr 1fr; gap:18px; width:100%; align-items:start; }
+.table-wrapper{ max-width:none; min-width:0; overflow-x:auto; }
+table.data-table{ width:100%; border-collapse:collapse; color:#e8eefc; font-size:14px; background:#0b0e14; border:1px solid rgba(255,255,255,0.08); }
+.data-table th,.data-table td{ border-bottom:1px solid rgba(255,255,255,0.08); padding:8px 10px; text-align:right; white-space:nowrap; }
+.data-table th:first-child,.data-table td:first-child{ text-align:left; }
+.data-table thead th{ background:#121722; font-weight:600; }
+.table-compact thead th, .table-compact td { white-space:nowrap; }
+.player-out{ color:#ff6b6b; }
+.player-dtd{ color:#ffd166; }
+a{ color:#63a0d4; text-decoration:none; }
+a:hover{ text-decoration:underline; }
+@media (max-width: 980px){ .table-container{ grid-template-columns:1fr; } }
+
+/* Graph sections */
+.graph-section{ padding:12px; }
+.graph-section h2,.graph-section p{ text-align:center; margin:0 0 12px; }
+
+.chart-area{ display:flex; justify-content:center; width:100%; }
+#chart{
+  background:#0b0e14; padding:12px; border-radius:10px;
+  border:1px solid rgba(255,255,255,0.08); box-shadow:0 6px 18px rgba(0,0,0,0.25);
+  max-width:800px; width:100%;
 }
 
-.table-wrapper {
-    flex: 1 1 auto; /* Grow and shrink equally */
-    max-width: calc(50% - 5px);
+/* Grid for categories page */
+.grid-container.chart-grid{
+  display:grid; grid-template-columns: repeat(3, minmax(320px,1fr)); gap:20px;
+  max-width:1200px; margin-left:auto; margin-right:auto; justify-content:center; align-items:stretch;
+}
+.chart-card{ background:#0b0e14; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 12px 4px 12px; overflow:visible; }
+.chart-title{ text-align:center; font-weight:600; font-size:16px; margin-bottom:8px; opacity:0.95; }
+.chart-svg{ display:block; width:100%; height:220px; }
+.chart-card svg{ display:block; width:100% !important; height:220px !important; overflow:visible; }
+@media (max-width: 1200px){ .grid-container.chart-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 800px){ .grid-container.chart-grid{ grid-template-columns: 1fr; } }
+
+/* Axes */
+.axis text { font-size: 12px; fill: #e8eefc; }
+.axis path, .axis line { stroke: rgba(255,255,255,.35); stroke-width: 1; }
+svg .tick text{ fill:#e8eefc; font-size:12px; }
+svg .domain, svg .tick line{ stroke:rgba(255,255,255,0.35); }
+
+/* NEW: unified legend look (white text) */
+.chart-legend text{ fill:#ffffff; font-size:12px; }
+
+/* Player-stats style legend (shared by both compare pages) */
+.legend{
+  display:flex;
+  gap:22px;
+  align-items:center;
+  margin-top:12px;
+  opacity:.95;
+  font-size:16px;
+  flex-wrap:wrap;
+}
+.legend .swatch{
+  width:26px;
+  height:4px;
+  border-radius:2px;
+  display:inline-block;
 }
 
-.data-table {
-    width: 100%; /* Ensures table uses the full width of its container */
-    max-width: 100%;
-    table-layout: auto; /* Fixed table layout can help prevent overflow */
-    border-collapse: collapse;
-    background-color: white;
-    word-wrap: break-word;
-    box-shadow: 0 2px 1px -1px rgba(0,0,0,0.2), 
-                0 1px 1px 0 rgba(0,0,0,0.14), 
-                0 1px 3px 0 rgba(0,0,0,0.12); /* Material design box shadow for the table */
-}
-.data-table th, .data-table td {
-    border: 1px solid #ddd; /* Lighter border color for the table cells */
-    white-space: normal;
-    text-overflow: ellipsis; 
-    min-width: 20px; /* Minimum width for columns */
-    max-width: 200px; /* Maximum width for columns */    max-width: 200px; /* Maximum width for columns */
-    padding: 4px;
-    text-align: left;
-    width:auto;
-}
-.data-table th {
-    background-color: #f2f2f2; /* Light background for headers for better contrast */
-}
+/* Solid swatches */
+.legend .swatch.blue-line{ background: steelblue; }
+.legend .swatch.red-line { background: red; }
 
-@media (max-width: 768px) {
-    .table-container {
-        flex-direction: column;
-    }
-    .table-wrapper {
-        max-width: none;
-        flex-basis: auto;
-    }
-    .data-table th, .data-table td {
-        font-size: smaller; /* Smaller font size for smaller screens */
-    }
+/* Dashed swatches to represent "Predicted" */
+.legend .swatch.blue-dashed{
+  background-image: linear-gradient(
+    to right,
+    steelblue 0 40%, transparent 40% 60%, steelblue 60% 100%
+  );
+  background-size: 10px 4px;
+  background-repeat: repeat-x;
+  background-color: transparent;
 }
-
-.player-out {
-    color: red;
-}
-.player-dtd {
-    color: orange;
-}
-.team-names {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.team-name-left,
-.team-name-right {
-    font-size: 24px;
-    font-weight: bold;
-    font-family: 'Arial', sans-serif;
-    display: flex;
-    align-items: center;
-}
-
-.team-name-left {
-    justify-content: flex-start; /* Aligns items to the left */
-}
-
-.team-name-right {
-    justify-content: flex-end; /* Aligns items to the right */
-    text-align: right;
+.legend .swatch.red-dashed{
+  background-image: linear-gradient(
+    to right,
+    red 0 40%, transparent 40% 60%, red 60% 100%
+  );
+  background-size: 10px 4px;
+  background-repeat: repeat-x;
+  background-color: transparent;
 }
