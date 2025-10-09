@@ -47,12 +47,37 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_PEM_KEY }}
         script: |
+          set -euo pipefail
+          REG=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+          REPO="$REG/fantasybballstats"
+          IMG="$REPO:latest"
+        
+          # ECR login
           aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-          docker pull ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/fantasybballstats:latest
-          docker stop fantasy_scraper_container || true
-          docker rm fantasy_scraper_container || true
-          docker run -d --name fantasy_scraper_container -p 5000:5000 ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/fantasybballstats:latest
-          # restart nginx to update website
-          sudo systemctl restart nginx
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
+            | docker login --username AWS --password-stdin "$REG"
+        
+          # Stop & remove the running container
+          docker rm -f fantasy_scraper_container || true
+        
+          # Remove ALL local images for this repo to free disk (safe since the container is gone)
+          docker images --filter="reference=$REPO:*" -q | xargs -r docker rmi -f || true
+        
+          # General prune to sweep any other cruft
+          docker system prune -af --volumes || true
+        
+          # Pull fresh
+          docker pull "$IMG"
+        
+          # Run with capped logs so they don't fill disk
+          docker run -d --name fantasy_scraper_container -p 5000:5000 \
+            --log-opt max-size=10m --log-opt max-file=3 \
+            -e FLASK_ENV=production \
+            -e S3_BUCKET=fantasy-stats-dev \
+            -e S3_PREFIX=dev/players/ \
+            -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }} \
+            "$IMG"
+
+  # restart nginx to update website
+  sudo systemctl restart nginx
