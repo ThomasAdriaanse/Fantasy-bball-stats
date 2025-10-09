@@ -111,8 +111,8 @@ def player_stats():
         'AVG_Z','Z_PTS','Z_FG3M','Z_REB','Z_AST','Z_STL','Z_BLK','Z_FG_PCT','Z_FT_PCT','Z_TOV'
     ]
 
-    # generate the JSON for the chosen stat
-    generate_json_file(selected_player, num_games, stat=selected_stat)
+    # Generate BOTH: small chart JSON (selected stat only) + full dataset files
+    out = generate_json_file(selected_player, num_games, stat=selected_stat)
 
     # players for dropdown
     active_players = players.get_active_players()
@@ -124,8 +124,12 @@ def player_stats():
         selected_player=selected_player,
         num_games=num_games,
         stat_options=stat_options,
-        selected_stat=selected_stat
+        selected_stat=selected_stat,
+        # download links for the “all stats” dataset (you can add links in the template later)
+        full_stats_json_url=out.get('full_json_url'),
+        full_stats_csv_url=out.get('full_csv_url')
     )
+
 
 
 # Route to serve the JSON file for player stats
@@ -133,11 +137,22 @@ def player_stats():
 def serve_data(filename):
     return send_from_directory('static', filename)
 
+def _safe_filename(name: str) -> str:
+    """lowercase-and-underscore a name for file outputs"""
+    return ''.join(ch if ch.isalnum() else '_' for ch in name).strip('_').lower()
+
 def generate_json_file(player_name, num_games, stat='FPTS'):
+    """
+    Produces TWO outputs:
+      1) /static/player_stats.json  -> compact chart JSON for the selected stat only
+      2) /static/downloads/players/<slug>.json -> full per-game dataset with ALL stats (JSON only)
+
+    Returns URLs for convenience.
+    """
     player_info = players.find_players_by_full_name(player_name)
     if not player_info:
         print(f"Player {player_name} not found.")
-        return
+        return {}
 
     player_id = player_info[0]['id']
     print(f"Fetching ALL regular-season games for: {player_name} (ID: {player_id}), stat={stat}")
@@ -149,14 +164,14 @@ def generate_json_file(player_name, num_games, stat='FPTS'):
             player_or_team_abbreviation="P",
             season_type_nullable="Regular Season"
         )
-        all_seasons_df = lgf.get_data_frames()[0]
+        df = lgf.get_data_frames()[0]
     except Exception as e:
         print(f"LeagueGameFinder error: {e}")
-        return
+        return {}
 
-    if all_seasons_df.empty:
+    if df.empty:
         print("No data available for the specified player.")
-        return
+        return {}
 
     # ---------- Coerce numerics we will use ----------
     numeric_cols = [
@@ -165,8 +180,8 @@ def generate_json_file(player_name, num_games, stat='FPTS'):
         "FG_PCT","FG3_PCT","FT_PCT","PLUS_MINUS"
     ]
     for c in numeric_cols:
-        if c in all_seasons_df.columns:
-            all_seasons_df[c] = pd.to_numeric(all_seasons_df[c], errors="coerce").fillna(0)
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
 
     # ---------- Fantasy points (always compute) ----------
     league_scoring_rules = {
@@ -190,21 +205,18 @@ def generate_json_file(player_name, num_games, stat='FPTS'):
             (row.get("PTS", 0) or 0)   * league_scoring_rules['pts']
         )
 
-    all_seasons_df['FPTS'] = all_seasons_df.apply(calculate_fp_row, axis=1)
+    df['FPTS'] = df.apply(calculate_fp_row, axis=1)
 
     # ---------- Dates / ordering / season labels ----------
-    all_seasons_df['Game_Date'] = pd.to_datetime(all_seasons_df['GAME_DATE'], errors="coerce")
-    all_seasons_df = all_seasons_df.sort_values('Game_Date').reset_index(drop=True)
-    all_seasons_df['Game_Number'] = all_seasons_df.index + 1
+    df['Game_Date'] = pd.to_datetime(df['GAME_DATE'], errors="coerce")
+    df = df.sort_values('Game_Date').reset_index(drop=True)
+    df['Game_Number'] = df.index + 1
 
-    all_seasons_df['SEASON_ID'] = all_seasons_df['SEASON_ID'].astype(str)
-    all_seasons_df['SEASON_START'] = all_seasons_df['SEASON_ID'].str[-4:].astype(int)
-    all_seasons_df['SEASON'] = all_seasons_df['SEASON_START'].map(
-        lambda y: f"{y}-{str((y+1) % 100).zfill(2)}"
-    )
+    df['SEASON_ID'] = df['SEASON_ID'].astype(str)
+    df['SEASON_START'] = df['SEASON_ID'].str[-4:].astype(int)
+    df['SEASON'] = df['SEASON_START'].map(lambda y: f"{y}-{str((y+1) % 100).zfill(2)}")
 
-    # ---------- Hardcoded league means / std devs ----------
-    # Base 7 cats + components needed for % impact
+    # ---------- League means / stds for z-scores ----------
     league_means = {
         'PTS': 16.714, 'FG3M': 1.876, 'REB': 6.000, 'AST': 3.825,
         'STL': 0.970,  'BLK': 0.680, 'TOV': 1.883,
@@ -213,54 +225,46 @@ def generate_json_file(player_name, num_games, stat='FPTS'):
     }
     league_stds = {
         'PTS': 6.078, 'FG3M': 0.588, 'REB': 2.500, 'AST': 2.077,
-        'STL': 0.435, 'BLK': 0.571, 'TOV': 0.891,  # positive; we invert TOV separately
+        'STL': 0.435, 'BLK': 0.571, 'TOV': 0.891,
         'FGM': 2.110, 'FGA': 4.494, 'FTM': 1.615, 'FTA': 1.947,
     }
 
-    # League-average percentages implied by the base means
     lg_fg_pct = league_means['FGM'] / league_means['FGA'] if league_means['FGA'] else 0.0
     lg_ft_pct = league_means['FTM'] / league_means['FTA'] if league_means['FTA'] else 0.0
 
-    # Your new (%-diff × volume) impact distribution params
     FG_IMPACT_MEAN = -0.087797348
     FG_IMPACT_STD  =  0.690900598
     FT_IMPACT_MEAN =  0.029394472
     FT_IMPACT_STD  =  0.303514900
 
-    # ---------- Per-game z-scores ----------
     def _z(series, mean, std, invert=False):
         std = abs(float(std)) if std else 0.0
         if std == 0:
-            return pd.Series(pd.NA, index=series.index if hasattr(series, "index") else all_seasons_df.index)
+            return pd.Series(pd.NA, index=series.index if hasattr(series, "index") else df.index)
         z = (series - mean) / std
         return -z if invert else z
 
     z_cols = []
-
-    # 6 positive cats + TOV (lower is better → invert)
     for base, invert in [
         ('PTS', False), ('FG3M', False), ('REB', False),
         ('AST', False), ('STL', False), ('BLK', False),
         ('TOV', True),
     ]:
-        all_seasons_df[f'Z_{base}'] = _z(all_seasons_df[base], league_means[base], league_stds[base], invert=invert)
-        z_cols.append(f'Z_{base}')
+        col = f'Z_{base}'
+        df[col] = _z(df[base], league_means[base], league_stds[base], invert=invert)
+        z_cols.append(col)
 
-    # ---- Percentage impact z-scores (your method) ----
-    # FG impact = (FG% - league_fg%) * FGA  == FGM - league_fg% * FGA
-    fg_impact = all_seasons_df['FGM'] - (lg_fg_pct * all_seasons_df['FGA'])
-    all_seasons_df['Z_FG_PCT'] = _z(fg_impact, FG_IMPACT_MEAN, FG_IMPACT_STD, invert=False)
+    fg_impact = df['FGM'] - (lg_fg_pct * df['FGA'])
+    df['Z_FG_PCT'] = _z(fg_impact, FG_IMPACT_MEAN, FG_IMPACT_STD)
     z_cols.append('Z_FG_PCT')
 
-    # FT impact = (FT% - league_ft%) * FTA  == FTM - league_ft% * FTA
-    ft_impact = all_seasons_df['FTM'] - (lg_ft_pct * all_seasons_df['FTA'])
-    all_seasons_df['Z_FT_PCT'] = _z(ft_impact, FT_IMPACT_MEAN, FT_IMPACT_STD, invert=False)
+    ft_impact = df['FTM'] - (lg_ft_pct * df['FTA'])
+    df['Z_FT_PCT'] = _z(ft_impact, FT_IMPACT_MEAN, FT_IMPACT_STD)
     z_cols.append('Z_FT_PCT')
 
-    # Average z across the 9 cats (skip NaNs)
-    all_seasons_df['AVG_Z'] = all_seasons_df[z_cols].mean(axis=1, skipna=True)
+    df['AVG_Z'] = df[z_cols].mean(axis=1, skipna=True)
 
-    # ---------- Which column to plot ----------
+    # ---------- Which column to plot (selected only) ----------
     base_allowed = {
         'FPTS','PTS','REB','AST','STL','BLK','TOV',
         'FGM','FGA','FG_PCT','FG3M','FG3A','FG3_PCT',
@@ -269,38 +273,367 @@ def generate_json_file(player_name, num_games, stat='FPTS'):
     z_allowed = {'AVG_Z'} | {f'Z_{k}' for k in [
         'PTS','FG3M','REB','AST','STL','BLK','FG_PCT','FT_PCT','TOV'
     ]}
-
     value_col = stat if stat in (base_allowed | z_allowed) else 'FPTS'
 
-    # ---------- Centered moving average ----------
+    # ---------- Centered moving average for SELECTED stat only (chart file) ----------
     def centered_average(idx, half_window):
         start = max(0, idx - half_window)
-        end   = min(len(all_seasons_df), idx + half_window + 1)
-        return all_seasons_df[value_col].iloc[start:end].mean()
+        end   = min(len(df), idx + half_window + 1)
+        return df[value_col].iloc[start:end].mean()
 
-    all_seasons_df['Centered_Avg'] = all_seasons_df.index.map(lambda i: centered_average(i, num_games))
+    df['Centered_Avg'] = df.index.map(lambda i: centered_average(i, num_games))
 
-    # ---------- Export for the front-end ----------
-    result_df = all_seasons_df[['Game_Number', 'MATCHUP', 'SEASON', 'SEASON_ID', 'Centered_Avg']].copy()
-    result_df['Centered_Avg_Stat'] = pd.to_numeric(result_df['Centered_Avg'], errors='coerce').round(3)
-    result_df['STAT'] = value_col
-    result_df = result_df.dropna(subset=['Centered_Avg_Stat'])
+    chart_df = df[['Game_Number', 'MATCHUP', 'SEASON', 'SEASON_ID']].copy()
+    chart_df['Centered_Avg_Stat'] = pd.to_numeric(df['Centered_Avg'], errors='coerce').round(3)
+    chart_df['STAT'] = value_col
+    chart_df = chart_df.dropna(subset=['Centered_Avg_Stat'])
 
-    data = result_df[['Game_Number','Centered_Avg_Stat','MATCHUP','SEASON','SEASON_ID','STAT']].to_dict(orient='records')
+    # ---------- Output paths ----------
+    static_dir = os.path.join(app.root_path, 'static')
+    os.makedirs(static_dir, exist_ok=True)
 
-    output_dir = os.path.join(app.root_path, 'static')
-    os.makedirs(output_dir, exist_ok=True)
-    output_file = os.path.join(output_dir, 'player_stats.json')
+    chart_json_file = os.path.join(static_dir, 'player_stats.json')
 
-    with open(output_file, 'w') as f:
-        json.dump(data, f, indent=4)
+    downloads_dir = os.path.join(static_dir, 'downloads', 'players')
+    os.makedirs(downloads_dir, exist_ok=True)
 
-    print(f"Data saved to {output_file} (rows: {len(result_df)}) for stat={value_col}")
+    slug = _safe_filename(player_name)
+    full_json_file = os.path.join(downloads_dir, f'{slug}.json')
+
+    # ---------- WRITE: compact chart JSON (selected stat only) ----------
+    with open(chart_json_file, 'w', encoding='utf-8') as f:
+        json.dump(chart_df[['Game_Number','Centered_Avg_Stat','MATCHUP','SEASON','SEASON_ID','STAT']].to_dict(orient='records'), f, indent=4)
+    print(f"Chart data saved to {chart_json_file} (rows: {len(chart_df)}) for stat={value_col}")
+
+    # ---------- WRITE: FULL per-game dataset with ALL stats (JSON only) ----------
+    base_cols_for_export = [
+        'Game_Number','GAME_DATE','Game_Date','MATCHUP','SEASON','SEASON_ID',
+        'MIN','PTS','REB','AST','STL','BLK','TOV',
+        'FGM','FGA','FG_PCT','FG3M','FG3A','FG3_PCT','FTM','FTA','FT_PCT',
+        'PLUS_MINUS','FPTS'
+    ]
+    export_cols = [c for c in base_cols_for_export if c in df.columns] + z_cols + ['AVG_Z']
+
+    full_df = df[export_cols].copy()
+    if 'Game_Date' in full_df.columns:
+        full_df.rename(columns={'Game_Date': 'GAME_DATE_TS'}, inplace=True)
+
+    full_payload = {
+        "player_id": int(player_id),
+        "player_name": player_name,
+        "source": "nba_api.leaguegamefinder",
+        "updated_utc": datetime.utcnow().isoformat() + "Z",
+        "columns": list(full_df.columns),
+        "rows": full_df.to_dict(orient='records')
+    }
+
+    with open(full_json_file, 'w', encoding='utf-8') as f:
+        json.dump(full_payload, f, indent=2, default=str)
+
+    print(f"Full dataset saved to:\n  {full_json_file}")
+
+    return {
+        'chart_json_url': '/static/player_stats.json',
+        'full_json_url':  f'/static/downloads/players/{os.path.basename(full_json_file)}',
+    }
 
 
+def _build_full_payload_for_player(player_id: int, player_name: str):
+    """Fetch ALL regular-season games for one player and return the full JSON payload (or None on error/empty)."""
+    try:
+        lgf = leaguegamefinder.LeagueGameFinder(
+            player_id_nullable=player_id,
+            player_or_team_abbreviation="P",
+            season_type_nullable="Regular Season"
+        )
+        df = lgf.get_data_frames()[0]
+    except Exception as e:
+        print(f"[SKIP] {player_name} ({player_id}) fetch error: {e}")
+        return None
+
+    if df.empty:
+        print(f"[SKIP] {player_name} ({player_id}) has no regular-season rows.")
+        return None
+
+    # Coerce numerics
+    numeric_cols = [
+        "FGM","FGA","FG3M","FG3A","FTM","FTA",
+        "REB","AST","STL","BLK","TOV","PTS","MIN",
+        "FG_PCT","FG3_PCT","FT_PCT","PLUS_MINUS"
+    ]
+    for c in numeric_cols:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+
+    # FPTS
+    league_scoring_rules = {
+        'fgm': 2, 'fga': -1, 'ftm': 1, 'fta': -1,
+        'threeptm': 1, 'reb': 1, 'ast': 2, 'stl': 4,
+        'blk': 4, 'turno': -2, 'pts': 1
+    }
+    def calc_fp(row):
+        return (
+            (row.get("FGM", 0) or 0)   * league_scoring_rules['fgm'] +
+            (row.get("FGA", 0) or 0)   * league_scoring_rules['fga'] +
+            (row.get("FTM", 0) or 0)   * league_scoring_rules['ftm'] +
+            (row.get("FTA", 0) or 0)   * league_scoring_rules['fta'] +
+            (row.get("FG3M", 0) or 0)  * league_scoring_rules['threeptm'] +
+            (row.get("REB", 0) or 0)   * league_scoring_rules['reb'] +
+            (row.get("AST", 0) or 0)   * league_scoring_rules['ast'] +
+            (row.get("STL", 0) or 0)   * league_scoring_rules['stl'] +
+            (row.get("BLK", 0) or 0)   * league_scoring_rules['blk'] +
+            (row.get("TOV", 0) or 0)   * league_scoring_rules['turno'] +
+            (row.get("PTS", 0) or 0)   * league_scoring_rules['pts']
+        )
+    df['FPTS'] = df.apply(calc_fp, axis=1)
+
+    # Dates & meta
+    df['Game_Date'] = pd.to_datetime(df['GAME_DATE'], errors="coerce")
+    df = df.sort_values('Game_Date').reset_index(drop=True)
+    df['Game_Number'] = df.index + 1
+
+    df['SEASON_ID'] = df['SEASON_ID'].astype(str)
+    df['SEASON_START'] = df['SEASON_ID'].str[-4:].astype(int)
+    df['SEASON'] = df['SEASON_START'].map(lambda y: f"{y}-{str((y+1) % 100).zfill(2)}")
+
+    # Z-scores (same constants)
+    league_means = {
+        'PTS': 16.714, 'FG3M': 1.876, 'REB': 6.000, 'AST': 3.825,
+        'STL': 0.970,  'BLK': 0.680, 'TOV': 1.883,
+        'FGM': 5.711,  'FGA': 11.943,
+        'FTM': 2.497,  'FTA': 3.126,
+    }
+    league_stds = {
+        'PTS': 6.078, 'FG3M': 0.588, 'REB': 2.500, 'AST': 2.077,
+        'STL': 0.435, 'BLK': 0.571, 'TOV': 0.891,
+        'FGM': 2.110, 'FGA': 4.494, 'FTM': 1.615, 'FTA': 1.947,
+    }
+    lg_fg_pct = league_means['FGM'] / league_means['FGA'] if league_means['FGA'] else 0.0
+    lg_ft_pct = league_means['FTM'] / league_means['FTA'] if league_means['FTA'] else 0.0
+
+    FG_IMPACT_MEAN = -0.087797348
+    FG_IMPACT_STD  =  0.690900598
+    FT_IMPACT_MEAN =  0.029394472
+    FT_IMPACT_STD  =  0.303514900
+
+    def _z(series, mean, std, invert=False):
+        std = abs(float(std)) if std else 0.0
+        if std == 0:
+            return pd.Series(pd.NA, index=series.index if hasattr(series, "index") else df.index)
+        z = (series - mean) / std
+        return -z if invert else z
+
+    z_cols = []
+    for base, invert in [('PTS', False), ('FG3M', False), ('REB', False),
+                         ('AST', False), ('STL', False), ('BLK', False), ('TOV', True)]:
+        col = f'Z_{base}'
+        df[col] = _z(df[base], league_means[base], league_stds[base], invert=invert)
+        z_cols.append(col)
+
+    fg_impact = df['FGM'] - (lg_fg_pct * df['FGA'])
+    df['Z_FG_PCT'] = _z(fg_impact, FG_IMPACT_MEAN, FG_IMPACT_STD)
+    z_cols.append('Z_FG_PCT')
+
+    ft_impact = df['FTM'] - (lg_ft_pct * df['FTA'])
+    df['Z_FT_PCT'] = _z(ft_impact, FT_IMPACT_MEAN, FT_IMPACT_STD)
+    z_cols.append('Z_FT_PCT')
+
+    df['AVG_Z'] = df[z_cols].mean(axis=1, skipna=True)
+
+    base_cols_for_export = [
+        'Game_Number','GAME_DATE','Game_Date','MATCHUP','SEASON','SEASON_ID',
+        'MIN','PTS','REB','AST','STL','BLK','TOV',
+        'FGM','FGA','FG_PCT','FG3M','FG3A','FG3_PCT','FTM','FTA','FT_PCT',
+        'PLUS_MINUS','FPTS'
+    ]
+    export_cols = [c for c in base_cols_for_export if c in df.columns] + z_cols + ['AVG_Z']
+
+    out_df = df[export_cols].copy()
+    if 'Game_Date' in out_df.columns:
+        out_df.rename(columns={'Game_Date': 'GAME_DATE_TS'}, inplace=True)
+
+    payload = {
+        "player_id": int(player_id),
+        "player_name": player_name,
+        "source": "nba_api.leaguegamefinder",
+        "updated_utc": datetime.utcnow().isoformat() + "Z",
+        "columns": list(out_df.columns),
+        "rows": out_df.to_dict(orient='records')
+    }
+    return payload
 
 
+def export_all_players(only_active: bool = True, limit: int | None = None, sleep_seconds: float = 1.2):
+    """
+    Export full JSON for many players to /static/downloads/players/<slug>.json
+    Adds a small delay between players to avoid rate limiting.
+    """
+    plist = players.get_active_players() if only_active else players.get_players()
+    # Sort for reproducibility
+    plist = sorted(plist, key=lambda x: x.get('full_name', ''))
+    if limit:
+        plist = plist[:limit]
 
+    downloads_dir = os.path.join(app.root_path, 'static', 'downloads', 'players')
+    os.makedirs(downloads_dir, exist_ok=True)
+
+    ok = err = 0
+    for idx, p in enumerate(plist, 1):
+        name = p.get('full_name') or p.get('full_name', 'Unknown')
+        pid  = p.get('id')
+        if not pid or not name:
+            continue
+
+        print(f"[{idx}/{len(plist)}] Exporting {name} ({pid}) ...")
+        payload = _build_full_payload_for_player(pid, name)
+        if not payload:
+            err += 1
+            time.sleep(sleep_seconds)
+            continue
+
+        slug = _safe_filename(name)
+        path = os.path.join(downloads_dir, f"{slug}.json")
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(payload, f, indent=2, default=str)
+            ok += 1
+        except Exception as e:
+            print(f"[ERROR] writing {name}: {e}")
+            err += 1
+
+        time.sleep(sleep_seconds)  # gentle delay
+    print(f"[DONE] Export complete. OK={ok}, ERRORS={err}, out_dir={downloads_dir}")
+    return ok, err
+
+
+@app.route('/admin/export_all_players')
+def export_all_players_route():
+    # /admin/export_all_players?only_active=1&limit=25&sleep=1.2
+    only_active = request.args.get('only_active', '1') != '0'
+    limit = request.args.get('limit')
+    limit = int(limit) if (limit and limit.isdigit()) else None
+    sleep_s = float(request.args.get('sleep', '1.2'))
+
+    ok, err = export_all_players(only_active=only_active, limit=limit, sleep_seconds=sleep_s)
+    return f"Export complete. OK={ok}, ERRORS={err}. Files in /static/downloads/players/"
+
+
+def _get_sorted_players(only_active: bool = True):
+    """Return a stable, name-sorted player list (active or all)."""
+    plist = players.get_active_players() if only_active else players.get_players()
+    return sorted(plist, key=lambda x: x.get('full_name', ''))
+
+
+def _export_players_list(plist, sleep_seconds: float = 1.2):
+    """
+    Core exporter that accepts a specific list of player dicts.
+    Writes JSON to /static/downloads/players/<slug>.json.
+    """
+    downloads_dir = os.path.join(app.root_path, 'static', 'downloads', 'players')
+    os.makedirs(downloads_dir, exist_ok=True)
+
+    ok = err = 0
+    picked = []
+    for idx, p in enumerate(plist, 1):
+        name = p.get('full_name') or 'Unknown'
+        pid  = p.get('id')
+        if not pid:
+            continue
+
+        print(f"[{idx}/{len(plist)}] Exporting {name} ({pid}) ...")
+        payload = _build_full_payload_for_player(pid, name)
+        if not payload:
+            err += 1
+            time.sleep(sleep_seconds)
+            continue
+
+        slug = _safe_filename(name)
+        path = os.path.join(downloads_dir, f"{slug}.json")
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(payload, f, indent=2, default=str)
+            ok += 1
+            picked.append({'id': pid, 'full_name': name, 'file': f'/static/downloads/players/{slug}.json'})
+        except Exception as e:
+            print(f"[ERROR] writing {name}: {e}")
+            err += 1
+
+        time.sleep(sleep_seconds)  # gentle delay to avoid rate limiting
+    return ok, err, picked
+
+
+def export_players_range(only_active: bool = True, start_index: int = 1, end_index: int = 10, sleep_seconds: float = 1.2):
+    """
+    Export a 1-based inclusive slice of the (name-sorted) player list.
+    Example: start_index=30, end_index=35 exports players #30..#35.
+    """
+    if start_index < 1 or end_index < start_index:
+        raise ValueError("Invalid range. Use 1-based indices and ensure end_index >= start_index.")
+
+    plist = _get_sorted_players(only_active=only_active)
+    # Convert to 0-based Python slice
+    subset = plist[start_index - 1 : end_index]
+    print(f"Selected {len(subset)} players from indices {start_index}..{end_index} (only_active={only_active})")
+    return _export_players_list(subset, sleep_seconds=sleep_seconds)
+
+@app.route('/admin/export_players')
+def admin_export_players():
+    """
+    Trigger via:
+      /admin/export_players?only_active=1&start=30&end=35&sleep=1.2
+    Query params:
+      - only_active: '1' (default) or '0'
+      - start: 1-based start index (required)
+      - end: 1-based end index, inclusive (required)
+      - sleep: seconds between players (default 1.2)
+      - dry_run: '1' to preview selection without exporting
+    """
+    try:
+        only_active = request.args.get('only_active', '1') != '0'
+        start = int(request.args.get('start'))
+        end   = int(request.args.get('end'))
+        sleep_s = float(request.args.get('sleep', '1.2'))
+        dry = request.args.get('dry_run', '0') == '1'
+    except Exception:
+        return ("Usage: /admin/export_players?only_active=1&start=30&end=35&sleep=1.2"
+                "<br/>Indices are 1-based and inclusive."), 400
+
+    plist = _get_sorted_players(only_active=only_active)
+    subset = plist[start - 1 : end]
+
+    if dry:
+        # Preview the selection without exporting
+        names = [f"{i+start}. {p['full_name']} ({p['id']})" for i, p in enumerate(subset)]
+        return "<br/>".join([
+            f"DRY RUN — would export {len(subset)} players (only_active={only_active})",
+            f"indices {start}..{end}:",
+            *names
+        ])
+
+    ok, err, picked = _export_players_list(subset, sleep_seconds=sleep_s)
+
+    lines = [
+        f"Export complete. OK={ok}, ERRORS={err}.",
+        f"indices {start}..{end} (only_active={only_active}).",
+        "Files:"
+    ] + [f"- {p['full_name']} → {p['file']}" for p in picked]
+    return "<br/>".join(lines)
+
+import click
+
+@app.cli.command("export-players-range")
+@click.option('--only-active/--all-players', default=True, help="Export active-only or all players.")
+@click.option('--start', type=int, required=True, help="1-based start index (sorted by name).")
+@click.option('--end', type=int, required=True, help="1-based end index (inclusive).")
+@click.option('--sleep', type=float, default=1.2, help="Seconds to sleep between players.")
+def export_players_range_cmd(only_active, start, end, sleep):
+    """Export a 1-based inclusive slice of players to static/downloads/players/*.json"""
+    ok, err, picked = export_players_range(
+        only_active=only_active, start_index=start, end_index=end, sleep_seconds=sleep
+    )
+    click.echo(f"Done. OK={ok}, ERRORS={err}.")
+    for p in picked:
+        click.echo(f"- {p['full_name']} -> {p['file']}")
 
 
 def calculate_fantasy_points(row, scoring_rules):
