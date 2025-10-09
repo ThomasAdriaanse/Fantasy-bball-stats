@@ -7,85 +7,98 @@
   <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/compare_page.css') }}" />
   <script src="https://d3js.org/d3.v7.min.js"></script>
 
-  <!-- Keep injury-colored links + current-cat styles + legend swatches -->
   <style>
+    /* keep injury-colored links */
     .player-out a, .player-dtd a { color: inherit; text-decoration: none; }
     .player-out a:hover, .player-dtd a:hover { text-decoration: underline; }
 
-    /* ===== Current categories card (new) ===== */
+    /* ===== Category snapshot (labels above, pills below) ===== */
     .cat-snapshot.card { padding: 16px 18px; }
-    .snapshot-rows {
-      display: grid;
-      /* ORDER: Team1 | Cat | Team2 (cat in the middle) */
-      grid-template-columns: minmax(64px, 1fr) max-content minmax(64px, 1fr);
-      row-gap: 6px;
-      column-gap: 10px;
-      align-items: center;
+    .cat-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+      gap:12px 14px;
+      align-items:start;
     }
-    @media (max-width: 700px) {
-      .snapshot-rows { grid-template-columns: minmax(56px,1fr) max-content minmax(56px,1fr); }
+    .cat-col{display:grid;grid-template-rows:auto auto;row-gap:6px;}
+    .cat-label{
+      text-align:center;
+      font-size:16px;
+      letter-spacing:.2px;
+      opacity:.9;
     }
-    .snap-cell {
-      padding: 6px 8px;
-      border-radius: 8px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: #0b0e14;
-      color: #e8eefc;
-      font-size: 13px;
-      line-height: 1.15;
-      min-height: 30px;
-      display: flex;
-      align-items: center;
+
+    /* Split pill: loser side stays black, winner side tinted by alpha. */
+    .split-pill{
+      position:relative;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      min-height:34px;
+      border-radius:8px;
+      border:1px solid rgba(255,255,255,0.10);
+      background:#0b0e14;
+      overflow:hidden;
+      color:#e8eefc;
+      background-clip: padding-box;
     }
-    .snap-cat  { justify-content: center; text-align: center; font-size: 12px; opacity: .85; padding-inline: 6px; }
-    .snap-t1   { justify-content: flex-end; text-align: right; }
-    .snap-t2   { justify-content: flex-start; text-align: left; }
+    .split-pill::after{
+      content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.18);
+    }
+    .pill-left,.pill-right{
+      padding:7px 10px;
+      display:flex;align-items:center;
+      font-size:13px;line-height:1.1;
+      background-clip: padding-box;
+    }
+    .pill-left { justify-content:flex-end; text-align:right;
+      background: rgba(70,130,180,var(--a1,0)); /* Team 1 blue */
+    }
+    .pill-right{ justify-content:flex-start; text-align:left;
+      background: rgba(255,0,0,var(--a2,0));   /* Team 2 red  */
+    }
+
+    /* ====== Evenly spaced compact tables (odds) ====== */
+    .data-table.table-compact{
+      table-layout: fixed;   /* even column widths */
+      width: 100%;
+    }
+    .data-table.table-compact th,
+    .data-table.table-compact td{
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .win-title{
+      margin: 10px 0 6px;
+      text-align: center;
+      font-size: 14px;
+      opacity: .9;
+    }
 
     /* Chart cards leave space for legend + larger axis like player_stats */
     .chart-card { padding: 12px 12px 8px 12px; }
     .chart-card .axis text { font-size: 16px; }
 
-    /* ===== Player-stats style legend (HTML swatches) — compact ===== */
+    /* Mini-chart legend (compact) */
     .legend {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px 12px;            /* tighter horizontal & vertical gap */
-      align-items: center;
-      margin: 6px 2px 0;
-      opacity: .95;
-      font-size: 13px;
+      display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center;
+      margin:6px 2px 0; opacity:.95; font-size:13px;
     }
-    .legend-item {
-      display: inline-flex;     /* swatch + label sit close together */
-      align-items: center;
-      gap: 6px;                 /* distance between swatch and text */
-      white-space: nowrap;      /* no ugly mid-word wraps */
-    }
-    .legend .swatch {
-      width: 22px;
-      height: 2px;
-      border-radius: 2px;
-      display: inline-block;
-    }
+    .legend-item { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+    .legend .swatch { width:22px; height:2px; border-radius:2px; display:inline-block; }
     .swatch.solid.blue { background: steelblue; }
     .swatch.solid.red  { background: red; }
-
-    /* Dash pattern matches stroke-dasharray: 3,3 used for (Pred) lines */
     .swatch.dashed.blue {
-      background: repeating-linear-gradient(
-        to right,
-        steelblue 0 3px, transparent 3px 6px
-      );
+      background: repeating-linear-gradient(to right, steelblue 0 3px, transparent 3px 6px);
     }
     .swatch.dashed.red {
-      background: repeating-linear-gradient(
-        to right,
-        red 0 3px, transparent 3px 6px
-      );
+      background: repeating-linear-gradient(to right, red 0 3px, transparent 3px 6px);
     }
   </style>
 </head>
 
+<!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-EZ4LV1SKJ1"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -99,7 +112,6 @@
   <div class="body-container">
     {% set t1 = data_team_stats_1|default([{'team_name':'Team 1','team_current_points':''}], true) %}
     {% set t2 = data_team_stats_2|default([{'team_name':'Team 2','team_current_points':''}], true) %}
-    {% set cats = ['PTS','REB','AST','STL','BLK','3PM','FG%','FT%','TO'] %}
 
     <!-- Header pills -->
     <div class="card teams-header">
@@ -115,16 +127,16 @@
 
     <!-- ===== CURRENT CATEGORY SNAPSHOT ===== -->
     <div class="card cat-snapshot">
-      <div class="snapshot-rows">
+      <div class="cat-grid">
         {% set scale_map = {
-          'PTS': 100, 'REB': 30, 'AST': 20, 'STL': 15, 'BLK': 10, '3PM': 15,
-          'FG%': 0.05, 'FT%': 0.05, 'TO' : 10
+          'PTS':100,'REB':30,'AST':20,'STL':15,'BLK':10,'3PM':15,
+          'FG%':0.05,'FT%':0.05,'TO':10
         } %}
-        {% for c in cats %}
-          {% set s1 = team1_current_stats.get(c) if team1_current_stats is defined and team1_current_stats else None %}
-          {% set s2 = team2_current_stats.get(c) if team2_current_stats is defined and team2_current_stats else None %}
-          {% set v1 = (s1['value'] if s1 and 'value' in s1 else None) %}
-          {% set v2 = (s2['value'] if s2 and 'value' in s2 else None) %}
+        {% for c in ['PTS','REB','AST','STL','BLK','3PM','FG%','FT%','TO'] %}
+          {% set s1 = team1_current_stats.get(c) if team1_current_stats else None %}
+          {% set s2 = team2_current_stats.get(c) if team2_current_stats else None %}
+          {% set v1 = s1['value'] if s1 and 'value' in s1 else None %}
+          {% set v2 = s2['value'] if s2 and 'value' in s2 else None %}
 
           {% if v1 is not none and v2 is not none %}
             {% if c == 'TO' %}
@@ -137,7 +149,7 @@
             {% set t1_wins = false %}{% set t2_wins = false %}{% set is_tie = true %}
           {% endif %}
 
-          {% set scale = scale_map.get(c, 10) %}
+          {% set scale = scale_map.get(c,10) %}
           {% if v1 is not none and v2 is not none %}
             {% set diff = (v1 - v2) if (v1 - v2) >= 0 else -(v1 - v2) %}
             {% set intensity = diff / scale %}
@@ -147,12 +159,15 @@
             {% set intensity = 0 %}
           {% endif %}
 
-          {% set bga = 0.14 + 0.46 * intensity %}
-          {% set bda = 0.20 + 0.55 * intensity %}
-          {% set blue_bg  = "background: rgba(70,130,180," ~ ('%.3f' % bga) ~ "); border-color: rgba(70,130,180," ~ ('%.3f' % bda) ~ ");" %}
-          {% set red_bg   = "background: rgba(255,0,0,"     ~ ('%.3f' % bga) ~ "); border-color: rgba(255,0,0,"     ~ ('%.3f' % bda) ~ ");" %}
-          {% set t1_style = (blue_bg  if (t1_wins and not is_tie) else "") %}
-          {% set t2_style = (red_bg   if (t2_wins and not is_tie) else "") %}
+          {# Winner tint alpha (0.25..0.80). Loser side stays black. Ties = both black. #}
+          {% set alpha = 0.25 + 0.55 * intensity %}
+          {% if is_tie %}
+            {% set a1 = 0 %}{% set a2 = 0 %}
+          {% elif t1_wins %}
+            {% set a1 = alpha %}{% set a2 = 0 %}
+          {% else %}
+            {% set a1 = 0 %}{% set a2 = alpha %}
+          {% endif %}
 
           {% if c in ['FG%','FT%'] %}
             {% set disp1 = ('%.1f%%' % (((v1 or 0) * 100))) if v1 is not none else '-' %}
@@ -162,15 +177,20 @@
             {% set disp2 = v2 if v2 is not none else '-' %}
           {% endif %}
 
-          <!-- One row: Team1 | Category | Team2 -->
-          <div class="snap-cell snap-t1" style="{{ t1_style }}">{{ disp1 }}</div>
-          <div class="snap-cell snap-cat">{{ c }}</div>
-          <div class="snap-cell snap-t2" style="{{ t2_style }}">{{ disp2 }}</div>
+          <div class="cat-col">
+            <div class="cat-label">{{ c }}</div>
+            <div class="split-pill" style="--a1:{{ '%.3f' % a1 }}; --a2:{{ '%.3f' % a2 }};"
+                 title="{{ t1[0]['team_name'] }} / {{ t2[0]['team_name'] }}">
+              <div class="pill-left">{{ disp1 }}</div>
+              <div class="pill-right">{{ disp2 }}</div>
+            </div>
+          </div>
         {% endfor %}
       </div>
     </div>
-    <!-- ===== END CURRENT CATEGORY SNAPSHOT ===== -->
+    <!-- ===== END SNAPSHOT ===== -->
 
+    <!-- Players + summary tables -->
     <div class="card">
       <div class="table-container">
         <div class="table-wrapper">
@@ -208,7 +228,9 @@
             </tbody>
           </table>
 
-          <table class="data-table table-compact" style="margin-top:12px">
+          <!-- Title + evenly spaced compact table -->
+          <h3 class="win-title">Odds of winning each category</h3>
+          <table class="data-table table-compact">
             <thead>
               <tr>
                 {% for key in team1_win_pct_data[0].keys() %}
@@ -261,7 +283,9 @@
             </tbody>
           </table>
 
-          <table class="data-table table-compact" style="margin-top:12px">
+          <!-- Title + evenly spaced compact table -->
+          <h3 class="win-title">Odds of winning each category</h3>
+          <table class="data-table table-compact">
             <thead>
               <tr>
                 {% for key in team2_win_pct_data[0].keys() %}
@@ -281,6 +305,7 @@
       </div>
     </div>
 
+    <!-- ===== Mini charts ===== -->
     <div id="graph-container" class="graph-section card">
       <p>Graphs update at end of day (PST)</p>
       <h2>Team Comparison — Projected Categories</h2>
@@ -289,7 +314,7 @@
         <div class="graph-wrapper chart-card">
           <div class="graph-title chart-title">{{ cat }}</div>
           <div id="chart-{{ (cat|replace('%','pct')|replace('3PM','3pm')|lower) }}" class="chart-svg"></div>
-          <!-- Per-chart legend appended here by D3 -->
+          <!-- per-chart legend appended by D3 -->
         </div>
         {% endfor %}
       </div>
@@ -297,16 +322,12 @@
   </div>
 
   <script>
-    const graphRenderStart = performance.now();
-
     const combinedJsons = {{ combined_jsons|default({}, true)|tojson }};
     const categories = Object.keys(combinedJsons);
     const slug = c => c.replace('%','pct').replace('3PM','3pm').toLowerCase();
 
     const team1Name = {{ t1[0]['team_name']|tojson }};
     const team2Name = {{ t2[0]['team_name']|tojson }};
-
-    // shorten for narrow cards, keep tooltip with full name
     const shorten = s => s && s.length > 18 ? (s.slice(0,16) + '…') : (s || '');
 
     categories.forEach((cat) => {
@@ -317,7 +338,6 @@
         team: d.team,
         category: d.category
       }));
-
       graphData.forEach(d => { d.date.setDate(d.date.getDate()+1); d.date.setHours(0,0,0,0); });
 
       const today = new Date(); today.setHours(0,0,0,0);
@@ -373,14 +393,10 @@
       svg.append("path").datum(team2FutureData).attr("fill","none").attr("stroke","red").attr("stroke-width",1.8).style("stroke-dasharray","5,5").attr("d", lineActual);
       svg.append("path").datum(team2Data).attr("fill","none").attr("stroke","red").attr("stroke-width",1.4).style("stroke-dasharray","3,3").attr("d", linePredicted);
 
-      // Player-stats style legend (HTML) under each mini-chart — unique per chart
+      // Legend under each mini-chart
       const t1Short = shorten(team1Name);
       const t2Short = shorten(team2Name);
-
-      const legend = d3.select(containerNode.parentNode)
-        .append("div")
-        .attr("class", "legend");
-
+      const legend = d3.select(containerNode.parentNode).append("div").attr("class", "legend");
       legend.html(`
         <span class="legend-item" title="${team1Name}">
           <span class="swatch solid blue"></span><span>${t1Short} (Actual)</span>
@@ -396,9 +412,6 @@
         </span>
       `);
     });
-
-    const graphRenderEnd = performance.now();
-    console.log(`Graphs render time: ${(graphRenderEnd - graphRenderStart).toFixed(2)} ms`);
   </script>
 </body>
 </html>
