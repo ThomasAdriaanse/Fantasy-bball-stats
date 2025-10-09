@@ -79,5 +79,5 @@ jobs:
             -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }} \
             "$IMG"
 
-  # restart nginx to update website
-  sudo systemctl restart nginx
+          # restart nginx to update website
+          sudo systemctl restart nginx
