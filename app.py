@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory
+from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory, jsonify
 import os
 from dotenv import load_dotenv
 from psycopg2 import extras
@@ -89,7 +89,7 @@ def entry_page():
 
 @app.route('/player_stats', methods=['GET', 'POST'])
 def player_stats():
-    num_games = 20  # default
+    num_games = 20
     selected_player = 'Bol Bol'
     selected_stat = 'FPTS'
 
@@ -97,25 +97,21 @@ def player_stats():
         selected_player = request.args.get('player_name', selected_player)
         num_games = int(request.args.get('num_games', num_games))
         selected_stat = request.args.get('stat', selected_stat)
-    else:  # POST
+    else:
         selected_player = request.form.get('player_name', selected_player)
         num_games = int(request.form.get('num_games', num_games))
         selected_stat = request.form.get('stat', selected_stat)
 
-    # Base stats + z-score stats for the dropdown
     stat_options = [
-        # base
         'FPTS','PTS','REB','AST','STL','BLK','TOV',
         'FGM','FGA','FG_PCT','FG3M','FG3A','FG3_PCT',
         'FTM','FTA','FT_PCT','MIN','PLUS_MINUS',
-        # z-scores
         'AVG_Z','Z_PTS','Z_FG3M','Z_REB','Z_AST','Z_STL','Z_BLK','Z_FG_PCT','Z_FT_PCT','Z_TOV'
     ]
 
-    # Generate compact chart JSON for the selected player/stat
-    generate_json_file(selected_player, num_games, stat=selected_stat)
+    # Build chart data in memory (no file)
+    chart_data = build_chart_data(selected_player, num_games, stat=selected_stat)
 
-    # players for dropdown
     active_players = players.get_active_players()
     active_players.sort(key=lambda x: x['full_name'])
 
@@ -125,12 +121,27 @@ def player_stats():
         selected_player=selected_player,
         num_games=num_games,
         stat_options=stat_options,
-        selected_stat=selected_stat
+        selected_stat=selected_stat,
+        chart_data_json=json.dumps(chart_data)  # pass to template for inline use
     )
 
-@app.route('/data/<path:filename>')
-def serve_data(filename):
-    return send_from_directory('static', filename)
+@app.get('/api/player_stats')
+def api_player_stats():
+    player_name = request.args.get('player_name', 'Bol Bol')
+    num_games   = int(request.args.get('num_games', 20))
+    stat        = request.args.get('stat', 'FPTS')
+    data = build_chart_data(player_name, num_games, stat)
+    return jsonify(data)
+
+# Optional compat: serve the same data at /data/player_stats.json if your front-end expects that path.
+@app.get('/data/player_stats.json')
+def data_player_stats_json():
+    player_name = request.args.get('player_name', 'Bol Bol')
+    num_games   = int(request.args.get('num_games', 20))
+    stat        = request.args.get('stat', 'FPTS')
+    data = build_chart_data(player_name, num_games, stat)
+    return jsonify(data)
+
 
 
 def _safe_filename(name: str) -> str:
@@ -171,7 +182,7 @@ def _load_player_dataset_from_s3(player_name: str) -> pd.DataFrame | None:
     # Light numeric coercion (don’t clobber strings like MATCHUP/SEASON)
     numeric_candidates = [c for c in df.columns if c not in ("MATCHUP","SEASON","SEASON_ID","GAME_DATE","GAME_DATE_TS")]
     for c in numeric_candidates:
-        df[c] = pd.to_numeric(df[c], errors="ignore")
+        df[c] = pd.to_numeric(df[c])
 
     # Ensure ordering columns exist
     if "Game_Number" not in df.columns and "GAME_DATE_TS" in df.columns:
@@ -181,28 +192,21 @@ def _load_player_dataset_from_s3(player_name: str) -> pd.DataFrame | None:
     return df
 
 # ---------- Core: single-player chart JSON ----------
-def generate_json_file(player_name, num_games, stat='FPTS'):
+def build_chart_data(player_name: str, num_games: int, stat: str = "FPTS"):
     """
-    Loads this player's FULL dataset from S3 (exported earlier),
-    then emits the compact chart JSON for the selected stat:
-      static/player_stats.json
+    Load player's full dataset from S3 and return compact chart data
+    for the selected stat as a Python list (no files written).
     """
     df = _load_player_dataset_from_s3(player_name)
     if df is None or df.empty:
         print(f"[S3] No data for {player_name}")
-        return
+        return []
 
-    # Make sure these metadata columns exist (they were in your export)
     required_meta = ["Game_Number", "MATCHUP", "SEASON", "SEASON_ID"]
     for col in required_meta:
         if col not in df.columns:
-            # Best-effort fallback
-            if col == "SEASON_ID" and "SEASON" in df.columns:
-                # ok, SEASON only
-                continue
             df[col] = None
 
-    # Which column to plot
     base_allowed = {
         'FPTS','PTS','REB','AST','STL','BLK','TOV',
         'FGM','FGA','FG_PCT','FG3M','FG3A','FG3_PCT',
@@ -212,40 +216,26 @@ def generate_json_file(player_name, num_games, stat='FPTS'):
         'PTS','FG3M','REB','AST','STL','BLK','FG_PCT','FT_PCT','TOV'
     ]}
     value_col = stat if stat in (base_allowed | z_allowed) else 'FPTS'
-
     if value_col not in df.columns:
-        print(f"[WARN] Column '{value_col}' not in dataset for {player_name}. Falling back to FPTS.")
+        print(f"[WARN] '{value_col}' missing for {player_name}; falling back to FPTS.")
         value_col = "FPTS"
         if value_col not in df.columns:
-            print("[ERROR] No FPTS in dataset — cannot draw chart.")
-            return
+            return []
 
-    # Centered moving average on selected stat
+    df = df.sort_values("Game_Number").reset_index(drop=True)
+
     def centered_average(idx, half_window):
         start = max(0, idx - half_window)
         end   = min(len(df), idx + half_window + 1)
         return pd.to_numeric(df[value_col].iloc[start:end], errors="coerce").mean()
 
-    df = df.sort_values("Game_Number").reset_index(drop=True)
     df['Centered_Avg'] = df.index.map(lambda i: centered_average(i, num_games))
-
     chart_df = df[['Game_Number', 'MATCHUP', 'SEASON', 'SEASON_ID']].copy()
     chart_df['Centered_Avg_Stat'] = pd.to_numeric(df['Centered_Avg'], errors='coerce').round(3)
     chart_df['STAT'] = value_col
     chart_df = chart_df.dropna(subset=['Centered_Avg_Stat'])
 
-    # Write compact chart JSON
-    static_dir = os.path.join(app.root_path, 'static')
-    os.makedirs(static_dir, exist_ok=True)
-    chart_json_file = os.path.join(static_dir, 'player_stats.json')
-
-    with open(chart_json_file, 'w', encoding='utf-8') as f:
-        json.dump(
-            chart_df[['Game_Number','Centered_Avg_Stat','MATCHUP','SEASON','SEASON_ID','STAT']].to_dict(orient='records'),
-            f, indent=4
-        )
-
-    print(f"[S3] Chart data saved to {chart_json_file} (rows: {len(chart_df)}) for stat={value_col}")
+    return chart_df[['Game_Number','Centered_Avg_Stat','MATCHUP','SEASON','SEASON_ID','STAT']].to_dict(orient='records')
 
 # ---------- Compare page (unchanged) ----------
 

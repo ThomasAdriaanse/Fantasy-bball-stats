@@ -2,91 +2,37 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico" />
-  <link
-    rel="stylesheet"
-    type="text/css"
-    href="{{ url_for('static', filename='css/select_teams_page.css') }}"
-  />
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/select_teams_page.css') }}"/>
   <title>{{ selected_player }} - Moving Average {{ selected_stat }}</title>
   <script src="https://d3js.org/d3.v7.min.js"></script>
 
   <style>
     .body-container { max-width: 96vw; margin: 0 auto; }
-
     .controls-card, .chart-card {
-      background: #10131a;
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      padding: 16px 18px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
-      margin-bottom: 18px;
+      background: #10131a; border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; padding: 16px 18px; box-shadow: 0 6px 18px rgba(0,0,0,0.25); margin-bottom: 18px;
     }
-
-    .controls-grid {
-      display: grid;
-      grid-template-columns: 1.2fr 280px 240px auto;
-      gap: 28px;
-      align-items: end;
+    .controls-grid { display: grid; grid-template-columns: 1.2fr 280px 240px auto; gap: 28px; align-items: end; }
+    .controls-grid label { display: block; font-size: 15px; margin-bottom: 6px; opacity: 0.9; }
+    .controls-grid select, .controls-grid input[type="number"] {
+      width: 100%; padding: 12px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12);
+      background: #0b0e14; color: #e8eefc; font-size: 15px;
     }
-    .controls-grid label {
-      display: block;
-      font-size: 15px;
-      margin-bottom: 6px;
-      opacity: 0.9;
-    }
-    .controls-grid select,
-    .controls-grid input[type="number"] {
-      width: 100%;
-      padding: 12px 14px;
-      border-radius: 8px;
-      border: 1px solid rgba(255,255,255,0.12);
-      background: #0b0e14;
-      color: #e8eefc;
-      font-size: 15px;
-    }
-
-    /* Red action button */
     .controls-grid button {
-      padding: 13px 18px;
-      border-radius: 10px;
-      border: 1px solid #b32626;
-      background: linear-gradient(180deg, #ff4d4d, #d62828);
-      color: #fff;
-      cursor: pointer;
-      transition: transform .2s ease, box-shadow .2s ease, filter .15s ease;
-      font-size: 15px;
-      letter-spacing: .2px;
+      padding: 13px 18px; border-radius: 10px; border: 1px solid #b32626;
+      background: linear-gradient(180deg, #ff4d4d, #d62828); color: #fff; cursor: pointer;
+      transition: transform .2s ease, box-shadow .2s ease, filter .15s ease; font-size: 15px; letter-spacing: .2px;
     }
-    .controls-grid button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 10px 25px rgba(214,40,40,.35);
-      filter: brightness(1.05);
-    }
-
+    .controls-grid button:hover { transform: translateY(-1px); box-shadow: 0 10px 25px rgba(214,40,40,.35); filter: brightness(1.05); }
     #chart svg { display: block; width: 100%; height: auto; }
-
-    /* Larger axis/tick text */
     #chart .axis text { font-size: 18px; fill: #e8eefc; }
     #chart .axis path, #chart .axis line { stroke: rgba(255,255,255,.35); stroke-width: 1.25; }
-
     .season-lines line { shape-rendering: crispEdges; }
     .season-lines text { font-size: 24px; fill: #1bb01b; }
     .team-ticks line { shape-rendering: crispEdges; }
-
-    .legend {
-      display: flex;
-      gap: 22px;
-      align-items: center;
-      margin-top: 12px;
-      opacity: 0.95;
-      font-size: 16px;
-      flex-wrap: wrap;
-    }
+    .legend { display: flex; gap: 22px; align-items: center; margin-top: 12px; opacity: 0.95; font-size: 16px; flex-wrap: wrap; }
     .legend .swatch { width: 26px; height: 4px; border-radius: 2px; display: inline-block; }
     .legend .swatch.blue  { background: steelblue; }
     .legend .swatch.green { background: #1bb01b; height: 14px; width: 3px; }
@@ -157,21 +103,27 @@
   </div>
 
   <script>
-    d3.json("/static/player_stats.json")
+    // Build API query using server-provided selections
+    const params = new URLSearchParams({
+      player_name: "{{ selected_player }}",
+      num_games: "{{ num_games }}",
+      stat: "{{ selected_stat }}"
+    });
+
+    d3.json(`/api/player_stats?${params.toString()}`, { cache: "no-store" })
       .then(function (data) {
         if (!data || data.length === 0) {
           d3.select("#chart").append("p").text("No data available for this selection.");
           return;
         }
 
-        // Support new JSON shape (Centered_Avg_Value + STAT) and older (Centered_Avg_Stat)
+        // Support new JSON shape and older one
         const getVal = d =>
           (d.Centered_Avg_Value !== undefined ? +d.Centered_Avg_Value : +d.Centered_Avg_Stat);
 
         const statLabel = (data[0] && (data[0].STAT || "{{ selected_stat }}")) || "{{ selected_stat }}";
         d3.select("#legend-stat").text(statLabel);
 
-        // Big chart
         const margin = { top: 90, right: 50, bottom: 80, left: 90 },
               width  = 2200 - margin.left - margin.right,
               height = 1100 - margin.top  - margin.bottom;
@@ -184,174 +136,123 @@
           .append("g")
           .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
-        // X scale (game number)
         const x = d3
           .scaleLinear()
           .domain([1, d3.max(data, (d) => +d.Game_Number)])
           .range([0, width]);
 
-// ==== Smarter Y domain based on stat/value distribution ====
-const vals = data.map(getVal).filter(v => Number.isFinite(v));
-let minV = d3.min(vals), maxV = d3.max(vals);
+        // ==== Smarter Y domain based on stat/value distribution ====
+        const vals = data.map(getVal).filter(v => Number.isFinite(v));
+        let minV = d3.min(vals), maxV = d3.max(vals);
 
-// Handle degenerate case
-if (minV === maxV) {
-  const pad = (Math.abs(maxV) || 1) * 0.1;
-  minV -= pad; maxV += pad;
-}
+        if (minV === maxV) {
+          const pad = (Math.abs(maxV) || 1) * 0.1;
+          minV -= pad; maxV += pad;
+        }
 
-const labelUpper = statLabel.toUpperCase();
-const isZ = labelUpper.startsWith('Z_') || labelUpper === 'AVG_Z';
+        const labelUpper = statLabel.toUpperCase();
+        const isZ = labelUpper.startsWith('Z_') || labelUpper === 'AVG_Z';
+        const isPctStat =
+          !isZ && (/^(FG_PCT|FT_PCT|FG3_PCT)$/.test(labelUpper) ||
+                   (maxV <= 1.2 && minV >= -0.1));
 
-// Only treat as a percentage if it's one of the *actual* pct stats and NOT a z-score
-const isPctStat =
-  !isZ && (/^(FG_PCT|FT_PCT|FG3_PCT)$/.test(labelUpper) ||
-           (maxV <= 1.2 && minV >= -0.1));
+        let yDomain;
+        if (isPctStat) {
+          const pad = 0.03;
+          yDomain = [Math.max(0, minV - pad), Math.min(1, maxV + pad)];
+        } else {
+          const spread = Math.max(1e-6, maxV - minV);
+          const pad = spread * 0.1;
+          yDomain = [minV - pad, maxV + pad];
+          if (minV >= 0) yDomain[0] = 0;
+        }
 
-let yDomain;
-if (isPctStat) {
-  const pad = 0.03;
-  // clamp to [0,1] with a little padding
-  yDomain = [Math.max(0, minV - pad), Math.min(1, maxV + pad)];
-} else {
-  // generic numeric (supports negatives, e.g., PLUS_MINUS and all Z_* stats)
-  const spread = Math.max(1e-6, maxV - minV);
-  const pad = spread * 0.1;
-  yDomain = [minV - pad, maxV + pad];
+        const y = d3.scaleLinear().domain(yDomain).nice().range([height, 0]);
 
-  // For strictly non-negative stats, anchor at 0 (nice baseline)
-  if (minV >= 0) yDomain[0] = 0;
-}
-
-const y = d3.scaleLinear().domain(yDomain).nice().range([height, 0]);
-
-
-        // Axes
         const xAxisG = svg
           .append("g")
           .attr("class", "axis axis--x")
           .attr("transform", "translate(0," + height + ")")
           .call(d3.axisBottom(x).ticks(12));
-
         xAxisG.selectAll("text").style("font-size", "24px");
-        xAxisG
-          .append("text")
-          .attr("x", width / 2)
-          .attr("y", 56)
-          .attr("fill", "#e8eefc")
-          .style("font-size", "20px")
-          .attr("text-anchor", "middle")
+        xAxisG.append("text")
+          .attr("x", width / 2).attr("y", 56).attr("fill", "#e8eefc")
+          .style("font-size", "20px").attr("text-anchor", "middle")
           .text("Game Number");
 
         const yAxisG = svg.append("g").attr("class", "axis axis--y").call(d3.axisLeft(y).ticks(12));
         yAxisG.selectAll("text").style("font-size", "24px");
-        yAxisG
-          .append("text")
+        yAxisG.append("text")
           .attr("transform", "rotate(-90)")
-          .attr("x", -height / 2)
-          .attr("y", -68)
-          .attr("fill", "#e8eefc")
-          .style("font-size", "20px")
-          .attr("text-anchor", "middle")
+          .attr("x", -height / 2).attr("y", -68).attr("fill", "#e8eefc")
+          .style("font-size", "20px").attr("text-anchor", "middle")
           .text(`Average ${statLabel}`);
 
-        // Main line — slightly thinner now
-        const line = d3
-          .line()
+        const line = d3.line()
           .x((d) => x(+d.Game_Number))
           .y((d) => y(getVal(d)));
 
-        svg
-          .append("path")
+        svg.append("path")
           .datum(data)
           .attr("fill", "none")
           .attr("stroke", "steelblue")
-          .attr("stroke-width", 2.2)               /* thinner */
+          .attr("stroke-width", 2.2)
           .attr("vector-effect", "non-scaling-stroke")
           .attr("d", line);
 
-        // Season boundaries — slightly thinner green full-height lines + label
+        // Season boundaries
         const seasonKey =
-          "SEASON" in data[0]
-            ? "SEASON"
-            : "SEASON_ID" in data[0]
-            ? "SEASON_ID"
-            : null;
+          "SEASON" in data[0] ? "SEASON" :
+          ("SEASON_ID" in data[0] ? "SEASON_ID" : null);
 
         if (seasonKey) {
           let prevSeason = String(data[0][seasonKey]);
           const boundaries = [];
-
           for (let i = 1; i < data.length; i++) {
             const s = String(data[i][seasonKey]);
             if (s !== prevSeason) {
               const label =
                 "SEASON" in data[i]
                   ? String(data[i].SEASON)
-                  : String(data[i].SEASON_ID).slice(-4) +
-                    "-" +
+                  : String(data[i].SEASON_ID).slice(-4) + "-" +
                     String((+String(data[i].SEASON_ID).slice(-4) + 1) % 100).padStart(2, "0");
-
               boundaries.push({ g: +data[i].Game_Number, label });
               prevSeason = s;
             }
           }
 
           const seasonG = svg.append("g").attr("class", "season-lines");
+          seasonG.selectAll("line")
+            .data(boundaries).enter().append("line")
+            .attr("x1", (d) => x(d.g)).attr("x2", (d) => x(d.g))
+            .attr("y1", 0).attr("y2", height)
+            .attr("stroke", "#1bb01b").attr("stroke-width", 1.6)
+            .attr("vector-effect", "non-scaling-stroke").attr("opacity", 0.9);
 
-          seasonG
-            .selectAll("line")
-            .data(boundaries)
-            .enter()
-            .append("line")
-            .attr("x1", (d) => x(d.g))
-            .attr("x2", (d) => x(d.g))
-            .attr("y1", 0)
-            .attr("y2", height)
-            .attr("stroke", "#1bb01b")
-            .attr("stroke-width", 1.6)             /* thinner */
-            .attr("vector-effect", "non-scaling-stroke")
-            .attr("opacity", 0.9);
-
-          seasonG
-            .selectAll("text")
-            .data(boundaries)
-            .enter()
-            .append("text")
-            .attr("x", (d) => x(d.g))
-            .attr("y", -16)
+          seasonG.selectAll("text")
+            .data(boundaries).enter().append("text")
+            .attr("x", (d) => x(d.g)).attr("y", -16)
             .attr("text-anchor", "middle")
             .style("font-size", "16px")
             .text((d) => d.label);
         }
 
-        // Team changes — red tick intersecting the line (slightly thinner)
+        // Team change ticks
         const teamTicks = [];
         let lastTeam = null;
         data.forEach((d) => {
           const currentTeam = (d.MATCHUP || "").split(" ")[0];
           if (lastTeam && currentTeam && lastTeam !== currentTeam) {
-            teamTicks.push({
-              g: +d.Game_Number,
-              y: getVal(d)
-            });
+            teamTicks.push({ g: +d.Game_Number, y: getVal(d) });
           }
           if (currentTeam) lastTeam = currentTeam;
         });
 
-        svg
-          .append("g")
-          .attr("class", "team-ticks")
-          .selectAll("line")
-          .data(teamTicks)
-          .enter()
-          .append("line")
-          .attr("x1", (d) => x(d.g))
-          .attr("x2", (d) => x(d.g))
-          .attr("y1", (d) => y(d.y) - 8)
-          .attr("y2", (d) => y(d.y) + 8)
-          .attr("stroke", "red")
-          .attr("stroke-width", 1.6) 
+        svg.append("g").attr("class", "team-ticks")
+          .selectAll("line").data(teamTicks).enter().append("line")
+          .attr("x1", (d) => x(d.g)).attr("x2", (d) => x(d.g))
+          .attr("y1", (d) => y(d.y) - 8).attr("y2", (d) => y(d.y) + 8)
+          .attr("stroke", "red").attr("stroke-width", 1.6)
           .attr("vector-effect", "non-scaling-stroke");
       })
       .catch(function (error) {
