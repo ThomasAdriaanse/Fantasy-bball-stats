@@ -26,53 +26,137 @@ def get_team_player_data_schema():
     
     return table_schema
 
+def get_team_player_data(
+    league,
+    team_num,
+    columns,
+    year,
+    league_scoring_rules,
+    week_data=None,
+    stat_window: str | None = None,   # "projected"|"total"|"last_30"|"last_15"|"last_7" or None
+):
+    """
+    Pull team player rows using the chosen ESPN window.
 
-def get_team_player_data(league, team_num, columns, year, league_scoring_rules, week_data=None):
+    Behavior:
+      - If stat_window is provided -> STRICT mode (no fallbacks). If the window is invalid or
+        has no 'avg' data, the row will be 'N/A'.
+      - If stat_window is None -> FRIENDLY mode with fallbacks (projected -> total -> last_30 -> last_15 -> last_7).
+    """
+    from datetime import datetime, timedelta
+    import pandas as pd
 
     team = league.teams[team_num]
-    # Initialize an empty list for each column
     team_data = {column: [] for column in columns}
 
-    year_string = str(year) + "_total"
+    VALID_WINDOWS = {"projected", "total", "last_30", "last_15", "last_7"}
 
-    # Single loop to collect data
+    # === Helpers ===
+    def pick(d, *keys, default=0):
+        for k in keys:
+            if k in d:
+                return d[k]
+        return default
+
+    def r2(x):
+        try:
+            return round(float(x), 2)
+        except Exception:
+            return 0.0
+
+    def pct(numer, denom):
+        try:
+            n = float(numer)
+            d = float(denom)
+            return round((n * 100.0) / d, 2) if d else 0.0
+        except Exception:
+            return 0.0
+
+    def extract_avg(stats_block: dict | None) -> dict:
+        if not stats_block or not isinstance(stats_block, dict):
+            return {}
+        if "avg" in stats_block and isinstance(stats_block["avg"], dict):
+            return stats_block["avg"]
+        return {}
+
+    # Determine strict vs friendly mode
+    strict_mode = stat_window is not None
+    if strict_mode:
+        window = (stat_window or "").strip().lower()
+        # In strict mode: invalid window -> force empty (N/A), do NOT coerce to projected
+        candidate_keys = [f"{year}_{window}"] if window in VALID_WINDOWS else []
+    else:
+        # Friendly mode default and fallbacks (like your old behavior)
+        window = "projected"
+        candidate_keys = [f"{year}_{window}", f"{year}_total", f"{year}_last_30", f"{year}_last_15", f"{year}_last_7"]
+
     for player in team.roster:
-    # Check if player is already in the database
-        if year_string in player.stats and 'avg' in player.stats[year_string].keys():
-            player_avg_stats = player.stats[year_string]['avg']
+        stats_all = getattr(player, "stats", {}) or {}
+
+        player_avg_stats = {}
+        chosen_key = None
+
+        # Only try the candidate keys we decided above
+        for k in candidate_keys:
+            if k in stats_all:
+                player_avg_stats = extract_avg(stats_all.get(k))
+                chosen_key = k
+                if player_avg_stats:  # non-empty avg -> use it
+                    break
+
+        if player_avg_stats:
+            # Pull with aliases (safe to handle ESPN names)
+            MIN  = r2(pick(player_avg_stats, "MIN", "MPG", default=0))
+            FGM  = r2(pick(player_avg_stats, "FGM", default=0))
+            FGA  = r2(pick(player_avg_stats, "FGA", default=0))
+            FTM  = r2(pick(player_avg_stats, "FTM", default=0))
+            FTA  = r2(pick(player_avg_stats, "FTA", default=0))
+            TPM  = r2(pick(player_avg_stats, "3PM", "TPM", default=0))
+            REB  = r2(pick(player_avg_stats, "REB", "RPG", default=0))
+            AST  = r2(pick(player_avg_stats, "AST", "APG", default=0))
+            STL  = r2(pick(player_avg_stats, "STL", "SPG", default=0))
+            BLK  = r2(pick(player_avg_stats, "BLK", "BPG", default=0))
+            TOs  = r2(pick(player_avg_stats, "TO",  "TOPG", default=0))
+            PTS  = r2(pick(player_avg_stats, "PTS", "PPG", default=0))
+
+            FG_PCT = pct(FGM, FGA)
+            FT_PCT = pct(FTM, FTA)
+
+            # Fill row
             team_data['player_name'].append(player.name)
-            team_data['min'].append(round(player_avg_stats['MIN'], 2))
-            team_data['fgm'].append(round(player_avg_stats['FGM'], 2))
-            team_data['fga'].append(round(player_avg_stats['FGA'], 2))
-            team_data['fg%'].append(round((player_avg_stats['FGM']*100)/player_avg_stats['FGA'], 2))
-            team_data['ftm'].append(round(player_avg_stats['FTM'], 2))
-            team_data['fta'].append(round(player_avg_stats['FTA'], 2))
-            team_data['ft%'].append(round((player_avg_stats['FTM']*100)/player_avg_stats['FTA'], 2))
-            team_data['threeptm'].append(round(player_avg_stats['3PM'], 2))
-            team_data['reb'].append(round(player_avg_stats['REB'], 2))
-            team_data['ast'].append(round(player_avg_stats['AST'], 2))
-            team_data['stl'].append(round(player_avg_stats['STL'], 2))
-            team_data['blk'].append(round(player_avg_stats['BLK'], 2))
-            team_data['turno'].append(round(player_avg_stats['TO'], 2))
-            team_data['pts'].append(round(player_avg_stats['PTS'], 2))
-            team_data['inj'].append(player.injuryStatus)
+            team_data['min'].append(MIN)
+            team_data['fgm'].append(FGM)
+            team_data['fga'].append(FGA)
+            team_data['fg%'].append(FG_PCT)
+            team_data['ftm'].append(FTM)
+            team_data['fta'].append(FTA)
+            team_data['ft%'].append(FT_PCT)
+            team_data['threeptm'].append(TPM)
+            team_data['reb'].append(REB)
+            team_data['ast'].append(AST)
+            team_data['stl'].append(STL)
+            team_data['blk'].append(BLK)
+            team_data['turno'].append(TOs)
+            team_data['pts'].append(PTS)
+            team_data['inj'].append(getattr(player, "injuryStatus", None))
 
             fpts = round(
-            player_avg_stats['FGM']*league_scoring_rules['fgm'] +
-            player_avg_stats['FGA']*league_scoring_rules['fga'] + 
-            player_avg_stats['FTM']*league_scoring_rules['ftm'] +
-            player_avg_stats['FTA']*league_scoring_rules['fta'] + 
-            player_avg_stats['3PM']*league_scoring_rules['threeptm'] + 
-            player_avg_stats['REB']*league_scoring_rules['reb'] + 
-            player_avg_stats['AST']*league_scoring_rules['ast'] + 
-            player_avg_stats['STL']*league_scoring_rules['stl'] + 
-            player_avg_stats['BLK']*league_scoring_rules['blk'] + 
-            player_avg_stats['TO']*league_scoring_rules['turno'] + 
-            player_avg_stats['PTS']*league_scoring_rules['pts']
-            , 2)
+                FGM * league_scoring_rules.get('fgm', 0)
+                + FGA * league_scoring_rules.get('fga', 0)
+                + FTM * league_scoring_rules.get('ftm', 0)
+                + FTA * league_scoring_rules.get('fta', 0)
+                + TPM * league_scoring_rules.get('threeptm', 0)
+                + REB * league_scoring_rules.get('reb', 0)
+                + AST * league_scoring_rules.get('ast', 0)
+                + STL * league_scoring_rules.get('stl', 0)
+                + BLK * league_scoring_rules.get('blk', 0)
+                + TOs * league_scoring_rules.get('turno', 0)
+                + PTS * league_scoring_rules.get('pts', 0),
+                2
+            )
             team_data['fpts'].append(fpts)
-
         else:
+            # Strict mode or no usable data -> N/A row
             team_data['player_name'].append(player.name)
             team_data['min'].append('N/A')
             team_data['fgm'].append('N/A')
@@ -88,39 +172,36 @@ def get_team_player_data(league, team_num, columns, year, league_scoring_rules, 
             team_data['blk'].append('N/A')
             team_data['turno'].append('N/A')
             team_data['pts'].append('N/A')
-            team_data['inj'].append(player.injuryStatus)
+            team_data['inj'].append(getattr(player, "injuryStatus", None))
             team_data['fpts'].append('N/A')
-        
-        # Get the players schedule for the week
-        schedule = player.schedule
+
+        # === Games this week (unchanged) ===
+        schedule = getattr(player, "schedule", {}) or {}
         list_schedule = list(schedule.values())
         list_schedule.sort(key=lambda x: x['date'], reverse=False)
 
-        # Use selected week data if provided, otherwise use current week
-        if week_data and 'matchup_data' in week_data:
-            # Use the selected week's date range from matchup_data
+        if week_data and 'matchup_data' in week_data and week_data['matchup_data']:
             start_date = datetime.strptime(week_data['matchup_data']['start_date'], '%Y-%m-%d').date()
-            end_date = datetime.strptime(week_data['matchup_data']['end_date'], '%Y-%m-%d').date()
-            
-            # Filter games for the selected week
-            games_in_week = [game for game in list_schedule if 
-                            start_date <= (game['date']-timedelta(hours=5)).date() <= end_date]
+            end_date   = datetime.strptime(week_data['matchup_data']['end_date'],   '%Y-%m-%d').date()
+            games_in_week = [
+                g for g in list_schedule
+                if start_date <= (g['date'] - timedelta(hours=5)).date() <= end_date
+            ]
         else:
-            print("error: not using proper week data")
-            # Fall back to current week if no week_data provided
-            today_minus_8 = (datetime.today()-timedelta(hours=8)).date()
+            today_minus_8 = (datetime.today() - timedelta(hours=8)).date()
             start_of_week, end_of_week = db_utils.range_of_current_week(today_minus_8)
-            
-            # Filter games for current week
-            games_in_week = [game for game in list_schedule if 
-                            today_minus_8 <= (game['date']-timedelta(hours=5)).date() <= end_of_week]
-        
-        # Add number of games to the database
-        team_data['games'].append(len(games_in_week)) 
+            games_in_week = [
+                g for g in list_schedule
+                if today_minus_8 <= (g['date'] - timedelta(hours=5)).date() <= end_of_week
+            ]
+
+        team_data['games'].append(len(games_in_week))
 
     df = pd.DataFrame(team_data)
     return df
 
+
+ 
 def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, year, week_data=None):
     
     start_time = time.time()
@@ -253,8 +334,6 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
     del predicted_values_team1[-1]
     del predicted_values_team2[-1]
 
-    #print(real_and_predicted_scores_team1)
-    #print(predicted_values_team1)
     #Convert Predicted Values into DataFrames
     team1_df = pd.DataFrame({
         'date': dates,
