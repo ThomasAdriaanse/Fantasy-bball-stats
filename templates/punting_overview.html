@@ -1,0 +1,186 @@
+{% extends "base.html" %} {# if you don’t have a base, remove this line and the block tags #}
+{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Punting Overview</title>
+<style>
+:root { color-scheme: dark; }
+:root{
+  --bg:#0b0e14; --card:#10131a; --text:#e8eefc;
+  --border:rgba(255,255,255,0.08); --border-strong:rgba(255,255,255,0.18);
+  --shadow:0 6px 18px rgba(0,0,0,0.25);
+  --accent-blue:#63a0d4; --accent-red:#ff7a7a; --accent-red-strong:#ff4848;
+}
+body{ background:var(--bg); color:var(--text); margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Helvetica,Arial; }
+.body-container{ max-width:1200px; margin:0 auto; padding:18px 12px 32px; }
+.page-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.title{ font-size:22px; font-weight:700; }
+.controls{ display:flex; gap:10px; align-items:center; }
+select, .pill{
+  background:#0b0e14; color:var(--text); border:1px solid var(--border-strong); border-radius:8px; padding:8px 10px;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(260px,1fr));
+  gap:16px;
+}
+@media (max-width:1100px){ .grid{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width:720px){ .grid{ grid-template-columns: 1fr; } }
+
+.card{
+  background:var(--card); border:1px solid var(--border); border-radius:10px; padding:12px 14px; box-shadow:var(--shadow);
+}
+.card .team-head{
+  display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:8px;
+}
+.card .team-name{ font-weight:700; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.card .punts{ font-size:12px; opacity:.85; }
+.card .punts .chip{
+  display:inline-block; padding:2px 6px; border-radius:999px; border:1px solid var(--border);
+  margin-left:6px; background:#0b0e14;
+}
+
+.bar-row{ display:grid; grid-template-columns: 64px 1fr auto; align-items:center; gap:10px; margin:6px 0; }
+.cat-label{ font-size:12px; opacity:.9; text-align:right; }
+.bar-track{ background:#0b0e14; border:1px solid var(--border); border-radius:999px; height:12px; position:relative; overflow:hidden; }
+.bar-fill{ position:absolute; top:0; left:0; bottom:0; border-radius:999px; background: rgba(70,130,180,0.66); } /* steelblue soft */
+.bar-value{ font-size:12px; opacity:.85; min-width:44px; text-align:right; }
+.bar-row.is-punt .bar-fill{ background: rgba(255,72,72,0.70); } /* red if punt */
+.bar-row.is-punt .cat-label{ color:#ff7a7a; }
+.legend{
+  display:flex; gap:16px; align-items:center; font-size:12px; opacity:.9; margin: 6px 2px 10px;
+}
+.swatch{ width:24px; height:6px; border-radius:3px; display:inline-block; }
+.swatch.blue{ background:rgba(70,130,180,0.66);}
+.swatch.red{ background:rgba(255,72,72,0.70);}
+.hint{ font-size:12px; opacity:.7; margin: 6px 2px 12px; }
+</style>
+</head>
+<body>
+<div class="body-container">
+  <div class="page-header">
+    <div class="title">Punting Overview — {{ year }}</div>
+    <div class="controls">
+      <span class="pill">League: {{ league_id }}</span>
+      <label for="window">Window:</label>
+      <select id="window">
+        <option value="projected" {{ 'selected' if stat_window=='projected' else '' }}>projected</option>
+        <option value="total" {{ 'selected' if stat_window=='total' else '' }}>total</option>
+        <option value="last_30" {{ 'selected' if stat_window=='last_30' else '' }}>last_30</option>
+        <option value="last_15" {{ 'selected' if stat_window=='last_15' else '' }}>last_15</option>
+        <option value="last_7"  {{ 'selected' if stat_window=='last_7'  else '' }}>last_7</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="swatch blue"></span> Strength &nbsp;&nbsp;
+    <span class="swatch red"></span> Likely Punt
+  </div>
+  <div class="hint">Bars show each team’s average by category (FG%/FT% are ratios; other stats are summed player averages). Punt = bottom-3 or z ≤ −0.6.</div>
+
+  <div id="grid" class="grid"></div>
+</div>
+
+<script>
+const DATA = {{ data_json|safe }};
+
+// compute per-category max for scaling (counting stats); FG%/FT% scale to 1.0
+const categories = DATA.categories;
+const teams = DATA.teams;
+
+// find maxima per category (except FG%/FT% which we keep on 0..1)
+const maxByCat = {};
+categories.forEach(cat => {
+  if (cat === 'FG%' || cat === 'FT%') { maxByCat[cat] = 1.0; return; }
+  maxByCat[cat] = Math.max(...teams.map(t => t.cats[cat] || 0), 1);
+});
+
+const grid = document.getElementById('grid');
+
+function fmt(cat, v){
+  if (cat === 'FG%' || cat === 'FT%') return (v*100).toFixed(1) + '%';
+  return (Math.round(v*100)/100).toString();
+}
+
+function render(){
+  grid.innerHTML = '';
+  teams.forEach(team => {
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    // header
+    const head = document.createElement('div');
+    head.className = 'team-head';
+
+    const name = document.createElement('div');
+    name.className = 'team-name';
+    name.textContent = team.team_name;
+
+    const punts = document.createElement('div');
+    punts.className = 'punts';
+    if (team.punts && team.punts.length){
+      punts.innerHTML = 'Punts:' + team.punts.map(c => `<span class="chip">${c}</span>`).join('');
+    } else {
+      punts.textContent = 'Punts: —';
+    }
+
+    head.appendChild(name);
+    head.appendChild(punts);
+    card.appendChild(head);
+
+    // bars
+    categories.forEach(cat => {
+      const row = document.createElement('div');
+      row.className = 'bar-row';
+      if (team.punts && team.punts.includes(cat)) row.classList.add('is-punt');
+
+      const label = document.createElement('div');
+      label.className = 'cat-label';
+      label.textContent = cat;
+
+      const track = document.createElement('div');
+      track.className = 'bar-track';
+
+      const fill = document.createElement('div');
+      fill.className = 'bar-fill';
+
+      const value = document.createElement('div');
+      value.className = 'bar-value';
+
+      const v = team.cats[cat] || 0;
+      const max = maxByCat[cat] || 1;
+      const pct = Math.max(0, Math.min(1, v / max)) * 100;
+      fill.style.width = pct + '%';
+
+      value.textContent = fmt(cat, v);
+
+      track.appendChild(fill);
+      row.appendChild(label);
+      row.appendChild(track);
+      row.appendChild(value);
+
+      card.appendChild(row);
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+render();
+
+document.getElementById('window').addEventListener('change', (e) => {
+  const w = e.target.value;
+  const params = new URLSearchParams(window.location.search);
+  params.set('stat_window', w);
+  // reload same page so the server recomputes from ESPN
+  window.location.search = params.toString();
+});
+</script>
+</body>
+</html>
+{% endblock %}

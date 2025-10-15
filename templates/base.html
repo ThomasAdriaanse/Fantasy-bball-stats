@@ -21,6 +21,9 @@
     <a href="{{ url_for('player_stats') }}" class="{% if ep in ['player_stats'] %}active{% endif %}">Player Stats</a>
     <a href="{{ url_for('select_teams_page') }}" class="{% if ep in ['select_teams_page','compare_page'] %}active{% endif %}">Select Teams</a>
 
+    <!-- NEW: Punting Overview -->
+    <a href="{{ url_for('punting_overview') }}" class="{% if ep in ['punting_overview'] %}active{% endif %}">Punting Overview</a>
+
     {% block topnav_extra %}{% endblock topnav_extra %}
   </nav>
 

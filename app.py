@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from psycopg2 import extras
 import compare_page.compare_page_data as cpd
 import compare_page.team_stats_data as tsd
+import compare_page.team_cat_averages as tca
 from scipy.stats import norm
 from espn_api.basketball import League
 from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, ESPNInvalidLeague
@@ -19,7 +20,6 @@ S3_BUCKET = os.getenv("S3_BUCKET", "fantasy-stats-dev")
 S3_PREFIX = os.getenv("S3_PREFIX", "dev/players/")  # includes trailing slash
 AWS_REGION = os.getenv("AWS_REGION", "ca-central-1")
 
-from nba_api.stats.static import players
 import json
 import time
 from pprint import pprint
@@ -27,9 +27,82 @@ from datetime import datetime, timedelta, date
 
 load_dotenv()
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
-
+app.secret_key = os.environ.get("SECRET_KEY", "dev-not-secret-change-me")
+app.permanent_session_lifetime = timedelta(days=1)
 # ---------- Utilities ----------
+
+def _parse_league_details_from_request(req):
+    """Best-effort parse of league details from GET or POST."""
+    lid  = (req.values.get('league_id') or "").strip()
+    yr   = (req.values.get('year') or "").strip()
+    s2   = (req.values.get('espn_s2') or "").strip() or None
+    swid = (req.values.get('swid') or "").strip() or None
+
+    if not lid or not yr:
+        return None  # insufficient to override
+
+    try:
+        yr = int(yr)
+    except ValueError:
+        return None
+
+    return {'league_id': lid, 'year': yr, 'espn_s2': s2, 'swid': swid}
+
+
+def _store_league_details(details: dict):
+    """Write normalized league details into the session; always mark as modified."""
+    if not details:
+        return
+    # Normalize
+    league_id = (details.get('league_id') or '').strip()
+    year = details.get('year')
+    try:
+        year = int(year) if year is not None else None
+    except (TypeError, ValueError):
+        year = None
+
+    new_payload = {
+        'league_id': league_id or None,
+        'year': year,
+        'espn_s2': (details.get('espn_s2') or None) or None,
+        'swid': (details.get('swid') or None) or None,
+    }
+
+    session.permanent = True
+    session['league_details'] = new_payload
+    # Optional: keep a simple change token to detect flips (useful for debugging)
+    session['league_changed_at'] = datetime.utcnow().isoformat()
+    session.modified = True
+
+@app.before_request
+def _capture_league_from_request():
+    # Hard reset: /?reset=1
+    if request.args.get('reset') in ('1', 'true', 'True'):
+        session.pop('league_details', None)
+        session.modified = True
+        return  # don’t attempt to parse after reset
+
+    # Legacy ?info=league,year,espn_s2,swid → ALWAYS override if present
+    if 'info' in request.args:
+        parts = request.args.get('info', '').split(',')
+        if len(parts) >= 2:
+            try:
+                year = int(parts[1])
+            except Exception:
+                year = None
+            legacy = {
+                'league_id': parts[0] if parts and parts[0] else None,
+                'year': year,
+                'espn_s2': parts[2] or None if len(parts) > 2 else None,
+                'swid'   : parts[3] or None if len(parts) > 3 else None,
+            }
+            _store_league_details(legacy)
+
+    # Explicit form/query params take precedence if both league_id and year exist
+    explicit = _parse_league_details_from_request(request)
+    if explicit and explicit.get('league_id') and explicit.get('year'):
+        _store_league_details(explicit)
+
 
 def get_matchup_dates(league, league_year):
     """Generate matchup date data for all matchup periods in the league"""
@@ -94,6 +167,13 @@ def entry_page():
 
 @app.route('/player_stats', methods=['GET', 'POST'])
 def player_stats():
+    
+    
+    # --- Prefer explicit request values over existing session ---
+    new_details = _parse_league_details_from_request(request)
+    if new_details:
+        _store_league_details(new_details)
+
     num_games = 20
     selected_player = 'Bol Bol'
     selected_stat = 'FPTS'
@@ -303,6 +383,8 @@ def compare_page():
     scoring_type = request.form.get('scoring_type')
     week_num = int(request.form.get('week_num'))
 
+    _store_league_details({'league_id': league_id, 'year': year, 'espn_s2': espn_s2, 'swid': swid})
+
     print(f"Processing league with scoring type: {scoring_type}, stat_window={stat_window}")
 
     try:
@@ -432,65 +514,111 @@ def compare_page():
 
 @app.route('/select_teams_page')
 def select_teams_page():
-    info_string = request.args.get('info', '')
-    info_list = info_string.split(',') if info_string else []
+    # by now, before_request has already applied ?info= or explicit params if present
+    league_details = session.get('league_details') or {}
+    if not league_details.get('league_id') or not league_details.get('year'):
+        return redirect(url_for('entry_page', error_message="Enter your league first."))
 
     try:
-        year = int(info_list[1])
-    except:
-        return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
+        league = League(
+            league_id=league_details['league_id'],
+            year=league_details['year'],
+            espn_s2=league_details.get('espn_s2'),
+            swid=league_details.get('swid')
+        ) if (league_details.get('espn_s2') and league_details.get('swid')) else League(
+            league_id=league_details['league_id'],
+            year=league_details['year']
+        )
+    except (ESPNUnknownError, ESPNInvalidLeague):
+        return redirect(url_for('entry_page', error_message="Invalid league entered."))
+    except ESPNAccessDenied:
+        return redirect(url_for('entry_page', error_message="That is a private league which needs ESPN S2 and SWID."))
+    except Exception as e:
+        return redirect(url_for('entry_page', error_message=str(e)))
 
-    if len(info_list) == 4:
-        league_details = {
-            'league_id': info_list[0],
-            'year': year,
-            'espn_s2': info_list[2],
-            'swid': info_list[3]
-        }
-    else:
-        league_details = {
-            'league_id': info_list[0],
-            'year': year,
-            'espn_s2': None,
-            'swid': None
-        }
-    
-    if league_details['espn_s2'] is None:
-        try:
-            league = League(league_id=league_details['league_id'], year=league_details['year'])
-        except (ESPNUnknownError, ESPNInvalidLeague):
-            return redirect(url_for('entry_page', error_message="Invalid league entered."))
-        except ESPNAccessDenied:
-            return redirect(url_for('entry_page', error_message="That is a private league which needs espn_s2 and SWID."))
-    else:
-        try:
-            league = League(league_id=league_details['league_id'], year=league_details['year'],
-                            espn_s2=league_details['espn_s2'], swid=league_details['swid'])
-        except ESPNUnknownError:
-            return redirect(url_for('entry_page', error_message="Invalid league entered."))
-
+    year = league_details['year']
     matchup_date_data = get_matchup_dates(league, year)
     teams_list = [team.team_name for team in league.teams]
     form_data = session.pop('form_data', {})
 
-    return render_template('select_teams_page.html', 
-                          info_list=teams_list, 
-                          **league_details, 
-                          form_data=form_data, 
-                          scoring_type=league.settings.scoring_type,
-                          matchup_data_dict=matchup_date_data,
-                          current_matchup=league.currentMatchupPeriod)
+    return render_template(
+        'select_teams_page.html',
+        info_list=teams_list,
+        league_id=league_details['league_id'],
+        year=league_details['year'],
+        espn_s2=league_details.get('espn_s2'),
+        swid=league_details.get('swid'),
+        form_data=form_data,
+        scoring_type=league.settings.scoring_type,
+        matchup_data_dict=matchup_date_data,
+        current_matchup=league.currentMatchupPeriod
+    )
+
+
+
 
 @app.route('/process', methods=['POST'])
 def process_information():
-    league_id = request.form.get('league_id')
-    year = request.form.get('year')
-    espn_s2 = request.form.get('espn_s2')
-    swid = request.form.get('swid')
+    details = _parse_league_details_from_request(request)
+    if not details or not details.get('league_id') or not details.get('year'):
+        return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
+    _store_league_details(details)
+    return redirect(url_for('select_teams_page'))
 
-    info_list = [league_id, year, espn_s2, swid]
-    info_string = ','.join(filter(None, info_list))
-    return redirect(url_for('select_teams_page', info=info_string))
+
+@app.get('/punting_overview')
+def punting_overview():
+    # accept overrides via query like the rest of your app
+    new_details = _parse_league_details_from_request(request)
+    if new_details:
+        _store_league_details(new_details)
+
+    league_details = session.get('league_details') or {}
+    league_id = league_details.get('league_id')
+    year      = league_details.get('year')
+    espn_s2   = league_details.get('espn_s2')
+    swid      = league_details.get('swid')
+
+    if not league_id or not year:
+        return redirect(url_for('entry_page', error_message="Enter your league first."))
+
+    stat_window = (request.args.get('stat_window') or 'projected').strip().lower().replace('-', '_')
+
+    try:
+        league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid) if espn_s2 and swid \
+                 else League(league_id=league_id, year=year)
+    except (ESPNUnknownError, ESPNInvalidLeague, ESPNAccessDenied) as e:
+        return redirect(url_for('entry_page', error_message=str(e)))
+
+    data = tca._team_category_averages(league, year, stat_window=stat_window)
+    # Render template with embedded JSON
+    return render_template('punting_overview.html',
+                           league_id=league_id, year=year,
+                           stat_window=stat_window,
+                           data_json=json.dumps(data))
+
+@app.get('/api/punting_overview')
+def api_punting_overview():
+    league_details = session.get('league_details') or {}
+    league_id = league_details.get('league_id')
+    year      = league_details.get('year')
+    espn_s2   = league_details.get('espn_s2')
+    swid      = league_details.get('swid')
+
+    if not league_id or not year:
+        return jsonify({'error': 'No league in session'}), 400
+
+    stat_window = (request.args.get('stat_window') or 'projected').strip().lower().replace('-', '_')
+
+    try:
+        league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid) if espn_s2 and swid \
+                 else League(league_id=league_id, year=year)
+    except (ESPNUnknownError, ESPNInvalidLeague, ESPNAccessDenied) as e:
+        return jsonify({'error': str(e)}), 400
+
+    data = tca._team_category_averages(league, year, stat_window=stat_window)
+    return jsonify(data)
+
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
