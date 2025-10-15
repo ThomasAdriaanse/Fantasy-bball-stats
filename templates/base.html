@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>{% block title %}Fantasy BBall Stats{% endblock %}</title>
+  <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico" />
+
+  <!-- Global base styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+
+  {% block head_css %}{% endblock head_css %}
+  {% block head_extra %}{% endblock head_extra %}
+</head>
+<body>
+  {% set ep = request.endpoint %}
+  <nav class="topnav">
+    <div class="brand">Fantasy BBall</div>
+
+    <a href="{{ url_for('entry_page') }}" class="{% if ep in ['entry_page'] %}active{% endif %}">Home</a>
+    <a href="{{ url_for('player_stats') }}" class="{% if ep in ['player_stats'] %}active{% endif %}">Player Stats</a>
+    <a href="{{ url_for('select_teams_page') }}" class="{% if ep in ['select_teams_page','compare_page'] %}active{% endif %}">Select Teams</a>
+
+    {% block topnav_extra %}{% endblock topnav_extra %}
+  </nav>
+
+  <div class="page-wrap">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flash space-y" style="margin-bottom: 12px;">
+          {% for message in messages %}
+            <div>{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock content %}
+  </div>
+
+  {% block body_js %}{% endblock body_js %}
+</body>
+</html>

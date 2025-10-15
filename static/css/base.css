@@ -1,0 +1,126 @@
+/* =======================
+   Global dark theme tokens
+   ======================= */
+   :root{
+    --bg: #0b0e14;       /* page background */
+    --card: #10131a;     /* card background */
+    --text: #e8eefc;     /* primary text */
+    --muted: rgba(232,238,252,.75);
+    --border: rgba(255,255,255,.10);
+    --border-strong: rgba(255,255,255,.18);
+    --accent: steelblue;
+    --accent-2: #d62828; /* red for emphasis/buttons */
+    --shadow: 0 6px 18px rgba(0,0,0,.25);
+    --radius: 12px;
+    --space: 16px;
+  }
+  
+  /* Reset-ish */
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.45;
+  }
+  a { color: var(--text); text-decoration: none; }
+  img { max-width: 100%; display: block; }
+  
+  /* =======================
+     Top navigation
+     ======================= */
+  .topnav {
+    position: sticky; top: 0; z-index: 1000;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: saturate(1.2) blur(6px);
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .topnav .brand {
+    font-weight: 700; letter-spacing: .2px; margin-right: 4px;
+    padding: 6px 10px; border-radius: 8px; color: var(--text);
+  }
+  .topnav a {
+    color: var(--text);
+    padding: 6px 10px; border-radius: 8px; opacity: .92;
+    transition: background .15s ease, opacity .15s ease, transform .1s ease;
+  }
+  .topnav a:hover { background: rgba(255,255,255,.06); opacity: 1; }
+  .topnav a.active { background: rgba(70,130,180,.22); }
+  
+  /* =======================
+     Page layout
+     ======================= */
+  .page-wrap { padding: 16px; margin: 0 auto; max-width: 2000px; }
+  @media (min-width: 900px) { .page-wrap { padding: 24px; } }
+  
+  /* Cards */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: var(--space);
+  }
+  
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 14px; border-radius: 10px;
+    background: linear-gradient(180deg, #ff4d4d, var(--accent-2));
+    color: #fff; border: 1px solid #b32626; cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease, filter .12s ease;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 25px rgba(214,40,40,.35); filter: brightness(1.05); }
+  
+  /* Inputs */
+  select,
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"]{
+    width: 100%; padding: 10px 12px;
+    border-radius: 8px; border: 1px solid var(--border);
+    background: #0b0e14; color: var(--text); font-size: 15px;
+  }
+  label { display: block; margin: 0 0 6px; opacity: .9; }
+  
+  /* Tables */
+  .data-table {
+    width: 100%; border-collapse: collapse;
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .data-table thead th {
+    text-align: left; padding: 10px 12px;
+    border-bottom: 1px solid var(--border-strong);
+    font-weight: 600; white-space: nowrap;
+  }
+  .data-table tbody td {
+    padding: 10px 12px; border-top: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .data-table tr:hover td { background: rgba(255,255,255,.03); }
+  
+  /* Utilities */
+  .muted { color: var(--muted); }
+  .space-y > * + * { margin-top: var(--space); }
+  .space-x > * + * { margin-left: var(--space); }
+  
+  /* Flash messages */
+  .flash {
+    border: 1px solid var(--border-strong);
+    background: #0f1219;
+    padding: 10px 12px; border-radius: 10px;
+  }
+  
+  /* Legacy back button hidden (use topnav) */
+  .back-button { display: none !important; }
+  

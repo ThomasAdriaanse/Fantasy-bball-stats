@@ -1,6 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
+{% extends "base.html" %}
+{% block title %}Home · Fantasy BBall{% endblock %}
 
+{% block head_extra %}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,14 @@
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/entry_page.css') }}">
     <title>Enter Information</title>
 </head>
+{% endblock head_extra %}
+
+{% block content %}
+    
+<!DOCTYPE html>
+<html lang="en">
+
+
 
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-EZ4LV1SKJ1"></script>
@@ -92,3 +101,6 @@
 </body>
 
 </html>
+
+{% endblock content %}
+

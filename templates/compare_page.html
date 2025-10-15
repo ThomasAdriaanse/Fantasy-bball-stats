@@ -1,29 +1,18 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Basketball Data</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico">
-  <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/compare_page.css') }}">
-  <script src="https://d3js.org/d3.v7.min.js"></script>
+{% extends "base.html" %}
+{% block title %}Compare (Points) · Fantasy BBall{% endblock %}
 
-  <!-- Ensure injury-colored cells keep their color even when the name is a link -->
+{% block head_extra %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/compare_page.css') }}">
+  <script src="https://d3js.org/d3.v7.min.js"></script>
   <style>
+    /* keep injury-colored cells when the name is a link */
     .player-out a, .player-dtd a { color: inherit; text-decoration: none; }
     .player-out a:hover, .player-dtd a:hover { text-decoration: underline; }
   </style>
-</head>
+{% endblock head_extra %}
 
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-EZ4LV1SKJ1"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date()); gtag('config', 'G-EZ4LV1SKJ1');
-</script>
-
-<body>
-  <a id="back-button" href="javascript:history.back()">Back</a>
-
+{% block content %}
+  <!-- Team header -->
   <div class="card teams-header">
     <div class="team-pill left">
       <div class="team-name left">{{ data_team_stats_1[0]['team_name'] }}</div>
@@ -37,6 +26,7 @@
 
   <div class="card">
     <div class="table-container">
+      <!-- Left team tables -->
       <div class="table-wrapper">
         <table class="data-table">
           <thead>
@@ -92,6 +82,7 @@
         </table>
       </div>
 
+      <!-- Right team tables -->
       <div class="table-wrapper">
         <table class="data-table">
           <thead>
@@ -146,17 +137,20 @@
           </tbody>
         </table>
       </div>
-    </div>
-  </div>
+    </div><!-- /table-container -->
+  </div><!-- /card -->
 
+  <!-- Graph -->
   <div id="graph-container" class="graph-section card">
     <p>Graph and table update at end of day (PST)</p>
-    <h2>Team Comparison - Projeced Fantasy Points</h2>
+    <h2>Team Comparison - Projected Fantasy Points</h2>
     <div id="graph" class="chart-area">
       <div id="chart"></div>
     </div>
   </div>
+{% endblock content %}
 
+{% block body_js %}
   <script>
     const graphRenderStart = performance.now();
 
@@ -180,7 +174,7 @@
       d.predicted_fpts_from_present = +d.predicted_fpts_from_present;
     });
 
-    var today = new Date(); today.setHours(0,0,0,0); today.setDate(today.getDate());
+    var today = new Date(); today.setHours(0,0,0,0);
     var team1Name = JSON.parse('{{ data_team_stats_1[0]["team_name"] | tojson }}');
     var team2Name = JSON.parse('{{ data_team_stats_2[0]["team_name"] | tojson }}');
 
@@ -214,9 +208,8 @@
     svg.append("path").datum(team2FutureData)
       .attr("fill","none").attr("stroke","red").attr("stroke-width",2).style("stroke-dasharray","5, 5").attr("d", lineActual);
 
-    /* UNIFIED LEGEND (same as categories page) */
+    // Legend
     const legend = svg.append("g").attr("class", "chart-legend").attr("transform", "translate(0,-6)");
-    // left column
     legend.append("line").attr("x1", 0).attr("y1", 10).attr("x2", 20).attr("y2", 10)
       .attr("stroke", "steelblue").attr("stroke-width", 1.8);
     legend.append("text").attr("x", 25).attr("y", 10).attr("alignment-baseline", "middle")
@@ -225,7 +218,6 @@
       .attr("stroke", "red").attr("stroke-width", 1.8);
     legend.append("text").attr("x", 25).attr("y", 26).attr("alignment-baseline", "middle")
       .text(team2Name + " (Actual)");
-    // right column
     const col2x = 180;
     legend.append("line").attr("x1", col2x).attr("y1", 10).attr("x2", col2x+20).attr("y2", 10)
       .attr("stroke", "steelblue").attr("stroke-width", 1.4).style("stroke-dasharray", "5,5");
@@ -247,5 +239,4 @@
       console.log(`Total page load time: ${(pageLoadEnd - pageLoadStart).toFixed(2)} ms`);
     });
   </script>
-</body>
-</html>
+{% endblock body_js %}

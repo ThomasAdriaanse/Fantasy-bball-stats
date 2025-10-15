@@ -44,8 +44,8 @@ body {
 
 /* Tables */
 .table-container{ display:grid; grid-template-columns:1fr 1fr; gap:18px; width:100%; align-items:start; }
-.table-wrapper{ max-width:none; min-width:0; overflow-x:auto; }
-table.data-table{ width:100%; border-collapse:collapse; color:#e8eefc; font-size:14px; background:#0b0e14; border:1px solid rgba(255,255,255,0.08); }
+.table-wrapper{ max-width:none; min-width:0; overflow-x:visible; }
+table.data-table{ width:100%; border-collapse:collapse; color:#e8eefc; font-size:14px; background:#0b0e14; border:1px solid rgba(255,255,255,0.08); table-layout: auto;}
 .data-table th,.data-table td{ border-bottom:1px solid rgba(255,255,255,0.08); padding:8px 10px; text-align:right; white-space:nowrap; }
 .data-table th:first-child,.data-table td:first-child{ text-align:left; }
 .data-table thead th{ background:#121722; font-weight:600; }
@@ -128,3 +128,75 @@ svg .domain, svg .tick line{ stroke:rgba(255,255,255,0.35); }
   background-repeat: repeat-x;
   background-color: transparent;
 }
+/* ====== ODDS (v2) — single centered bar per category ====== */
+.odds-card-v2 { padding: 16px 18px; }
+
+.odds-list-v2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0px;
+}
+
+/* Each row stacks: centered label -> full-width bar */
+.odds-item-v2 {
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: 0px;
+}
+
+.odds-label-v2 {
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: .2px;
+  opacity: .95;
+}
+
+/* Full-width bar — midpoint is exactly the visual center */
+.odds-bar-v2 {
+  position: relative;
+  height: 26px;
+  border-radius: 999px;
+  background: #0b0e14;
+  border: 1px solid rgba(255,255,255,0.12);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+/* Both sides visible (baseline softness) */
+.odds-left-v2,
+.odds-right-v2 {
+  position: absolute; top: 0; bottom: 0;
+}
+.odds-left-v2  { left: 0;  background: rgba(70,130,180,0.30); } /* steelblue, soft */
+.odds-right-v2 { right: 0; background: rgba(255,72,72,0.30); }  /* red, soft */
+
+/* Winner more intense; loser a bit more faded */
+.odds-bar-v2.winner-left  .odds-left-v2  { background: rgba(70,130,180,0.66); }
+.odds-bar-v2.winner-left  .odds-right-v2 { background: rgba(255,72,72,0.22); }
+
+.odds-bar-v2.winner-right .odds-right-v2 { background: rgba(255,72,72,0.66); }
+.odds-bar-v2.winner-right .odds-left-v2  { background: rgba(70,130,180,0.22); }
+
+/* Tie: small lift so both look equal and readable */
+.odds-bar-v2.is-tie .odds-left-v2,
+.odds-bar-v2.is-tie .odds-right-v2 { filter: brightness(1.06); }
+
+/* Midpoint marker at exact 50% */
+.odds-mid-v2 {
+  position: absolute; top: 0; bottom: 0; width: 1px; left: 50%;
+  background: rgba(255,255,255,0.14);
+  pointer-events: none;
+}
+
+/* Percent chips overlay the bar; don't shift layout */
+.odds-tag-v2 {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  font-size: 12px; line-height: 1; color: #e8eefc;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  pointer-events: none;
+}
+.odds-tag-v2.left  { left: 8px; }
+.odds-tag-v2.right { right: 8px; }
+
+.odds-tag-v2.strong { opacity: 0.98; font-weight: 600; }
+.odds-tag-v2.muted  { opacity: 0.62; }

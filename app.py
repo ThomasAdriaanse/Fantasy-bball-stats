@@ -337,9 +337,9 @@ def compare_page():
             team2_index = idx
 
     if team1_index == -1:
-        return redirect(url_for('entry_page', error_message="Team 1 not found. Please try again."))
+        return redirect(url_for('entry_page', error_message="Team 1 not found."))
     if team2_index == -1:
-        return redirect(url_for('entry_page', error_message="Team 2 not found. Please try again."))
+        return redirect(url_for('entry_page', error_message="Team 2 not found."))
 
     player_data_column_names = [
         'player_name','min','fgm','fga','fg%','ftm','fta','ft%','threeptm',
@@ -459,15 +459,15 @@ def select_teams_page():
         try:
             league = League(league_id=league_details['league_id'], year=league_details['year'])
         except (ESPNUnknownError, ESPNInvalidLeague):
-            return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
+            return redirect(url_for('entry_page', error_message="Invalid league entered."))
         except ESPNAccessDenied:
-            return redirect(url_for('entry_page', error_message="That is a private league which needs espn_s2 and SWID. Please try again."))
+            return redirect(url_for('entry_page', error_message="That is a private league which needs espn_s2 and SWID."))
     else:
         try:
             league = League(league_id=league_details['league_id'], year=league_details['year'],
                             espn_s2=league_details['espn_s2'], swid=league_details['swid'])
         except ESPNUnknownError:
-            return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
+            return redirect(url_for('entry_page', error_message="Invalid league entered."))
 
     matchup_date_data = get_matchup_dates(league, year)
     teams_list = [team.team_name for team in league.teams]
