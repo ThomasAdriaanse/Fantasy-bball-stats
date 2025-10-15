@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from psycopg2 import extras
 import compare_page.compare_page_data as cpd
 import compare_page.team_stats_data as tsd
+import compare_page.team_cat_averages as tca
 from scipy.stats import norm
 from espn_api.basketball import League
 from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, ESPNInvalidLeague
@@ -49,16 +50,58 @@ def _parse_league_details_from_request(req):
 
 
 def _store_league_details(details: dict):
-    """Write normalized league details into the session."""
+    """Write normalized league details into the session; always mark as modified."""
     if not details:
         return
-    session.permanent = True
-    session['league_details'] = {
-        'league_id': details.get('league_id'),
-        'year': int(details.get('year')) if details.get('year') is not None else None,
-        'espn_s2': details.get('espn_s2') or None,
-        'swid': details.get('swid') or None,
+    # Normalize
+    league_id = (details.get('league_id') or '').strip()
+    year = details.get('year')
+    try:
+        year = int(year) if year is not None else None
+    except (TypeError, ValueError):
+        year = None
+
+    new_payload = {
+        'league_id': league_id or None,
+        'year': year,
+        'espn_s2': (details.get('espn_s2') or None) or None,
+        'swid': (details.get('swid') or None) or None,
     }
+
+    session.permanent = True
+    session['league_details'] = new_payload
+    # Optional: keep a simple change token to detect flips (useful for debugging)
+    session['league_changed_at'] = datetime.utcnow().isoformat()
+    session.modified = True
+
+@app.before_request
+def _capture_league_from_request():
+    # Hard reset: /?reset=1
+    if request.args.get('reset') in ('1', 'true', 'True'):
+        session.pop('league_details', None)
+        session.modified = True
+        return  # don’t attempt to parse after reset
+
+    # Legacy ?info=league,year,espn_s2,swid → ALWAYS override if present
+    if 'info' in request.args:
+        parts = request.args.get('info', '').split(',')
+        if len(parts) >= 2:
+            try:
+                year = int(parts[1])
+            except Exception:
+                year = None
+            legacy = {
+                'league_id': parts[0] if parts and parts[0] else None,
+                'year': year,
+                'espn_s2': parts[2] or None if len(parts) > 2 else None,
+                'swid'   : parts[3] or None if len(parts) > 3 else None,
+            }
+            _store_league_details(legacy)
+
+    # Explicit form/query params take precedence if both league_id and year exist
+    explicit = _parse_league_details_from_request(request)
+    if explicit and explicit.get('league_id') and explicit.get('year'):
+        _store_league_details(explicit)
 
 
 def get_matchup_dates(league, league_year):
@@ -471,50 +514,21 @@ def compare_page():
 
 @app.route('/select_teams_page')
 def select_teams_page():
-    # 0) Optional hard reset (?reset=1)
-    if request.args.get('reset') in ('1', 'true', 'True'):
-        session.pop('league_details', None)
-
-    # 1) If explicit league params are present, they OVERRIDE the session
-    new_details = _parse_league_details_from_request(request)
-    if new_details:
-        _store_league_details(new_details)
-
-    # 2) Else, legacy `?info=` path can populate/override
-    elif 'info' in request.args and not session.get('league_details'):
-        info_string = request.args.get('info', '')
-        parts = info_string.split(',')
-        try:
-            year = int(parts[1])
-            legacy = {
-                'league_id': parts[0],
-                'year': year,
-                'espn_s2': parts[2] or None if len(parts) > 2 else None,
-                'swid'   : parts[3] or None if len(parts) > 3 else None,
-            }
-            _store_league_details(legacy)
-        except Exception:
-            return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
-
-    # 3) Finally, use whatever is in session
-    league_details = session.get('league_details')
-    if not league_details or not league_details.get('league_id') or not league_details.get('year'):
+    # by now, before_request has already applied ?info= or explicit params if present
+    league_details = session.get('league_details') or {}
+    if not league_details.get('league_id') or not league_details.get('year'):
         return redirect(url_for('entry_page', error_message="Enter your league first."))
 
-    # Build League object (unchanged)
     try:
-        if league_details.get('espn_s2') and league_details.get('swid'):
-            league = League(
-                league_id=league_details['league_id'],
-                year=league_details['year'],
-                espn_s2=league_details['espn_s2'],
-                swid=league_details['swid']
-            )
-        else:
-            league = League(
-                league_id=league_details['league_id'],
-                year=league_details['year']
-            )
+        league = League(
+            league_id=league_details['league_id'],
+            year=league_details['year'],
+            espn_s2=league_details.get('espn_s2'),
+            swid=league_details.get('swid')
+        ) if (league_details.get('espn_s2') and league_details.get('swid')) else League(
+            league_id=league_details['league_id'],
+            year=league_details['year']
+        )
     except (ESPNUnknownError, ESPNInvalidLeague):
         return redirect(url_for('entry_page', error_message="Invalid league entered."))
     except ESPNAccessDenied:
@@ -522,7 +536,6 @@ def select_teams_page():
     except Exception as e:
         return redirect(url_for('entry_page', error_message=str(e)))
 
-    # Build page data (unchanged)
     year = league_details['year']
     matchup_date_data = get_matchup_dates(league, year)
     teams_list = [team.team_name for team in league.teams]
@@ -543,14 +556,68 @@ def select_teams_page():
 
 
 
+
 @app.route('/process', methods=['POST'])
 def process_information():
     details = _parse_league_details_from_request(request)
-    if not details:
+    if not details or not details.get('league_id') or not details.get('year'):
         return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
     _store_league_details(details)
     return redirect(url_for('select_teams_page'))
 
+
+@app.get('/punting_overview')
+def punting_overview():
+    # accept overrides via query like the rest of your app
+    new_details = _parse_league_details_from_request(request)
+    if new_details:
+        _store_league_details(new_details)
+
+    league_details = session.get('league_details') or {}
+    league_id = league_details.get('league_id')
+    year      = league_details.get('year')
+    espn_s2   = league_details.get('espn_s2')
+    swid      = league_details.get('swid')
+
+    if not league_id or not year:
+        return redirect(url_for('entry_page', error_message="Enter your league first."))
+
+    stat_window = (request.args.get('stat_window') or 'projected').strip().lower().replace('-', '_')
+
+    try:
+        league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid) if espn_s2 and swid \
+                 else League(league_id=league_id, year=year)
+    except (ESPNUnknownError, ESPNInvalidLeague, ESPNAccessDenied) as e:
+        return redirect(url_for('entry_page', error_message=str(e)))
+
+    data = tca._team_category_averages(league, year, stat_window=stat_window)
+    # Render template with embedded JSON
+    return render_template('punting_overview.html',
+                           league_id=league_id, year=year,
+                           stat_window=stat_window,
+                           data_json=json.dumps(data))
+
+@app.get('/api/punting_overview')
+def api_punting_overview():
+    league_details = session.get('league_details') or {}
+    league_id = league_details.get('league_id')
+    year      = league_details.get('year')
+    espn_s2   = league_details.get('espn_s2')
+    swid      = league_details.get('swid')
+
+    if not league_id or not year:
+        return jsonify({'error': 'No league in session'}), 400
+
+    stat_window = (request.args.get('stat_window') or 'projected').strip().lower().replace('-', '_')
+
+    try:
+        league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid) if espn_s2 and swid \
+                 else League(league_id=league_id, year=year)
+    except (ESPNUnknownError, ESPNInvalidLeague, ESPNAccessDenied) as e:
+        return jsonify({'error': str(e)}), 400
+
+    data = tca._team_category_averages(league, year, stat_window=stat_window)
+    return jsonify(data)
 
 
 if __name__ == '__main__':
