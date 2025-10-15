@@ -1,22 +1,29 @@
 name: CI/CD Pipeline
 
 on:
-  push:
-    branches: [ main ]
+  # Build/test on PRs targeting main (no deploy)
   pull_request:
     branches: [ main ]
+    types: [opened, synchronize, reopened, closed]
+
+  # Optional manual trigger
+  workflow_dispatch:
+
+concurrency:
+  group: cicd-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build:
+  pr-build:
+    # Run for PR open/update (NOT for closed). Useful to catch issues early.
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      # (Recommended) Use AWS credentials action instead of manual aws configure
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -25,70 +32,90 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Log in to Amazon ECR
-        id: ecr-login
+        id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build Docker image
+      - name: Build (PR validation only; no deploy)
         run: |
-          IMAGE="${{ steps.ecr-login.outputs.registry }}/fantasybballstats"
-          TAG="${{ github.sha }}"
+          IMAGE="${{ steps.ecr.outputs.registry }}/fantasybballstats"
+          TAG="pr-${{ github.event.pull_request.head.sha }}"
           docker build -t "$IMAGE:$TAG" .
+          # Optional: push to ECR for cache/use in reviews (comment out if you prefer)
+          docker push "$IMAGE:$TAG"
 
-      # Only push images on pushes to main (skip for PRs)
-      - name: Push Docker image to ECR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  deploy_on_merge:
+    # Only run when a PR to main is CLOSED and actually MERGED
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Determine merge commit
+        id: meta
         run: |
-          IMAGE="${{ steps.ecr-login.outputs.registry }}/fantasybballstats"
-          TAG="${{ github.sha }}"
+          echo "merge_sha=${{ github.event.pull_request.merge_commit_sha }}" >> $GITHUB_OUTPUT
+
+      - name: Checkout merge commit (the code that actually landed on main)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.merge_sha }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & Push image for merge commit
+        run: |
+          IMAGE="${{ steps.ecr.outputs.registry }}/fantasybballstats"
+          TAG="${{ steps.meta.outputs.merge_sha }}"
+          docker build -t "$IMAGE:$TAG" .
           docker tag "$IMAGE:$TAG" "$IMAGE:latest"
           docker push "$IMAGE:$TAG"
           docker push "$IMAGE:latest"
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    # 🚦 Gate deployments so they only run on push to main
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-    # SSH to EC2 instance and pull the new image from ECR
-    - name: SSH and Deploy to EC2
-      uses: appleboy/ssh-action@v0.1.7
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
-        key: ${{ secrets.EC2_PEM_KEY }}
-        script: |
-          set -euo pipefail
-          REG=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-          REPO="$REG/fantasybballstats"
-          IMG="$REPO:latest"
-        
-          # ECR login
-          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
-            | docker login --username AWS --password-stdin "$REG"
-        
-          # Stop & remove the running container
-          docker rm -f fantasy_scraper_container || true
-        
-          # Remove ALL local images for this repo to free disk (safe since the container is gone)
-          docker images --filter="reference=$REPO:*" -q | xargs -r docker rmi -f || true
-        
-          # General prune to sweep any other cruft
-          docker system prune -af --volumes || true
-        
-          # Pull fresh
-          docker pull "$IMG"
-        
-          # Run with capped logs so they don't fill disk
-          docker run -d --name fantasy_scraper_container -p 5000:5000 \
-            --log-opt max-size=10m --log-opt max-file=3 \
-            -e FLASK_ENV=production \
-            -e S3_BUCKET=fantasy-stats-dev \
-            -e S3_PREFIX=dev/players/ \
-            -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }} \
-            "$IMG"
+      - name: SSH and Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_PEM_KEY }}
+          script: |
+            set -euo pipefail
+            REG=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+            REPO="$REG/fantasybballstats"
+            SHA="${{ steps.meta.outputs.merge_sha }}"
+            IMG="$REPO:$SHA"
 
-          # restart nginx to update website
-          sudo systemctl restart nginx
+            # Ensure AWS CLI & Docker login to ECR work on the instance
+            aws --version || true
+            docker --version
+
+            aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
+              | docker login --username AWS --password-stdin "$REG"
+
+            docker rm -f fantasy_scraper_container || true
+            docker images --filter="reference=$REPO:*" -q | xargs -r docker rmi -f || true
+            docker system prune -af --volumes || true
+
+            docker pull "$IMG"
+            docker run -d --name fantasy_scraper_container -p 5000:5000 \
+              --log-opt max-size=10m --log-opt max-file=3 \
+              -e FLASK_ENV=production \
+              -e S3_BUCKET=fantasy-stats-dev \
+              -e S3_PREFIX=dev/players/ \
+              -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }} \
+              "$IMG"
+
+            sudo systemctl restart nginx
