@@ -19,7 +19,6 @@ S3_BUCKET = os.getenv("S3_BUCKET", "fantasy-stats-dev")
 S3_PREFIX = os.getenv("S3_PREFIX", "dev/players/")  # includes trailing slash
 AWS_REGION = os.getenv("AWS_REGION", "ca-central-1")
 
-from nba_api.stats.static import players
 import json
 import time
 from pprint import pprint
@@ -27,9 +26,40 @@ from datetime import datetime, timedelta, date
 
 load_dotenv()
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
-
+app.secret_key = os.environ.get("SECRET_KEY", "dev-not-secret-change-me")
+app.permanent_session_lifetime = timedelta(days=1)
 # ---------- Utilities ----------
+
+def _parse_league_details_from_request(req):
+    """Best-effort parse of league details from GET or POST."""
+    lid  = (req.values.get('league_id') or "").strip()
+    yr   = (req.values.get('year') or "").strip()
+    s2   = (req.values.get('espn_s2') or "").strip() or None
+    swid = (req.values.get('swid') or "").strip() or None
+
+    if not lid or not yr:
+        return None  # insufficient to override
+
+    try:
+        yr = int(yr)
+    except ValueError:
+        return None
+
+    return {'league_id': lid, 'year': yr, 'espn_s2': s2, 'swid': swid}
+
+
+def _store_league_details(details: dict):
+    """Write normalized league details into the session."""
+    if not details:
+        return
+    session.permanent = True
+    session['league_details'] = {
+        'league_id': details.get('league_id'),
+        'year': int(details.get('year')) if details.get('year') is not None else None,
+        'espn_s2': details.get('espn_s2') or None,
+        'swid': details.get('swid') or None,
+    }
+
 
 def get_matchup_dates(league, league_year):
     """Generate matchup date data for all matchup periods in the league"""
@@ -94,6 +124,13 @@ def entry_page():
 
 @app.route('/player_stats', methods=['GET', 'POST'])
 def player_stats():
+    
+    
+    # --- Prefer explicit request values over existing session ---
+    new_details = _parse_league_details_from_request(request)
+    if new_details:
+        _store_league_details(new_details)
+
     num_games = 20
     selected_player = 'Bol Bol'
     selected_stat = 'FPTS'
@@ -303,6 +340,8 @@ def compare_page():
     scoring_type = request.form.get('scoring_type')
     week_num = int(request.form.get('week_num'))
 
+    _store_league_details({'league_id': league_id, 'year': year, 'espn_s2': espn_s2, 'swid': swid})
+
     print(f"Processing league with scoring type: {scoring_type}, stat_window={stat_window}")
 
     try:
@@ -432,65 +471,87 @@ def compare_page():
 
 @app.route('/select_teams_page')
 def select_teams_page():
-    info_string = request.args.get('info', '')
-    info_list = info_string.split(',') if info_string else []
+    # 0) Optional hard reset (?reset=1)
+    if request.args.get('reset') in ('1', 'true', 'True'):
+        session.pop('league_details', None)
 
+    # 1) If explicit league params are present, they OVERRIDE the session
+    new_details = _parse_league_details_from_request(request)
+    if new_details:
+        _store_league_details(new_details)
+
+    # 2) Else, legacy `?info=` path can populate/override
+    elif 'info' in request.args and not session.get('league_details'):
+        info_string = request.args.get('info', '')
+        parts = info_string.split(',')
+        try:
+            year = int(parts[1])
+            legacy = {
+                'league_id': parts[0],
+                'year': year,
+                'espn_s2': parts[2] or None if len(parts) > 2 else None,
+                'swid'   : parts[3] or None if len(parts) > 3 else None,
+            }
+            _store_league_details(legacy)
+        except Exception:
+            return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
+
+    # 3) Finally, use whatever is in session
+    league_details = session.get('league_details')
+    if not league_details or not league_details.get('league_id') or not league_details.get('year'):
+        return redirect(url_for('entry_page', error_message="Enter your league first."))
+
+    # Build League object (unchanged)
     try:
-        year = int(info_list[1])
-    except:
-        return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
+        if league_details.get('espn_s2') and league_details.get('swid'):
+            league = League(
+                league_id=league_details['league_id'],
+                year=league_details['year'],
+                espn_s2=league_details['espn_s2'],
+                swid=league_details['swid']
+            )
+        else:
+            league = League(
+                league_id=league_details['league_id'],
+                year=league_details['year']
+            )
+    except (ESPNUnknownError, ESPNInvalidLeague):
+        return redirect(url_for('entry_page', error_message="Invalid league entered."))
+    except ESPNAccessDenied:
+        return redirect(url_for('entry_page', error_message="That is a private league which needs ESPN S2 and SWID."))
+    except Exception as e:
+        return redirect(url_for('entry_page', error_message=str(e)))
 
-    if len(info_list) == 4:
-        league_details = {
-            'league_id': info_list[0],
-            'year': year,
-            'espn_s2': info_list[2],
-            'swid': info_list[3]
-        }
-    else:
-        league_details = {
-            'league_id': info_list[0],
-            'year': year,
-            'espn_s2': None,
-            'swid': None
-        }
-    
-    if league_details['espn_s2'] is None:
-        try:
-            league = League(league_id=league_details['league_id'], year=league_details['year'])
-        except (ESPNUnknownError, ESPNInvalidLeague):
-            return redirect(url_for('entry_page', error_message="Invalid league entered."))
-        except ESPNAccessDenied:
-            return redirect(url_for('entry_page', error_message="That is a private league which needs espn_s2 and SWID."))
-    else:
-        try:
-            league = League(league_id=league_details['league_id'], year=league_details['year'],
-                            espn_s2=league_details['espn_s2'], swid=league_details['swid'])
-        except ESPNUnknownError:
-            return redirect(url_for('entry_page', error_message="Invalid league entered."))
-
+    # Build page data (unchanged)
+    year = league_details['year']
     matchup_date_data = get_matchup_dates(league, year)
     teams_list = [team.team_name for team in league.teams]
     form_data = session.pop('form_data', {})
 
-    return render_template('select_teams_page.html', 
-                          info_list=teams_list, 
-                          **league_details, 
-                          form_data=form_data, 
-                          scoring_type=league.settings.scoring_type,
-                          matchup_data_dict=matchup_date_data,
-                          current_matchup=league.currentMatchupPeriod)
+    return render_template(
+        'select_teams_page.html',
+        info_list=teams_list,
+        league_id=league_details['league_id'],
+        year=league_details['year'],
+        espn_s2=league_details.get('espn_s2'),
+        swid=league_details.get('swid'),
+        form_data=form_data,
+        scoring_type=league.settings.scoring_type,
+        matchup_data_dict=matchup_date_data,
+        current_matchup=league.currentMatchupPeriod
+    )
+
+
 
 @app.route('/process', methods=['POST'])
 def process_information():
-    league_id = request.form.get('league_id')
-    year = request.form.get('year')
-    espn_s2 = request.form.get('espn_s2')
-    swid = request.form.get('swid')
+    details = _parse_league_details_from_request(request)
+    if not details:
+        return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
+    _store_league_details(details)
+    return redirect(url_for('select_teams_page'))
 
-    info_list = [league_id, year, espn_s2, swid]
-    info_string = ','.join(filter(None, info_list))
-    return redirect(url_for('select_teams_page', info=info_string))
+
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
