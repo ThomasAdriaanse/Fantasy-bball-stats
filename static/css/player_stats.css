@@ -1,0 +1,54 @@
+/* Page container */
+.body-container { max-width: 60vw; margin: 0 auto; }
+
+/* Cards specific to Player Stats */
+.controls-card,
+.chart-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+  margin-bottom: 18px;
+}
+
+/* Controls layout */
+.controls-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 280px 240px auto;
+  gap: 50px;
+  align-items: end;
+}
+.controls-grid label { display: block; font-size: 15px; margin-bottom: 6px; opacity: 0.9; }
+
+/* Submit button inside controls */
+.controls-grid button {
+  padding: 13px 18px; border-radius: 10px; border: 1px solid #b32626;
+  background: linear-gradient(180deg, #ff4d4d, var(--accent-2));
+  color: #fff; cursor: pointer;
+  transition: transform .2s ease, box-shadow .2s ease, filter .15s ease;
+  font-size: 15px; letter-spacing: .2px;
+}
+.controls-grid button:hover {
+  transform: translateY(-1px); box-shadow: 0 10px 25px rgba(214,40,40,.35); filter: brightness(1.05);
+}
+
+/* Chart / D3 styles */
+#chart svg { display: block; width: 100%; height: auto; }
+#chart .axis text { font-size: 18px; fill: var(--text); }
+#chart .axis path,
+#chart .axis line { stroke: rgba(255,255,255,.35); stroke-width: 1.25; }
+
+.season-lines line { shape-rendering: crispEdges; }
+.season-lines text { font-size: 24px; fill: #1bb01b; }
+
+.team-ticks line { shape-rendering: crispEdges; }
+
+.legend {
+  display: flex; gap: 22px; align-items: center;
+  margin-top: 12px; opacity: 0.95; font-size: 16px; flex-wrap: wrap;
+}
+.legend .swatch { width: 26px; height: 4px; border-radius: 2px; display: inline-block; }
+.legend .swatch.blue  { background: steelblue; }
+.legend .swatch.green { background: #1bb01b; height: 14px; width: 3px; }
+.legend .swatch.red   { background: red; height: 14px; width: 3px; }

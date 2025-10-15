@@ -23,7 +23,7 @@ from nba_api.stats.static import players
 import json
 import time
 from pprint import pprint
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 load_dotenv()
 app = Flask(__name__)
@@ -31,15 +31,20 @@ app.secret_key = os.urandom(24)
 
 # ---------- Utilities ----------
 
-def get_matchup_dates(league):
+def get_matchup_dates(league, league_year):
     """Generate matchup date data for all matchup periods in the league"""
-    today = datetime.today()
+    
+    today = date.today()
     current_year = today.year
 
-    if today > datetime(current_year, 3, 30) and today < datetime(current_year, 10, 20):
-        season_start = datetime(2025, 4, 13).date() - timedelta(days=league.scoringPeriodId)
+    if league_year < 2026:
+        #if today > datetime(current_year, 3, 30) and today < datetime(current_year, 10, 20):
+        season_start = date(2025, 4, 13) - timedelta(days=league.scoringPeriodId)
     else:
-        season_start = today - timedelta(days=league.scoringPeriodId)
+        if today < date(2025, 10, 20):
+            season_start = date(2025, 10, 20)        
+        else:
+            season_start = today - timedelta(days=league.scoringPeriodId)
     
     matchupperiods = league.settings.matchup_periods
     first_scoring_period = league.firstScoringPeriod
@@ -141,8 +146,6 @@ def data_player_stats_json():
     stat        = request.args.get('stat', 'FPTS')
     data = build_chart_data(player_name, num_games, stat)
     return jsonify(data)
-
-
 
 def _safe_filename(name: str) -> str:
     """lowercase-and-underscore a name to match your exported filenames"""
@@ -252,7 +255,6 @@ def calculate_fantasy_points(row, scoring_rules):
             row['TOV'] * scoring_rules['turno'] +
             row['PTS'] * scoring_rules['pts'])
     return fpts
-
 @app.route('/compare_page', methods=['POST'])
 def compare_page():
     start_time = time.time()
@@ -269,7 +271,6 @@ def compare_page():
         blk = int(request.form.get('blk', 4))
         turno = int(request.form.get('turno', -2))
         pts = int(request.form.get('pts', 1))
-
     except (ValueError, TypeError):
         flash("Invalid input. Please ensure all stats are numbers.")
         league_id = request.form.get('league_id')
@@ -281,13 +282,18 @@ def compare_page():
         info_string = ','.join(filter(None, info_list))
         session['form_data'] = request.form.to_dict()
         return redirect(url_for('select_teams_page', info=info_string, scoring_type=scoring_type))
-    
+
+    # One stat window for BOTH teams (from the form)
+    raw_window = (request.form.get('stat_window') or 'projected').strip().lower().replace('-', '_')
+    VALID_WINDOWS = {'projected', 'total', 'last_30', 'last_15', 'last_7'}
+    stat_window = raw_window if raw_window in VALID_WINDOWS else 'projected'
+
     league_scoring_rules = {
         'fgm': fgm, 'fga': fga, 'ftm': ftm, 'fta': fta,
         'threeptm': threeptm, 'reb': reb, 'ast': ast, 'stl': stl,
         'blk': blk, 'turno': turno, 'pts': pts,
     }
-        
+
     my_team_name = request.form.get('myTeam')
     opponents_team_name = request.form.get('opponentsTeam')
     league_id = request.form.get('league_id')
@@ -296,15 +302,16 @@ def compare_page():
     swid = request.form.get('swid')
     scoring_type = request.form.get('scoring_type')
     week_num = int(request.form.get('week_num'))
-    
-    print(f"Processing league with scoring type: {scoring_type}")
-    
+
+    print(f"Processing league with scoring type: {scoring_type}, stat_window={stat_window}")
+
     try:
         if espn_s2 and swid:
             league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
         else:
             league = League(league_id=league_id, year=year)
-        matchup_data_dict = get_matchup_dates(league)
+
+        matchup_data_dict = get_matchup_dates(league, year)
         selected_week_key = f'matchup_{week_num}'
         week_data = {
             "selected_week": week_num,
@@ -320,88 +327,108 @@ def compare_page():
         print(f"Error initializing league: {str(e)}")
         return redirect(url_for('entry_page', error_message=str(e)))
 
+    # Find team indices
     team1_index = -1
     team2_index = -1
-
-    count = 0
-    for i in league.teams:
-        if i.team_name == my_team_name:
-            team1_index = count
-        if i.team_name == opponents_team_name:
-            team2_index = count
-        count += 1
+    for idx, t in enumerate(league.teams):
+        if t.team_name == my_team_name:
+            team1_index = idx
+        if t.team_name == opponents_team_name:
+            team2_index = idx
 
     if team1_index == -1:
-        return redirect(url_for('entry_page', error_message="Team 1 not found. Please try again."))
+        return redirect(url_for('entry_page', error_message="Team 1 not found."))
     if team2_index == -1:
-        return redirect(url_for('entry_page', error_message="Team 2 not found. Please try again."))
-    
-    player_data_column_names = ['player_name', 'min', 'fgm', 'fga', 'fg%', 'ftm', 'fta', 'ft%', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts', 'inj', 'fpts', 'games']
+        return redirect(url_for('entry_page', error_message="Team 2 not found."))
+
+    player_data_column_names = [
+        'player_name','min','fgm','fga','fg%','ftm','fta','ft%','threeptm',
+        'reb','ast','stl','blk','turno','pts','inj','fpts','games'
+    ]
 
     if scoring_type == "H2H_POINTS":
-        team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, year, league_scoring_rules, week_data)
-        team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, year, league_scoring_rules, week_data)
+        # Use the SAME stat_window for both teams
+        team1_player_data = cpd.get_team_player_data(
+            league, team1_index, player_data_column_names, year,
+            league_scoring_rules, week_data, stat_window=stat_window
+        )
+        team2_player_data = cpd.get_team_player_data(
+            league, team2_index, player_data_column_names, year,
+            league_scoring_rules, week_data, stat_window=stat_window
+        )
 
-        team_data_column_names = ['team_avg_fpts', 'team_expected_points', 'team_chance_of_winning', 'team_name', 'team_current_points']
-        team1_data, team2_data = tsd.get_team_stats(league, team1_index, team1_player_data, team2_index, team2_player_data, team_data_column_names, league_scoring_rules, year, week_data)
+        team_data_column_names = [
+            'team_avg_fpts', 'team_expected_points', 'team_chance_of_winning',
+            'team_name', 'team_current_points'
+        ]
+        team1_data, team2_data = tsd.get_team_stats(
+            league, team1_index, team1_player_data,
+            team2_index, team2_player_data,
+            team_data_column_names, league_scoring_rules, year, week_data
+        )
 
-        combined_df = cpd.get_compare_graph(league, team1_index, team1_player_data, team2_index, team2_player_data, year, week_data)
+        combined_df = cpd.get_compare_graph(
+            league, team1_index, team1_player_data,
+            team2_index, team2_player_data, year, week_data
+        )
         combined_json = combined_df.to_json(orient='records')
 
-        team1_player_data = team1_player_data.to_dict(orient='records')
-        team2_player_data = team2_player_data.to_dict(orient='records')
-        team1_data = team1_data.to_dict(orient='records')
-        team2_data = team2_data.to_dict(orient='records')
+        return render_template(
+            'compare_page.html',
+            data_team_players_1=team1_player_data.to_dict(orient='records'),
+            data_team_players_2=team2_player_data.to_dict(orient='records'),
+            data_team_stats_1=team1_data.to_dict(orient='records'),
+            data_team_stats_2=team2_data.to_dict(orient='records'),
+            combined_json=combined_json,
+            scoring_type="H2H_POINTS",
+            week_data=week_data,
+            stat_window=stat_window,
+        )
 
-        return render_template('compare_page.html', 
-                            data_team_players_1=team1_player_data, 
-                            data_team_players_2=team2_player_data, 
-                            data_team_stats_1=team1_data, 
-                            data_team_stats_2=team2_data,
-                            combined_json=combined_json,
-                            scoring_type="H2H_POINTS",
-                            week_data=week_data)
-    
     elif scoring_type in ["H2H_CATEGORY", "H2H_MOST_CATEGORIES"]:
-        team1_player_data = cpd.get_team_player_data(league, team1_index, player_data_column_names, year, league_scoring_rules, week_data)
-        team2_player_data = cpd.get_team_player_data(league, team2_index, player_data_column_names, year, league_scoring_rules, week_data)
-        
-        team1_data, team2_data, team1_win_pcts, team2_win_pcts, team1_current_stats, team2_current_stats = tsd.get_team_stats_categories(
-            league, team1_index, team1_player_data, team2_index, team2_player_data, 
+        # Use the SAME stat_window for both teams
+        team1_player_data = cpd.get_team_player_data(
+            league, team1_index, player_data_column_names, year,
+            league_scoring_rules, week_data, stat_window=stat_window
+        )
+        team2_player_data = cpd.get_team_player_data(
+            league, team2_index, player_data_column_names, year,
+            league_scoring_rules, week_data, stat_window=stat_window
+        )
+
+        (team1_data, team2_data,
+         team1_win_pcts, team2_win_pcts,
+         team1_current_stats, team2_current_stats) = tsd.get_team_stats_categories(
+            league, team1_index, team1_player_data,
+            team2_index, team2_player_data,
             league_scoring_rules, year, week_data
         )
 
         combined_dfs = cpd.get_compare_graphs_categories(
-            league, team1_index, team1_player_data, team2_index, team2_player_data, year, week_data
+            league, team1_index, team1_player_data,
+            team2_index, team2_player_data, year, week_data
         )
-
         combined_dicts = {cat: df.to_dict(orient='records') for cat, df in combined_dfs.items()}
 
-        team1_player_data = team1_player_data.to_dict(orient='records')
-        team2_player_data = team2_player_data.to_dict(orient='records')
-        team1_data = team1_data.to_dict(orient='records')
-        team2_data = team2_data.to_dict(orient='records')
-
-        team1_win_pct_data = team1_win_pcts.to_dict(orient='records')
-        team2_win_pct_data = team2_win_pcts.to_dict(orient='records')
-
         return render_template(
-            'compare_page_cat.html', 
-            data_team_players_1=team1_player_data, 
-            data_team_players_2=team2_player_data, 
-            data_team_stats_1=team1_data, 
-            data_team_stats_2=team2_data,
-            team1_win_pct_data=team1_win_pct_data,
-            team2_win_pct_data=team2_win_pct_data,
+            'compare_page_cat.html',
+            data_team_players_1=team1_player_data.to_dict(orient='records'),
+            data_team_players_2=team2_player_data.to_dict(orient='records'),
+            data_team_stats_1=team1_data.to_dict(orient='records'),
+            data_team_stats_2=team2_data.to_dict(orient='records'),
+            team1_win_pct_data=team1_win_pcts.to_dict(orient='records'),
+            team2_win_pct_data=team2_win_pcts.to_dict(orient='records'),
             team1_current_stats=team1_current_stats,
             team2_current_stats=team2_current_stats,
             combined_jsons=combined_dicts,
             scoring_type=scoring_type,
-            week_data=week_data
+            week_data=week_data,
+            stat_window=stat_window,
         )
-    
+
     print(f"Unrecognized scoring type: {scoring_type}")
     return redirect(url_for('entry_page', error_message=f"Unsupported scoring type: {scoring_type}"))
+
 
 @app.route('/select_teams_page')
 def select_teams_page():
@@ -432,17 +459,17 @@ def select_teams_page():
         try:
             league = League(league_id=league_details['league_id'], year=league_details['year'])
         except (ESPNUnknownError, ESPNInvalidLeague):
-            return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
+            return redirect(url_for('entry_page', error_message="Invalid league entered."))
         except ESPNAccessDenied:
-            return redirect(url_for('entry_page', error_message="That is a private league which needs espn_s2 and SWID. Please try again."))
+            return redirect(url_for('entry_page', error_message="That is a private league which needs espn_s2 and SWID."))
     else:
         try:
             league = League(league_id=league_details['league_id'], year=league_details['year'],
                             espn_s2=league_details['espn_s2'], swid=league_details['swid'])
         except ESPNUnknownError:
-            return redirect(url_for('entry_page', error_message="Invalid league entered. Please try again."))
+            return redirect(url_for('entry_page', error_message="Invalid league entered."))
 
-    matchup_date_data = get_matchup_dates(league)
+    matchup_date_data = get_matchup_dates(league, year)
     teams_list = [team.team_name for team in league.teams]
     form_data = session.pop('form_data', {})
 

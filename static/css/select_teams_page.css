@@ -1,312 +1,237 @@
-body {
+/* === Keep your current layout; only colors + minor spacing fixes === */
+
+/* Use base theme tokens */
+:root{
+    --bg: #0b0e14;
+    --card: #10131a;
+    --text: #e8eefc;
+    --muted: rgba(232,238,252,.75);
+    --border: rgba(255,255,255,.10);
+    --border-strong: rgba(255,255,255,.18);
+    --accent: steelblue;
+    --accent-2: #d62828;
+  }
+  
+  /* Body: same structure, just colors from theme */
+  body {
     font-family: Arial, sans-serif;
-    background-color: #1c1c1c;
+    background-color: var(--bg);
     margin: 0;
     padding: 0;
     display: flex;
     justify-content: center;
-    flex-direction: column; 
-    color: #f5f5f5;
-}
-
-/* Container styling from the first page */
-.container {
-    background-color: #2a2a2a;
+    flex-direction: column;
+    color: var(--text);
+  }
+  
+  /* Prevent header from feeling “cut off” under sticky nav */
+  h1 { 
+    text-align: center;
+    font-size: 24px;
+    color: #ff4c4c;        /* keep your red title color */
+    margin-top: 14px;      /* add a little space below the nav */
+  }
+  
+  /* Container from first page: just colors */
+  .container {
+    background-color: var(--card);
     padding: 20px;
     border-radius: 10px;
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
     width: 100%;
     max-width: 500px;
-}
-
-.body-container {
-    align-items: center;
-}
-
-/* Heading styles from both pages, prioritizing the first page */
-h1 {
-    text-align: center;
-    font-size: 24px;
-    color: #ff4c4c;
-    margin-top: 20px; /* Added margin-top from the second page */
-}
-
-/* Form and input styles from the first page */
-form {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-label {
-    margin-top: 10px;
-    font-weight: bold;
-    color: #cccccc;
-}
-
-input[type="text"] {
+  }
+  
+  .body-container { align-items: center; }
+  
+  /* Form + inputs: theme colors */
+  form { display: flex; flex-direction: column; align-items: center; }
+  
+  label { margin-top: 10px; font-weight: bold; color: var(--muted); }
+  
+  input[type="text"] {
     padding: 10px;
-    margin-top: 5px;
-    margin-bottom: 15px;
-    border: 1px solid #444;
+    margin-top: 5px; margin-bottom: 15px;
+    border: 1px solid var(--border);
     border-radius: 5px;
     font-size: 16px;
-    background-color: #333;
-    color: #f5f5f5;
-}
-
-input[type="text"]:focus {
-    border-color: #ff4c4c;
-    outline: none;
-}
-
-/* Remove overlap - apply only to submit buttons or other generic buttons */
-input[type="submit"], button:not(.team-button) {
-    background-color: #ff4c4c;
-    color: white;
+    background-color: #0b0e14;
+    color: var(--text);
+  }
+  input[type="text"]:focus { border-color: #ff4c4c; outline: none; }
+  
+  /* Buttons (but not team buttons) — keep your style, align with theme */
+  input[type="submit"], button:not(.team-button) {
+    background: linear-gradient(180deg, #ff4d4d, var(--accent-2));
+    color: #fff;
     padding: 10px;
-    border: none;
-    border-radius: 5px;
+    border: 1px solid #b32626;
+    border-radius: 10px;
     cursor: pointer;
     font-size: 18px;
-    transition: background-color 0.3s, transform 0.3s;
-    margin-top: 20px; /* Added margin-top for buttons */
-}
-
-
-input[type="submit"]:hover, button[type="button"]:hover {
+    transition: background-color .3s, transform .3s, filter .15s, box-shadow .15s;
+    margin-top: 20px;
+  }
+  input[type="submit"]:hover, button[type="button"]:hover {
     background-color: #e04343;
     transform: translateY(-2px);
-}
-
-/* Note and error-message styles from the first page */
-.note {
-    font-size: 14px;
-    color: #aaaaaa;
-    margin-top: 20px;
-}
-
-.note b {
-    color: #f5f5f5;
-}
-
-.note u {
-    color: #ff4c4c;
-}
-
-.error-message {
-    text-align: center;
-    color: #ff4c4c; 
-    padding: 15px;
-}
-
-.error-message p {
-    margin: 0;
-}
-
-/* Teams container and team column styles from the second page */
-.teams-container {
+  }
+  
+  /* Notes + errors */
+  .note { font-size: 14px; color: var(--muted); margin-top: 20px; }
+  .note b { color: var(--text); }
+  .note u { color: #ff4c4c; }
+  
+  .error-message { text-align: center; color: #ff4c4c; padding: 15px; }
+  .error-message p { margin: 0; }
+  
+  /* Teams layout (unchanged) */
+  .teams-container {
     display: flex;
     justify-content: center;
     margin-top: 20px;
-}
-
-.team-column {
-    margin: 0 20px;
-}
-
-/* Team selector styles from the second page */
-.team-selector {
-    background-color: #2a2a2a;
+  }
+  .team-column { margin: 0 20px; }
+  
+  /* Section headers */
+  .team-selector {
+    background-color: var(--card);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 10px;
     margin-bottom: 10px;
-    color: white;
+    color: var(--text);
     font-weight: bold;
     text-align: center;
-}
-
-/* My team and opponent team styles from the second page */
-.my-team, .opponents-team {
-    background-color: #ff4c4c;
-}
-
-/* Team button styles from the second page */
-.team-button {
+  }
+  .my-team, .opponents-team {
+    background-color: #0f1219;
+    border-color: var(--border-strong);
+  }
+  
+  /* Team buttons: same layout, themed colors */
+  .team-button {
     display: block;
     padding: 10px;
     margin: 10px 0;
-    border: 1px solid #444;
-    border-radius: 5px;
-    background-color: #333;
-    color: #f5f5f5;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background-color: #0b0e14;
+    color: var(--text);
     cursor: pointer;
-    transition: background-color 0.3s, transform 0.3s;
-}
-
-.team-button:hover {
-    background-color: #555;
-    transform: translateY(-2px);
-}
-
-.team-selected-my, .team-selected-opponent {
-    background-color: #ff4c4c;
-    color: white;
-}
-
-/* Loading overlay styles from the second page */
-#loading {
+    transition: background-color .3s, transform .3s, border-color .15s;
+  }
+  .team-button:hover { background-color: rgba(255,255,255,.05); transform: translateY(-2px); }
+  
+  /* Selected buttons: subtle blue tint (like Player Stats) */
+  .team-selected-my, .team-selected-opponent {
+    background-color: rgba(70,130,180,.16);
+    color: var(--text);
+    border-color: rgba(70,130,180,.35);
+  }
+  
+  /* Loading overlay (unchanged; colors aligned) */
+  #loading {
     position: fixed;
-    width: 100%;
-    height: 100%;
-    top: 0;
-    left: 0;
+    width: 100%; height: 100%;
+    top: 0; left: 0;
     background-color: rgba(0, 0, 0, 0.8);
     z-index: 9999;
     display: none;
-    justify-content: center;
-    align-items: center;
-    font-size: 24px;
-    font-family: Arial, sans-serif;
+    justify-content: center; align-items: center;
+    font-size: 24px; font-family: Arial, sans-serif;
     color: #ff4c4c;
-}
-
-#loading:before {
+  }
+  #loading:before {
     content: "";
     border: 6px solid #f3f3f3;
     border-top: 6px solid #ff4c4c;
     border-radius: 50%;
-    width: 40px;
-    height: 40px;
+    width: 40px; height: 40px;
     animation: spin 1s linear infinite;
     margin-right: 10px;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-.main-container {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-}
-
-.scoring-area {
-    width: 400px;
-    margin-right: 20px;
-}
-
-.scoring-container {
-    display: flex;
-    flex-wrap: wrap;
-}
-
-.scoring-box {
-    width: 42%;
-    margin-bottom: 15px;
-    margin-right: 8%;
-}
-
-.scoring-box:nth-child(2n) {
-    margin-right: 0;
-}
-
-.scoring-box label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: bold;
-}
-
-.scoring-box input[type="text"] {
-    width: 100%;
-    padding: 5px;
-    border: 1px solid #444;
-    border-radius: 5px;
-    background-color: #333;
-    color: #f5f5f5;
-}
-
-h2 {
-    margin-bottom: 10px;
-}
-
-.teams-container {
-    flex-grow: 1;
-}
-
-.back-button {
-    background-color: #ff4c4c;
+  }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  
+  /* Scoring panel layout (unchanged) */
+  .main-container { display: flex; justify-content: space-between; align-items: flex-start; }
+  .scoring-area { width: 400px; margin-right: 20px; }
+  .scoring-container { display: flex; flex-wrap: wrap; justify-content:center; }
+  .scoring-box { width: 42%; margin-bottom: 0px; margin-right: 8%; }
+  .scoring-box:nth-child(2n) { margin-right: 0; }
+  .scoring-box label { display: block; margin-bottom: 5px; font-weight: bold; }
+  .scoring-box input[type="text"] {
+    width: 100%; padding: 5px;
+    border: 1px solid var(--border); border-radius: 5px;
+    background-color: #0b0e14; color: var(--text);
+  }
+  h2 { margin-bottom: 10px; }
+  .teams-container { flex-grow: 1; }
+  
+  /* Back button (kept as-is if visible) */
+  .back-button {
+    background: linear-gradient(180deg, #ff4d4d, var(--accent-2));
     color: white;
-    padding: 10px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 18px;
-    transition: background-color 0.3s, transform 0.3s;
-    text-decoration: none; /* Remove underline from the link */
-    display: inline-block; /* Ensure it takes up only the necessary space */
-    width: 45px;
-}
-
-/* Center the dropdown container */
-.dropdown-container {
-    text-align: center;
-    margin: 20px 0; /* Adjust if needed for spacing */
+    padding: 10px; border: 1px solid #b32626;
+    border-radius: 10px; cursor: pointer; font-size: 18px;
+    transition: background-color .3s, transform .3s, filter .15s, box-shadow .15s;
+    text-decoration: none;
+    display: inline-block; width: 45px;
   }
+  .back-button:hover { transform: translateY(-1px); box-shadow: 0 10px 25px rgba(214,40,40,.35); }
   
-  /* The dropdown itself is inline-block so it can be centered easily */
-  .dropdown {
-    display: inline-block;
-    position: relative;
-  }
+  /* Center the dropdown container (unchanged, just ensure it’s centered) */
+  .dropdown-container { text-align: center; margin: 20px 0; }
   
-  /* Dropdown button with fixed width */
+  /* Dropdown (week selector) stays the same, recolored; menu layered above */
+  .dropdown { display: inline-block; position: relative; }
   .dropbtn {
-    width: 200px;              /* Adjust as needed */
-    background-color: #ff4c4c; 
+    width: 200px;
+    background: linear-gradient(180deg, #ff4d4d, var(--accent-2));
     color: #fff;
-    padding: 10px;
-    font-size: 18px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background-color 0.3s, transform 0.3s;
+    padding: 10px; font-size: 18px;
+    border: 1px solid #b32626;
+    border-radius: 10px; cursor: pointer;
+    transition: background-color .3s, transform .3s, filter .15s, box-shadow .15s;
     text-align: center;
   }
+  .dropbtn:hover { background-color: #e04343; filter: brightness(1.05); transform: translateY(-2px); }
   
-  .dropbtn:hover {
-    background-color: #e04343;
-  }
-  
-  /* The dropdown menu is initially hidden */
   .dropdown-content {
     display: none;
-    position: absolute;   /* Positioned relative to the .dropdown */
-    top: 100%;            /* Appear directly below the button */
-    left: 0;             /* Left-align with the button */
-    width: 200px;         /* Match the button width */
-    background-color: #333;
-    border-radius: 5px;
+    position: absolute;
+    top: 100%; left: 0;
+    width: 200px;
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
-    z-index: 999;         /* Ensure it's on top of other elements */
+    z-index: 1100; /* ensure it sits above content and nav */
   }
-  
-  /* Each menu link */
   .dropdown-content a {
-    display: block;
-    color: #f5f5f5;
-    padding: 12px 16px;
-    text-decoration: none;
+    display: block; color: var(--text);
+    padding: 12px 16px; text-decoration: none;
+    border-top: 1px solid var(--border);
   }
-  
-  /* Hover effect for the menu items */
-  .dropdown-content a:hover {
-    background-color: #555;
-  }
-  
-  /* Show the dropdown on .dropdown hover */
-  .dropdown:hover .dropdown-content {
-    display: block;
-  }
-  
+  .dropdown-content a:first-child { border-top: none; }
+  .dropdown-content a:hover { background-color: rgba(255,255,255,.05); }
+  .dropdown:hover .dropdown-content { display: block; }
+  /* --- keep content from hiding under the sticky topnav --- */
+.page-wrap { padding-top: 64px; }          /* nudge page below nav */
+.page-wrap h1:first-child {
+margin-top: 0;                           /* prevent margin-collapsing with sticky header */
+padding-top: 8px;
+}
+
+/* --- center the week selector row --- */
+.dropdown-container {
+display: flex;
+justify-content: center;
+}
+
+/* --- center the "Compare Teams" button --- */
+#compareForm button[type="button"] {
+display: block;
+margin: 16px auto 0;                     /* center horizontally */
+}
+
