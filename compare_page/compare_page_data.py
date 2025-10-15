@@ -1,5 +1,4 @@
 import pandas as pd
-import db_utils
 from datetime import datetime, timedelta
 import time
 
@@ -189,7 +188,7 @@ def get_team_player_data(
             ]
         else:
             today_minus_8 = (datetime.today() - timedelta(hours=8)).date()
-            start_of_week, end_of_week = db_utils.range_of_current_week(today_minus_8)
+            start_of_week, end_of_week = range_of_current_week(today_minus_8)
             games_in_week = [
                 g for g in list_schedule
                 if today_minus_8 <= (g['date'] - timedelta(hours=5)).date() <= end_of_week
@@ -219,7 +218,7 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
         # Fall back to current week if no week_data provided
         today = datetime.today()
         today_minus_8 = (today-timedelta(hours=8)).date()
-        start_date, end_date = db_utils.range_of_current_week(today_minus_8)
+        start_date, end_date = range_of_current_week(today_minus_8)
         selected_matchup_period = league.currentMatchupPeriod
 
     # Create date range for the selected week
@@ -271,7 +270,7 @@ def get_compare_graph(league, team1_index, team1_player_data, team2_index, team2
     if week_data and 'matchup_data' in week_data:
         scoring_periods = week_data['matchup_data']['scoring_periods']
     else:
-        matchup_periods = db_utils.get_matchup_periods(league, selected_matchup_period)
+        matchup_periods = get_matchup_periods(league, selected_matchup_period)
         scoring_periods = []
         for matchup_period in matchup_periods:
             for i, date in enumerate(dates):
@@ -366,7 +365,7 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
         # Fall back to current week if no week_data provided
         today = datetime.today()
         today_minus_8 = (today-timedelta(hours=8)).date()
-        start_date, end_date = db_utils.range_of_current_week(today_minus_8)
+        start_date, end_date = range_of_current_week(today_minus_8)
         selected_matchup_period = league.currentMatchupPeriod
 
     team1 = league.teams[team1_index]
@@ -389,7 +388,7 @@ def get_compare_graphs_categories(league, team1_index, team1_player_data, team2_
     if week_data and 'matchup_data' in week_data:
         scoring_periods = week_data['matchup_data']['scoring_periods']
     else:
-        matchup_periods = db_utils.get_matchup_periods(league, selected_matchup_period)
+        matchup_periods = get_matchup_periods(league, selected_matchup_period)
         scoring_periods = []
         for matchup_period in matchup_periods:
             for i, date in enumerate(dates):
@@ -658,3 +657,12 @@ def get_team_boxscore_number(league, team, matchup_period=None):
             return index, "away"
 
     return "error"
+
+def range_of_current_week(date):
+    #today = datetime.today()
+    start_of_week = date - timedelta(days=date.weekday())
+    end_of_week = start_of_week + timedelta(days=6)
+    return start_of_week, end_of_week
+
+def get_matchup_periods(league, current_matchup_period):
+    return(league.settings.matchup_periods[str(current_matchup_period)])

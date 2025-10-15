@@ -2,7 +2,6 @@ import pandas as pd
 from scipy.stats import norm
 import compare_page.compare_page_data as cpd
 import time
-import db_utils
 
 def get_team_stats_data_schema():
     table_schema = """

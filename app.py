@@ -9,7 +9,6 @@ from scipy.stats import norm
 from espn_api.basketball import League
 from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, ESPNInvalidLeague
 import pandas as pd
-import db_utils
 import boto3
 from botocore.exceptions import ClientError
 # nba_api.stats.endpoints import playergamelog, playercareerstats, leaguegamefinder
