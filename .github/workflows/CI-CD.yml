@@ -50,25 +50,45 @@ jobs:
     # 🚦 Gate deployments so they only run on push to main
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - name: SSH and Deploy to EC2
-        uses: appleboy/ssh-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_PEM_KEY }}
-          script: |
-            # Login to ECR on the instance
-            aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
-            aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
-              | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+    # SSH to EC2 instance and pull the new image from ECR
+    - name: SSH and Deploy to EC2
+      uses: appleboy/ssh-action@v0.1.7
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_PEM_KEY }}
+        script: |
+          set -euo pipefail
+          REG=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+          REPO="$REG/fantasybballstats"
+          IMG="$REPO:latest"
+        
+          # ECR login
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
+            | docker login --username AWS --password-stdin "$REG"
+        
+          # Stop & remove the running container
+          docker rm -f fantasy_scraper_container || true
+        
+          # Remove ALL local images for this repo to free disk (safe since the container is gone)
+          docker images --filter="reference=$REPO:*" -q | xargs -r docker rmi -f || true
+        
+          # General prune to sweep any other cruft
+          docker system prune -af --volumes || true
+        
+          # Pull fresh
+          docker pull "$IMG"
+        
+          # Run with capped logs so they don't fill disk
+          docker run -d --name fantasy_scraper_container -p 5000:5000 \
+            --log-opt max-size=10m --log-opt max-file=3 \
+            -e FLASK_ENV=production \
+            -e S3_BUCKET=fantasy-stats-dev \
+            -e S3_PREFIX=dev/players/ \
+            -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }} \
+            "$IMG"
 
-            IMAGE="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/fantasybballstats:latest"
-
-            docker pull "$IMAGE"
-            docker stop fantasy_scraper_container || true
-            docker rm fantasy_scraper_container || true
-
-            docker run -d --name fantasy_scraper_container -p 5000:5000 "$IMAGE"
-
-            sudo systemctl restart nginx
+          # restart nginx to update website
+          sudo systemctl restart nginx
