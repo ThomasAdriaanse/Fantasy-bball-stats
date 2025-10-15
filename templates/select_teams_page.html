@@ -1,200 +1,159 @@
 {% extends "base.html" %}
 {% block title %}Select Teams · Fantasy BBall{% endblock %}
 
-{% block head_extra %}
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/select_teams_page.css') }}">
-  <style>
-    /* base nav replaces old back button */
-    .back-button { display:none; }
-
-    .card { background:#10131a; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 14px; }
-    .body-container { max-width: 1100px; margin: 0 auto; }
-    .form-row { display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
-
-    /* Left rail stacks Week + Stat panels (and Scoring when present) */
-    .left-rail { width: 400px; margin-right: 20px; display:flex; flex-direction:column; gap:12px; }
-
-    /* Unified select look (matches player-stats / theme) */
-    .select-like,
-    select#stat_window,
-    select#week_select {
-      width: 100%;
-      padding: 10px 12px;
-      border-radius: 8px;
-      border: 1px solid rgba(255,255,255,0.12);
-      background: #0b0e14;
-      color: #e8eefc;
-      font-size: 14px;
-      appearance: none;
-      background-image:
-        linear-gradient(45deg, transparent 50%, #e8eefc 50%),
-        linear-gradient(135deg, #e8eefc 50%, transparent 50%),
-        linear-gradient(to right, transparent, transparent);
-      background-position:
-        calc(100% - 18px) calc(50% - 3px),
-        calc(100% - 13px) calc(50% - 3px),
-        calc(100% - 40px) 0.5em;
-      background-size:
-        5px 5px,
-        5px 5px,
-        1px 1.4em;
-      background-repeat: no-repeat;
-    }
-
-    .filters-card h3 { margin: 0 0 8px 0; }
-
-    /* Keep your existing columns */
-    .main-container { display:flex; justify-content:space-between; align-items:flex-start; }
-    .teams-container { flex-grow: 1; }
-
-    /* Center the “Compare Teams” button */
-    #compareForm button[type="button"] { display:block; margin:16px auto 0; }
-
-    /* Fix top cut-off under sticky nav */
-    .page-wrap { padding-top: 64px; }
-    .page-wrap h1:first-child { margin-top: 0; padding-top: 8px; }
-  </style>
-{% endblock head_extra %}
+{% block head_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/select_teams_page.css') }}">
+{% endblock head_css %}
 
 {% block content %}
-  <div class="body-container">
-    <h1>Select Teams to Compare</h1>
+<div class="body-container">
+  <h1>Select Teams to Compare</h1>
 
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <div class="error-message">
-          {% for message in messages %}
-            <p>{{ message }}</p>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <div class="error-message">
+        {% for message in messages %}
+          <p>{{ message }}</p>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <form id="compareForm" action="{{ url_for('compare_page') }}" method="post">
+    <div class="main-container">
+      <!-- ===== LEFT RAIL ===== -->
+      <div class="left-rail">
+        <!-- Week selector -->
+        <div class="card filters-card">
+          <h3>Week</h3>
+          <select id="week_select" class="select-like">
+            {% for week_key, wdata in matchup_data_dict.items() %}
+              <option value="{{ wdata.matchup_period }}"
+                      {% if wdata.matchup_period == current_matchup %}selected{% endif %}>
+                Week {{ wdata.matchup_period }} ({{ wdata.start_date }} to {{ wdata.end_date }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Shared Stat Type -->
+        <div class="card filters-card">
+          <h3>Stat Type</h3>
+          <select id="stat_window" name="stat_window" class="select-like">
+            <option value="ESPN projected" selected>Projected</option>
+            <option value="total">Season Total</option>
+            <option value="last_30">Last 30</option>
+            <option value="last_15">Last 15</option>
+            <option value="last_7">Last 7</option>
+          </select>
+        </div>
+
+        {% if scoring_type == "H2H_POINTS" %}
+        <!-- Scoring -->
+        <div class="scoring-area card">
+          <h2 class="mb-10">Adjust Scoring for Stats</h2>
+          <div class="scoring-container">
+            <div class="scoring-box">
+              <label for="fgm">Field Goals Made (FGM):</label>
+              <input type="text" id="fgm" name="fgm" value="{{ form_data.get('fgm', 2) }}">
+            </div>
+            <div class="scoring-box">
+              <label for="fga">Field Goals Attempted (FGA):</label>
+              <input type="text" id="fga" name="fga" value="{{ form_data.get('fga', -1) }}">
+            </div>
+            <div class="scoring-box">
+              <label for="ftm">Free Throws Made (FTM):</label>
+              <input type="text" id="ftm" name="ftm" value="{{ form_data.get('ftm', 1) }}">
+            </div>
+            <div class="scoring-box">
+              <label for="fta">Free Throws Attempted (FTA):</label>
+              <input type="text" id="fta" name="fta" value="{{ form_data.get('fta', -1) }}">
+            </div>
+            <div class="scoring-box">
+              <label for="threeptm">Three Pointers Made (3PTM):</label>
+              <input type="text" id="threeptm" name="threeptm" value="{{ form_data.get('threeptm', 1) }}">
+            </div>
+            <div class="scoring-box">
+              <label for="reb">Rebounds (REB):</label>
+              <input type="text" id="reb" name="reb" value="{{ form_data.get('reb', 1) }}">
+            </div>
+            <div class="scoring-box">
+              <label for="ast">Assists (AST):</label>
+              <input type="text" id="ast" name="ast" value="{{ form_data.get('ast', 2) }}">
+            </div>
+            <div class="scoring-box">
+              <label for="stl">Steals (STL):</label>
+              <input type="text" id="stl" name="stl" value="{{ form_data.get('stl', 4) }}">
+            </div>
+            <div class="scoring-box">
+              <label for="blk">Blocks (BLK):</label>
+              <input type="text" id="blk" name="blk" value="{{ form_data.get('blk', 4) }}">
+            </div>
+            <div class="scoring-box">
+              <label for="turno">Turnovers (TO):</label>
+              <input type="text" id="turno" name="turno" value="{{ form_data.get('turno', -2) }}">
+            </div>
+            <div class="scoring-box">
+              <label for="pts">Points (PTS):</label>
+              <input type="text" id="pts" name="pts" value="{{ form_data.get('pts', 1) }}">
+            </div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      <!-- ===== END LEFT RAIL ===== -->
+
+      <!-- ===== RIGHT: Teams columns ===== -->
+      <div class="teams-container">
+        <div class="team-column">
+          <div class="team-selector my-team">My Team</div>
+          {% for team in info_list %}
+          <button
+            type="button"
+            id="myTeam{{ loop.index }}"
+            class="team-button"
+            data-team-name="{{ team }}"
+            onclick="selectMyTeam(this.getAttribute('data-team-name'), 'myTeam{{ loop.index }}')"
+          >{{ team }}</button>
           {% endfor %}
         </div>
-      {% endif %}
-    {% endwith %}
 
-    <form id="compareForm" action="{{ url_for('compare_page') }}" method="post">
-      <div class="main-container">
-        <!-- ===== LEFT RAIL ===== -->
-        <div class="left-rail">
-          <!-- Week selector (now a styled select matching Stat Type) -->
-          <div class="card filters-card">
-            <h3>Week</h3>
-            <select id="week_select" class="select-like">
-              {% for week_key, wdata in matchup_data_dict.items() %}
-                <option value="{{ wdata.matchup_period }}"
-                        {% if wdata.matchup_period == current_matchup %}selected{% endif %}>
-                  Week {{ wdata.matchup_period }} ({{ wdata.start_date }} to {{ wdata.end_date }})
-                </option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <!-- Shared Stat Type (moved into the left rail) -->
-          <div class="card filters-card">
-            <h3>Stat Type</h3>
-            <select id="stat_window" name="stat_window">
-              <option value="ESPN projected" selected>Projected</option>
-              <option value="total">Season Total</option>
-              <option value="last_30">Last 30</option>
-              <option value="last_15">Last 15</option>
-              <option value="last_7">Last 7</option>
-            </select>
-          </div>
-
-          {% if scoring_type == "H2H_POINTS" %}
-            <!-- Scoring area (unchanged, just lives in the left rail) -->
-            <div class="scoring-area card">
-              <h2 style="margin:0 0 10px 0;">Adjust Scoring for Stats</h2>
-              <div class="scoring-container">
-                <div class="scoring-box">
-                  <label for="fgm">Field Goals Made (FGM):</label>
-                  <input type="text" id="fgm" name="fgm" value="{{ form_data.get('fgm', 2) }}">
-                </div>
-                <div class="scoring-box">
-                  <label for="fga">Field Goals Attempted (FGA):</label>
-                  <input type="text" id="fga" name="fga" value="{{ form_data.get('fga', -1) }}">
-                </div>
-                <div class="scoring-box">
-                  <label for="ftm">Free Throws Made (FTM):</label>
-                  <input type="text" id="ftm" name="ftm" value="{{ form_data.get('ftm', 1) }}">
-                </div>
-                <div class="scoring-box">
-                  <label for="fta">Free Throws Attempted (FTA):</label>
-                  <input type="text" id="fta" name="fta" value="{{ form_data.get('fta', -1) }}">
-                </div>
-                <div class="scoring-box">
-                  <label for="threeptm">Three Pointers Made (3PTM):</label>
-                  <input type="text" id="threeptm" name="threeptm" value="{{ form_data.get('threeptm', 1) }}">
-                </div>
-                <div class="scoring-box">
-                  <label for="reb">Rebounds (REB):</label>
-                  <input type="text" id="reb" name="reb" value="{{ form_data.get('reb', 1) }}">
-                </div>
-                <div class="scoring-box">
-                  <label for="ast">Assists (AST):</label>
-                  <input type="text" id="ast" name="ast" value="{{ form_data.get('ast', 2) }}">
-                </div>
-                <div class="scoring-box">
-                  <label for="stl">Steals (STL):</label>
-                  <input type="text" id="stl" name="stl" value="{{ form_data.get('stl', 4) }}">
-                </div>
-                <div class="scoring-box">
-                  <label for="blk">Blocks (BLK):</label>
-                  <input type="text" id="blk" name="blk" value="{{ form_data.get('blk', 4) }}">
-                </div>
-                <div class="scoring-box">
-                  <label for="turno">Turnovers (TO):</label>
-                  <input type="text" id="turno" name="turno" value="{{ form_data.get('turno', -2) }}">
-                </div>
-                <div class="scoring-box">
-                  <label for="pts">Points (PTS):</label>
-                  <input type="text" id="pts" name="pts" value="{{ form_data.get('pts', 1) }}">
-                </div>
-              </div>
-            </div>
-          {% endif %}
-        </div>
-        <!-- ===== END LEFT RAIL ===== -->
-
-        <!-- ===== RIGHT: Teams columns (unchanged) ===== -->
-        <div class="teams-container">
-          <div class="team-column">
-            <div class="team-selector my-team">My Team</div>
-            {% for team in info_list %}
-            <button type="button" id="myTeam{{ loop.index }}" class="team-button" data-team-name="{{ team }}"
-              onclick="selectMyTeam(this.getAttribute('data-team-name'), 'myTeam{{ loop.index }}')">{{ team }}</button>
-            {% endfor %}
-          </div>
-
-          <div class="team-column">
-            <div class="team-selector opponents-team">Opponent's Team</div>
-            {% for team in info_list %}
-            <button type="button" id="opponentsTeam{{ loop.index }}" class="team-button" data-team-name="{{ team }}"
-              onclick="selectOpponentsTeam(this.getAttribute('data-team-name'), 'opponentsTeam{{ loop.index }}')">{{ team }}</button>
-            {% endfor %}
-          </div>
+        <div class="team-column">
+          <div class="team-selector opponents-team">Opponent's Team</div>
+          {% for team in info_list %}
+          <button
+            type="button"
+            id="opponentsTeam{{ loop.index }}"
+            class="team-button"
+            data-team-name="{{ team }}"
+            onclick="selectOpponentsTeam(this.getAttribute('data-team-name'), 'opponentsTeam{{ loop.index }}')"
+          >{{ team }}</button>
+          {% endfor %}
         </div>
       </div>
+    </div>
 
-      <!-- Hidden league inputs -->
-      <input type="hidden" name="league_id" value="{{ league_id }}">
-      <input type="hidden" name="year" value="{{ year }}">
-      <input type="hidden" name="espn_s2" value="{{ espn_s2 }}">
-      <input type="hidden" name="swid" value="{{ swid }}">
-      <input type="hidden" name="scoring_type" value="{{ scoring_type }}">
-      <input type="hidden" name="matchup_data_dict" value="{{ matchup_data_dict }}">
+    <!-- Hidden league inputs -->
+    <input type="hidden" name="league_id" value="{{ league_id }}">
+    <input type="hidden" name="year" value="{{ year }}">
+    <input type="hidden" name="espn_s2" value="{{ espn_s2 }}">
+    <input type="hidden" name="swid" value="{{ swid }}">
+    <input type="hidden" name="scoring_type" value="{{ scoring_type }}">
+    <input type="hidden" name="matchup_data_dict" value="{{ matchup_data_dict }}">
 
-      <!-- Selected teams -->
-      <input type="hidden" id="myTeamInput" name="myTeam" value="">
-      <input type="hidden" id="opponentsTeamInput" name="opponentsTeam" value="">
+    <!-- Selected teams -->
+    <input type="hidden" id="myTeamInput" name="myTeam" value="">
+    <input type="hidden" id="opponentsTeamInput" name="opponentsTeam" value="">
 
-      <!-- Week (controlled by #week_select) -->
-      <input type="hidden" id="selectedWeek" name="week_num" value="{{ current_matchup }}">
+    <!-- Week (controlled by #week_select) -->
+    <input type="hidden" id="selectedWeek" name="week_num" value="{{ current_matchup }}">
 
-      <!-- Submit -->
-      <button type="button" onclick="compareTeams()">Compare Teams</button>
-    </form>
+    <!-- Submit: standard .btn -->
+    <button type="button" class="btn" onclick="compareTeams()">Compare Teams</button>
+  </form>
 
-    <div id="loading">Loading, please wait... <br>(About 10s)</div>
-  </div>
+  <div id="loading">Loading, please wait... <br>(About 10s)</div>
+</div>
 {% endblock content %}
 
 {% block body_js %}
@@ -215,7 +174,7 @@
     document.getElementById(opponentsTeam).classList.add('team-selected-opponent');
   }
 
-  // --- week selector (styled select) -> sync hidden input ---
+  // --- week selector -> sync hidden input ---
   const weekSelect = document.getElementById('week_select');
   const selectedWeekInput = document.getElementById('selectedWeek');
   if (weekSelect && selectedWeekInput) {
@@ -235,9 +194,7 @@
     document.getElementById('myTeamInput').value = myTeamName;
     document.getElementById('opponentsTeamInput').value = opponentsTeamName;
 
-    // show overlay
     document.getElementById('loading').style.display = 'flex';
-    // submit
     document.getElementById('compareForm').submit();
   }
 

@@ -8,6 +8,15 @@
     /* keep injury-colored cells when the name is a link */
     .player-out a, .player-dtd a { color: inherit; text-decoration: none; }
     .player-out a:hover, .player-dtd a:hover { text-decoration: underline; }
+
+      /* tighten vertical spacing just for this page */
+    .page-wrap { padding-top: 8px; }         /* was larger globally */
+    .body-container { padding: 0 0 24px; }   /* remove the extra top padding */
+    .card { margin-top: 8px; }
+    .card.teams-header { margin-top: 0; }    /* first card flush to top */
+
+    /* if your base.css has .topnav { margin-bottom: 40px; }, trim it here: */
+    .topnav { margin-bottom: 8px; }
   </style>
 {% endblock head_extra %}
 
