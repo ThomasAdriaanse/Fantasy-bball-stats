@@ -1,9 +1,19 @@
+from __future__ import annotations
+
+import time
+from typing import Dict, Tuple, Any, List
+
 import pandas as pd
 from scipy.stats import norm
-import compare_page.compare_page_data as cpd
-import time
 
-def get_team_stats_data_schema():
+# stays as-is since you kept the package at project root
+import compare_page.compare_page_data as cpd
+
+
+def get_team_stats_data_schema() -> str:
+    """
+    Returns a SQL-ish schema string for team stats tables.
+    """
     table_schema = """
         team_avg_fpts FLOAT,
         team_expected_points FLOAT,
@@ -11,375 +21,351 @@ def get_team_stats_data_schema():
         team_name TEXT,
         team_current_points FLOAT
     """
-    
     return table_schema
 
-def get_team_stats(league, team_num, team_player_data, opponent_num, opponent_player_data, columns, league_scoring_rules, year, week_data=None):
 
-    # Use selected week matchup period if available
-    selected_matchup_period = week_data['selected_week'] if week_data else league.currentMatchupPeriod
+def _safe_boxscores(league, matchup_period: int, **kwargs) -> list:
+    """
+    Fetch box scores once and return a list; safely handle ESPN quirks for future weeks.
+    """
+    try:
+        return league.box_scores(matchup_period=matchup_period, **kwargs) or []
+    except Exception:
+        # For future weeks (or ESPN API quirks), ESPN can throw; normalize to empty list.
+        return []
 
-    #start_time = time.time()
-    #print("Starting get_team_stats...")
 
-    # Finding which team in the box scores dictionary we are
+def _locate_teams_in_boxscores(league, matchup_period: int, team_idx: int, opp_idx: int) -> Tuple[int, str, int, str]:
+    """
+    Find each team’s index in box scores and whether they are home/away.
+    Returns: (team_boxscore_num, team_home_or_away, opp_boxscore_num, opp_home_or_away)
+    """
+    boxes = _safe_boxscores(league, matchup_period=matchup_period)
     team_boxscore_num = -1
+    opp_boxscore_num = -1
     team_home_or_away = "temp"
-    opponent_boxscore_num = -1
-    opponent_home_or_away = "temp"
+    opp_home_or_away = "temp"
 
-    box_count = 0
-    for boxscore in league.box_scores(matchup_period=selected_matchup_period):
-        if league.teams[team_num] == boxscore.home_team:
-            team_boxscore_num = box_count 
+    for i, bx in enumerate(boxes):
+        if league.teams[team_idx] == getattr(bx, "home_team", None):
+            team_boxscore_num = i
             team_home_or_away = "home"
-
-        elif league.teams[team_num] == boxscore.away_team:  
-            team_boxscore_num = box_count 
+        elif league.teams[team_idx] == getattr(bx, "away_team", None):
+            team_boxscore_num = i
             team_home_or_away = "away"
 
-        if league.teams[opponent_num] == boxscore.home_team:
-            opponent_boxscore_num = box_count 
-            opponent_home_or_away = "home"
+        if league.teams[opp_idx] == getattr(bx, "home_team", None):
+            opp_boxscore_num = i
+            opp_home_or_away = "home"
+        elif league.teams[opp_idx] == getattr(bx, "away_team", None):
+            opp_boxscore_num = i
+            opp_home_or_away = "away"
 
-        elif league.teams[opponent_num] == boxscore.away_team:  
-            opponent_boxscore_num = box_count 
-            opponent_home_or_away = "away"
-    
-        box_count += 1
+    return team_boxscore_num, team_home_or_away, opp_boxscore_num, opp_home_or_away
 
-    if team_boxscore_num == -1 or opponent_boxscore_num == -1:
-        print("Error: Could not find box scores for a team")
 
-    #mid_time = time.time()
-    #print(f"Time taken to find teams in box scores: {mid_time - start_time:.4f} seconds")
+def _team_avg_fpts(league, team, year: int, rules: Dict[str, float]) -> float:
+    """
+    Compute a team’s average fantasy points over roster using season averages.
+    Guards against empty/partial data.
+    """
+    year_key = f"{year}_total"
+    total = 0.0
+    count = 0
+
+    for p in getattr(team, "roster", []):
+        stats = getattr(p, "stats", {}) or {}
+        year_blob = stats.get(year_key, {})
+        avg = year_blob.get("avg") if isinstance(year_blob, dict) else None
+        if not avg:
+            continue
+
+        # Some ESPN fields are 3PM/TO etc.
+        try:
+            fpts = (
+                avg.get("FGM", 0) * rules["fgm"] +
+                avg.get("FGA", 0) * rules["fga"] +
+                avg.get("FTM", 0) * rules["ftm"] +
+                avg.get("FTA", 0) * rules["fta"] +
+                avg.get("3PM", 0) * rules["threeptm"] +
+                avg.get("REB", 0) * rules["reb"] +
+                avg.get("AST", 0) * rules["ast"] +
+                avg.get("STL", 0) * rules["stl"] +
+                avg.get("BLK", 0) * rules["blk"] +
+                avg.get("TO",  0) * rules["turno"] +
+                avg.get("PTS", 0) * rules["pts"]
+            )
+        except KeyError:
+            # If a rule key is missing, treat it as zero weight.
+            fpts = 0.0
+        total += float(fpts)
+        count += 1
+
+    if count == 0:
+        return 0.0
+    return round(total / count, 2)
+
+
+def get_team_stats(
+    league,
+    team_num: int,
+    team_player_data: pd.DataFrame,
+    opponent_num: int,
+    opponent_player_data: pd.DataFrame,
+    columns: List[str],
+    league_scoring_rules: Dict[str, float],
+    year: int,
+    week_data: Dict[str, Any] | None = None
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Points scoring view: expected totals + win probability.
+    Returns (team_df, opponent_df).
+    """
+    selected_matchup_period = week_data['selected_week'] if week_data else league.currentMatchupPeriod
+
+    # Find teams in this week’s boxscores once
+    team_boxscore_num, team_side, opp_boxscore_num, opp_side = _locate_teams_in_boxscores(
+        league, selected_matchup_period, team_num, opponent_num
+    )
 
     team = league.teams[team_num]
-    team_data = {column: [] for column in columns}
     opponent = league.teams[opponent_num]
-    opponent_data = {column: [] for column in columns}
-    
-    # Calculating average fpts of the team    
-    def get_team_avg_fpts(team, year):
-        year_string = str(year) + "_total"
-        team_average_fpts = 0
-        num_players = 0
+    team_data = {c: [] for c in columns}
+    opponent_data = {c: [] for c in columns}
 
-        for player in team.roster:
-            if year_string in player.stats and 'avg' in player.stats[year_string].keys():
-                player_avg_stats = player.stats[year_string]['avg']
+    # Team average FPTS (season avg)
+    team_data['team_avg_fpts'].append(_team_avg_fpts(league, team, year, league_scoring_rules))
+    opponent_data['team_avg_fpts'].append(_team_avg_fpts(league, opponent, year, league_scoring_rules))
 
-                fpts = round(
-                player_avg_stats['FGM']*league_scoring_rules['fgm'] +
-                player_avg_stats['FGA']*league_scoring_rules['fga'] + 
-                player_avg_stats['FTM']*league_scoring_rules['ftm'] +
-                player_avg_stats['FTA']*league_scoring_rules['fta'] + 
-                player_avg_stats['3PM']*league_scoring_rules['threeptm'] + 
-                player_avg_stats['REB']*league_scoring_rules['reb'] + 
-                player_avg_stats['AST']*league_scoring_rules['ast'] + 
-                player_avg_stats['STL']*league_scoring_rules['stl'] + 
-                player_avg_stats['BLK']*league_scoring_rules['blk'] + 
-                player_avg_stats['TO']*league_scoring_rules['turno'] + 
-                player_avg_stats['PTS']*league_scoring_rules['pts']
-                , 2)
+    # Projected points left this week (exclude OUT players, exclude N/A rows)
+    def _valid_rows(df: pd.DataFrame) -> pd.DataFrame:
+        df2 = df[(df['inj'] != 'OUT') & (df['fpts'] != 'N/A')].copy()
+        df2['fpts'] = pd.to_numeric(df2['fpts'], errors='coerce')
+        df2['games'] = pd.to_numeric(df2['games'], errors='coerce')
+        return df2.dropna(subset=['fpts', 'games'])
 
-                team_average_fpts += fpts
-                num_players += 1
-            else:
-                team_average_fpts += 0
+    t_df = _valid_rows(team_player_data)
+    o_df = _valid_rows(opponent_player_data)
 
-        team_average_fpts /= num_players
-        team_average_fpts = round(team_average_fpts, 2)
+    team_expected_points_remaining = float((t_df['fpts'] * t_df['games']).sum())
+    opp_expected_points_remaining  = float((o_df['fpts'] * o_df['games']).sum())
 
-        return team_average_fpts
-
-    team_data['team_avg_fpts'].append(get_team_avg_fpts(team, year))
-    opponent_data['team_avg_fpts'].append(get_team_avg_fpts(opponent, year))
-
-    # Filtering the DataFrame to get only players who are not 'out' and selecting their fantasy points
-    player_averages = team_player_data[(team_player_data['inj'] != 'OUT') & (team_player_data['fpts'] != 'N/A')]['fpts'].tolist()
-    player_games_left = team_player_data[(team_player_data['inj'] != 'OUT') & (team_player_data['fpts'] != 'N/A')]['games'].tolist()
-
-    # Do the same for team 2
-    opponent_player_averages = opponent_player_data[(opponent_player_data['inj'] != 'OUT') & (opponent_player_data['fpts'] != 'N/A')]['fpts'].tolist()
-    opponent_player_games_left = opponent_player_data[(opponent_player_data['inj'] != 'OUT') & (opponent_player_data['fpts'] != 'N/A')]['games'].tolist()
-
-    # Assuming the standard deviation is 40% of the average fantasy points for each player
+    # Standard deviation assumptions
     player_std_dev = 0.40
-    team_1_stds = [avg * player_std_dev for avg in player_averages]
-    team_2_stds = [avg * player_std_dev for avg in opponent_player_averages]
+    t_std = (t_df['fpts'] * player_std_dev * t_df['games']).pow(2).sum() ** 0.5
+    o_std = (o_df['fpts'] * player_std_dev * o_df['games']).pow(2).sum() ** 0.5
 
-    # Calculate expected points remaining
-    team_expected_points_remaining = sum(player_avg_fpts * games_left for player_avg_fpts, games_left in zip(player_averages, player_games_left))
-    opponent_expected_points_remaining = sum(player_avg_fpts * games_left for player_avg_fpts, games_left in zip(opponent_player_averages, opponent_player_games_left))
+    # Current points (subtract today’s partial period so projections don’t double-count)
+    current_period = getattr(league, "scoringPeriodId", None)
+    week_boxes_total = _safe_boxscores(league, matchup_period=selected_matchup_period)
+    if current_period is not None:
+        week_boxes_current = _safe_boxscores(league, matchup_period=selected_matchup_period,
+                                             scoring_period=current_period, matchup_total=False)
+    else:
+        week_boxes_current = []
 
-    current_scoring_period = league.scoringPeriodId
- 
+    def _current_for(index: int, side: str) -> float:
+        if index < 0 or index >= len(week_boxes_total):
+            return 0.0
+        try:
+            if side == "home":
+                total = float(getattr(week_boxes_total[index], "home_score", 0) or 0)
+                if index < len(week_boxes_current):
+                    total -= float(getattr(week_boxes_current[index], "home_score", 0) or 0)
+            else:
+                total = float(getattr(week_boxes_total[index], "away_score", 0) or 0)
+                if index < len(week_boxes_current):
+                    total -= float(getattr(week_boxes_current[index], "away_score", 0) or 0)
+            return total
+        except Exception:
+            return 0.0
 
-    # Get current box scores
-    try:
-        if team_home_or_away == "home":
-            team_current_points = league.box_scores(matchup_period=selected_matchup_period)[team_boxscore_num].home_score
-            try:
-                current_period_scores = league.box_scores(matchup_period=selected_matchup_period, scoring_period=current_scoring_period, matchup_total=False)
-                if team_boxscore_num < len(current_period_scores):
-                    team_current_points -= current_period_scores[team_boxscore_num].home_score
-            except (IndexError, AttributeError):
-                print("error1")
-                # If we can't get current period scores for future weeks, just use total points
-                pass
-        else:
-            team_current_points = league.box_scores(matchup_period=selected_matchup_period)[team_boxscore_num].away_score
-            try:
-                current_period_scores = league.box_scores(matchup_period=selected_matchup_period, scoring_period=current_scoring_period, matchup_total=False)
-                if team_boxscore_num < len(current_period_scores):
-                    team_current_points -= current_period_scores[team_boxscore_num].away_score
-            except (IndexError, AttributeError):
-                print("error1")
-                # If we can't get current period scores for future weeks, just use total points
-                pass
-
-        if opponent_home_or_away == "home":
-            opponent_current_points = league.box_scores(matchup_period=selected_matchup_period)[opponent_boxscore_num].home_score
-            try:
-                current_period_scores = league.box_scores(matchup_period=selected_matchup_period, scoring_period=current_scoring_period, matchup_total=False)
-                if opponent_boxscore_num < len(current_period_scores):
-                    opponent_current_points -= current_period_scores[opponent_boxscore_num].home_score
-            except (IndexError, AttributeError):
-                print("error1")
-                # If we can't get current period scores for future weeks, just use total points
-                pass
-        else:
-            opponent_current_points = league.box_scores(matchup_period=selected_matchup_period)[opponent_boxscore_num].away_score
-            try:
-                current_period_scores = league.box_scores(matchup_period=selected_matchup_period, scoring_period=current_scoring_period, matchup_total=False)
-                if opponent_boxscore_num < len(current_period_scores):
-                    opponent_current_points -= current_period_scores[opponent_boxscore_num].away_score
-            except (IndexError, AttributeError):
-                print("error1")
-                # If we can't get current period scores for future weeks, just use total points
-                pass
-    except IndexError:
-        print("error2")
-        # If we're looking at a future matchup period with no box scores yet, set current points to 0
-        team_current_points = 0
-        opponent_current_points = 0
-
+    team_current_points = _current_for(team_boxscore_num, team_side)
+    opp_current_points  = _current_for(opp_boxscore_num, opp_side)
 
     team_total_expected = team_expected_points_remaining + team_current_points
-    opponent_total_expected = opponent_expected_points_remaining + opponent_current_points
+    opp_total_expected  = opp_expected_points_remaining + opp_current_points
 
-    # Calculate the total variance and standard deviation for each team
-    total_variance_team_1 = sum((std * games_left)**2 for std, games_left in zip(team_1_stds, player_games_left))
-    total_variance_team_2 = sum((std * games_left)**2 for std, games_left in zip(team_2_stds, opponent_player_games_left))
-    total_std_team_1 = total_variance_team_1**0.5
-    total_std_team_2 = total_variance_team_2**0.5
-    expected_point_difference = team_total_expected - opponent_total_expected
+    # Win probability
+    diff = team_total_expected - opp_total_expected
+    denom = (t_std ** 2 + o_std ** 2) ** 0.5
+    if denom > 0:
+        p_team = float(norm.cdf(diff / denom))
+    else:
+        # No variance; deterministic outcome
+        p_team = 1.0 if diff > 0 else (0.0 if diff < 0 else 0.5)
 
-    try:
-        z_score = expected_point_difference / ((total_std_team_2**2 + total_std_team_1**2)**0.5)
-        probability_team_wins = norm.cdf(z_score)
-        #print(z_score)
-        #print(probability_team_wins)
-    except ZeroDivisionError:            
-        z_score = float('inf')
-        if expected_point_difference > 0:
-            probability_team_wins = 1.0  
-        else:
-            probability_team_wins = 0.0
-        
-        if expected_point_difference == 0:
-            probability_team_wins = 0.5
-
+    # Fill rows
     team_data['team_expected_points'].append(round(team_total_expected, 2))
-    team_data['team_chance_of_winning'].append(round(probability_team_wins*100, 2))
+    team_data['team_chance_of_winning'].append(round(p_team * 100, 2))
     team_data['team_name'].append(team.team_name)
-    team_data['team_current_points'].append(team_current_points)
+    team_data['team_current_points'].append(round(team_current_points, 2))
 
-    opponent_data['team_expected_points'].append(round(opponent_total_expected, 2))
-    opponent_data['team_chance_of_winning'].append(round(100-probability_team_wins*100, 2))
+    opponent_data['team_expected_points'].append(round(opp_total_expected, 2))
+    opponent_data['team_chance_of_winning'].append(round((1 - p_team) * 100, 2))
     opponent_data['team_name'].append(opponent.team_name)
-    opponent_data['team_current_points'].append(opponent_current_points)
+    opponent_data['team_current_points'].append(round(opp_current_points, 2))
 
-    #end_time = time.time()
-    #print(f"Total time for get_team_stats: {end_time - start_time:.4f} seconds")
+    return pd.DataFrame(team_data), pd.DataFrame(opponent_data)
 
-    df = pd.DataFrame(team_data)
-    opponent_df = pd.DataFrame(opponent_data)
-    return df, opponent_df
 
 def get_team_stats_categories(
     league,
-    team_num,
-    team_player_data,
-    opponent_num,
-    opponent_player_data,
-    league_scoring_rules,
-    year,
-    week_data=None
+    team_num: int,
+    team_player_data: pd.DataFrame,
+    opponent_num: int,
+    opponent_player_data: pd.DataFrame,
+    league_scoring_rules: Dict[str, float],
+    year: int,
+    week_data: Dict[str, Any] | None = None
 ):
-    import pandas as pd
-
+    """
+    Categories view: expected category totals and win% per category.
+    Returns:
+      (team_df, opponent_df, team_pct_df, opponent_pct_df, team_current_stats, opponent_current_stats)
+    """
     team = league.teams[team_num]
     opponent = league.teams[opponent_num]
 
-    # Use selected week matchup period if available
     selected_matchup_period = week_data['selected_week'] if week_data else league.currentMatchupPeriod
 
-    # Locate box scores (only needed to fetch "current" category totals if your get_cat_stats uses them)
+    # Locate box scores and current category totals (if available)
     try:
-        team_boxscore_num, team_home_or_away = cpd.get_team_boxscore_number(league, team, selected_matchup_period)
-        opponent_boxscore_num, opponent_home_or_away = cpd.get_team_boxscore_number(league, opponent, selected_matchup_period)
+        team_boxscore_num, team_side, opp_boxscore_num, opp_side = _locate_teams_in_boxscores(
+            league, selected_matchup_period, team_num, opponent_num
+        )
+        boxes = _safe_boxscores(league, matchup_period=selected_matchup_period)
 
-        if team_home_or_away == "home":
-            team_current_stats = league.box_scores(matchup_period=selected_matchup_period)[team_boxscore_num].home_stats
-        else:
-            team_current_stats = league.box_scores(matchup_period=selected_matchup_period)[team_boxscore_num].away_stats
+        def _current_stats(index: int, side: str) -> Dict[str, Any]:
+            if index < 0 or index >= len(boxes):
+                return {}
+            if side == "home":
+                return getattr(boxes[index], "home_stats", {}) or {}
+            return getattr(boxes[index], "away_stats", {}) or {}
 
-        if opponent_home_or_away == "home":
-            opponent_current_stats = league.box_scores(matchup_period=selected_matchup_period)[opponent_boxscore_num].home_stats
-        else:
-            opponent_current_stats = league.box_scores(matchup_period=selected_matchup_period)[opponent_boxscore_num].away_stats
+        team_current_stats = _current_stats(team_boxscore_num, team_side)
+        opponent_current_stats = _current_stats(opp_boxscore_num, opp_side)
     except Exception:
-        # For future weeks / missing box scores, fall back to empty dicts
         team_current_stats = {}
         opponent_current_stats = {}
 
-    # Categories you project (left are your labels; right are ESPN stat keys)
+    # Your category map
     cats      = ['fg%', 'ft%', 'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts']
     espn_cats = ['FG%', 'FT%', '3PM',     'REB', 'AST', 'STL', 'BLK', 'TO',    'PTS']
 
-    # Collect expected values and win % per category
-    team_expected           = {}
-    opponent_expected       = {}
-    team_win_percentage     = {}
-    opponent_win_percentage = {}
+    team_expected, opp_expected = {}, {}
+    team_win_pct, opp_win_pct = {}, {}
 
     for cat, espn_cat in zip(cats, espn_cats):
-        texp, opexp, twin, opwin = get_cat_stats(
+        texp, opexp, twin, owin = get_cat_stats(
             cat, espn_cat,
             team_player_data, opponent_player_data,
             team_current_stats, opponent_current_stats
         )
-        team_expected[cat]           = texp
-        opponent_expected[cat]       = opexp
-        team_win_percentage[cat]     = twin
-        opponent_win_percentage[cat] = opwin
+        team_expected[cat] = texp
+        opp_expected[cat] = opexp
+        team_win_pct[cat] = twin
+        opp_win_pct[cat] = owin
 
-    # --- Add meta fields expected by the template ---
-    # Use the same keys the points view returns so Jinja can read them.
+    # Meta for header compatibility
     team_expected['team_name'] = team.team_name
-    opponent_expected['team_name'] = opponent.team_name
+    opp_expected['team_name'] = opponent.team_name
+    team_expected['team_current_points'] = ''   # not meaningful on categories page
+    opp_expected['team_current_points'] = ''
 
-    # Category page header shows "team_current_points"; there’s no single number here,
-    # so provide an empty string (or 0 if you prefer).
-    team_expected['team_current_points'] = ''
-    opponent_expected['team_current_points'] = ''
+    df_team = pd.DataFrame([team_expected])
+    df_opp  = pd.DataFrame([opp_expected])
+    df_team_pct = pd.DataFrame([team_win_pct])
+    df_opp_pct  = pd.DataFrame([opp_win_pct])
 
-    # Build 1-row DataFrames
-    df           = pd.DataFrame([team_expected])
-    opponent_df  = pd.DataFrame([opponent_expected])
-    win_pct_df        = pd.DataFrame([team_win_percentage])
-    opponent_pct_df   = pd.DataFrame([opponent_win_percentage])
-
-    return df, opponent_df, win_pct_df, opponent_pct_df, team_current_stats, opponent_current_stats
+    return df_team, df_opp, df_team_pct, df_opp_pct, team_current_stats, opponent_current_stats
 
 
-def get_cat_stats(cat, espn_cat, team_player_data, opponent_player_data, team_current_stats, opponent_current_stats):
-    # Filter out non-numeric values and players who are OUT
-    team_player_data = team_player_data[(team_player_data['inj'] != 'OUT') & (team_player_data[cat] != 'N/A')].copy()
-    opponent_player_data = opponent_player_data[(opponent_player_data['inj'] != 'OUT') & (opponent_player_data[cat] != 'N/A')].copy()
-    
-    # Convert numeric columns to float
-    for df in [team_player_data, opponent_player_data]:
-        for col in [cat, 'games']:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-        df.dropna(subset=[cat, 'games'], inplace=True)
+def get_cat_stats(
+    cat: str,
+    espn_cat: str,
+    team_player_data: pd.DataFrame,
+    opponent_player_data: pd.DataFrame,
+    team_current_stats: Dict[str, Any],
+    opponent_current_stats: Dict[str, Any]
+) -> Tuple[float, float, float, float]:
+    """
+    Compute team/opponent expected category totals and win % for one category.
+    Returns: (team_expected, opponent_expected, team_win_pct, opponent_win_pct)
+    """
+    def _clean(df: pd.DataFrame, stat: str) -> pd.DataFrame:
+        out = df[(df['inj'] != 'OUT') & (df[stat] != 'N/A')].copy()
+        out[stat] = pd.to_numeric(out[stat], errors='coerce')
+        out['games'] = pd.to_numeric(out['games'], errors='coerce')
+        return out.dropna(subset=[stat, 'games'])
 
-    if cat in ['fg%', 'ft%']:
-        # Determine the correct stat keys
-        made_stat = 'fgm' if cat == 'fg%' else 'ftm'
-        attempt_stat = 'fga' if cat == 'fg%' else 'fta'
+    t_df = _clean(team_player_data, cat)
+    o_df = _clean(opponent_player_data, cat)
 
-        # Convert makes and attempts columns to numeric
-        for df in [team_player_data, opponent_player_data]:
-            for col in [made_stat, attempt_stat]:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-            df.dropna(subset=[made_stat, attempt_stat], inplace=True)
+    if cat in ('fg%', 'ft%'):
+        made = 'fgm' if cat == 'fg%' else 'ftm'
+        att  = 'fga' if cat == 'fg%' else 'fta'
 
-        # Calculate expected makes and attempts for team and opponent
-        team_expected_makes = sum(team_player_data[made_stat] * team_player_data['games'])
-        team_expected_attempts = sum(team_player_data[attempt_stat] * team_player_data['games'])
-        opponent_expected_makes = sum(opponent_player_data[made_stat] * opponent_player_data['games'])
-        opponent_expected_attempts = sum(opponent_player_data[attempt_stat] * opponent_player_data['games'])
+        # ensure numeric
+        for df in (t_df, o_df):
+            df[made] = pd.to_numeric(df[made], errors='coerce')
+            df[att]  = pd.to_numeric(df[att],  errors='coerce')
+            df.dropna(subset=[made, att], inplace=True)
 
-        # Add current season stats
-        team_current_makes = float(team_current_stats.get(made_stat, {}).get('value', 0))
-        team_current_attempts = float(team_current_stats.get(attempt_stat, {}).get('value', 0))
-        opponent_current_makes = float(opponent_current_stats.get(made_stat, {}).get('value', 0))
-        opponent_current_attempts = float(opponent_current_stats.get(attempt_stat, {}).get('value', 0))
+        t_exp_makes = float((t_df[made] * t_df['games']).sum())
+        t_exp_atts  = float((t_df[att]  * t_df['games']).sum())
+        o_exp_makes = float((o_df[made] * o_df['games']).sum())
+        o_exp_atts  = float((o_df[att]  * o_df['games']).sum())
 
-        # Compute final makes and attempts
-        team_total_makes = team_current_makes + team_expected_makes
-        team_total_attempts = team_current_attempts + team_expected_attempts
-        opponent_total_makes = opponent_current_makes + opponent_expected_makes
-        opponent_total_attempts = opponent_current_attempts + opponent_expected_attempts
+        t_cur_m = float((team_current_stats.get(made, {}) or {}).get('value', 0) or 0)
+        t_cur_a = float((team_current_stats.get(att,  {}) or {}).get('value', 0) or 0)
+        o_cur_m = float((opponent_current_stats.get(made, {}) or {}).get('value', 0) or 0)
+        o_cur_a = float((opponent_current_stats.get(att,  {}) or {}).get('value', 0) or 0)
 
-        # Calculate percentages
-        team_expected = (team_total_makes / team_total_attempts * 100) if team_total_attempts > 0 else 0
-        opponent_expected = (opponent_total_makes / opponent_total_attempts * 100) if opponent_total_attempts > 0 else 0
+        t_tot_m = t_cur_m + t_exp_makes
+        t_tot_a = t_cur_a + t_exp_atts
+        o_tot_m = o_cur_m + o_exp_makes
+        o_tot_a = o_cur_a + o_exp_atts
 
-        # For percentage stats, we need to consider the volume (attempts) in our variance calculation
-        team_std = 2.0 * (team_total_attempts ** 0.5) if team_total_attempts > 0 else 0  # Using binomial variance approximation
-        opponent_std = 2.0 * (opponent_total_attempts ** 0.5) if opponent_total_attempts > 0 else 0
-        
-        # Calculate z-score based on percentage difference and volume-adjusted standard deviation
-        try:
-            z_score = (team_expected - opponent_expected) / ((team_std**2 + opponent_std**2)**0.5)
-            team_win_percentage = norm.cdf(z_score) * 100
-        except ZeroDivisionError:
-            team_win_percentage = 50.0 if team_expected == opponent_expected else (100.0 if team_expected > opponent_expected else 0.0)
-            
-    else:
-        # Normal counting stat calculations
-        team_current = float(team_current_stats.get(espn_cat, {}).get('value', 0))
-        opponent_current = float(opponent_current_stats.get(espn_cat, {}).get('value', 0))
-        
-        team_expected = team_current + sum(team_player_data[cat] * team_player_data['games'])
-        opponent_expected = opponent_current + sum(opponent_player_data[cat] * opponent_player_data['games'])
+        t_expected = (t_tot_m / t_tot_a * 100) if t_tot_a > 0 else 0.0
+        o_expected = (o_tot_m / o_tot_a * 100) if o_tot_a > 0 else 0.0
 
-        # Adjust standard deviation based on stat type
-        if cat == 'pts':
-            std_factor = 0.25  # Points tend to be more consistent
-        elif cat in ['threeptm', 'stl', 'blk']:
-            std_factor = 0.60  # These stats tend to be more variable
+        # rough variance proxy – more attempts => lower variance
+        t_std = 2.0 * (t_tot_a ** 0.5) if t_tot_a > 0 else 0.0
+        o_std = 2.0 * (o_tot_a ** 0.5) if o_tot_a > 0 else 0.0
+
+        denom = (t_std ** 2 + o_std ** 2) ** 0.5
+        if denom > 0:
+            twin = float(norm.cdf((t_expected - o_expected) / denom) * 100)
         else:
-            std_factor = 0.40  # Default variance for other stats
+            twin = 50.0 if t_expected == o_expected else (100.0 if t_expected > o_expected else 0.0)
 
-        # Calculate variance for each team
-        team_variance = sum((team_player_data[cat] * std_factor * team_player_data['games'])**2)
-        opponent_variance = sum((opponent_player_data[cat] * std_factor * opponent_player_data['games'])**2)
-        
-        # Calculate total standard deviation
-        total_std = (team_variance + opponent_variance)**0.5
-        
-        # For turnovers, lower is better so invert the difference
-        expected_difference = opponent_expected - team_expected if cat == 'turno' else team_expected - opponent_expected
-        
-        try:
-            z_score = expected_difference / total_std if total_std > 0 else float('inf')
-            team_win_percentage = norm.cdf(z_score) * 100
-        except (ZeroDivisionError, ValueError):
-            team_win_percentage = 50.0 if expected_difference == 0 else (100.0 if expected_difference > 0 else 0.0)
+    else:
+        # counting stats
+        t_cur = float((team_current_stats.get(espn_cat, {}) or {}).get('value', 0) or 0)
+        o_cur = float((opponent_current_stats.get(espn_cat, {}) or {}).get('value', 0) or 0)
 
-    opponent_win_percentage = 100 - team_win_percentage
-    
-    #print(f"Category: {cat}")
-    #print(f"Team expected: {team_expected:.2f}")
-    #print(f"Opponent expected: {opponent_expected:.2f}")
-    #print(f"Team win %: {team_win_percentage:.2f}")
-    #print(f"Opponent win %: {opponent_win_percentage:.2f}")
+        t_expected = t_cur + float((t_df[cat] * t_df['games']).sum())
+        o_expected = o_cur + float((o_df[cat] * o_df['games']).sum())
 
+        if cat == 'pts':
+            std_factor = 0.25
+        elif cat in ('threeptm', 'stl', 'blk'):
+            std_factor = 0.60
+        else:
+            std_factor = 0.40
 
-    
-    return round(team_expected, 2), round(opponent_expected, 2), round(team_win_percentage, 2), round(opponent_win_percentage, 2)
+        t_var = float(((t_df[cat] * std_factor * t_df['games']) ** 2).sum())
+        o_var = float(((o_df[cat] * std_factor * o_df['games']) ** 2).sum())
+        denom = (t_var + o_var) ** 0.5
+
+        # For turnovers, lower is better -> invert sign
+        diff = (o_expected - t_expected) if cat == 'turno' else (t_expected - o_expected)
+
+        if denom > 0:
+            twin = float(norm.cdf(diff / denom) * 100)
+        else:
+            twin = 50.0 if diff == 0 else (100.0 if diff > 0 else 0.0)
+
+    owin = 100.0 - twin
+    return round(t_expected, 2), round(o_expected, 2), round(twin, 2), round(owin, 2)
