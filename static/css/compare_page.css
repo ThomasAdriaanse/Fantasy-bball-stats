@@ -28,6 +28,7 @@ body {
   padding:16px 18px;
   box-shadow:0 6px 18px rgba(0,0,0,0.25);
   margin: 10px;
+  overflow: hidden; /* contain any inner overflow */
 }
 
 .body-container{ max-width:96vw; margin:0 auto; padding:14px 0 32px; }
@@ -42,19 +43,84 @@ body {
 .team-name.right{ color:#ff7a7a; }
 .team-points{ font-size:16px; opacity:0.9; }
 
-/* Tables */
-.table-container{ display:grid; grid-template-columns:1fr 1fr; gap:18px; width:100%; align-items:start; }
-.table-wrapper{ max-width:none; min-width:0; overflow-x:visible; }
-table.data-table{ width:100%; border-collapse:collapse; color:#e8eefc; font-size:14px; background:#0b0e14; border:1px solid rgba(255,255,255,0.08); table-layout: auto;}
-.data-table th,.data-table td{ border-bottom:1px solid rgba(255,255,255,0.08); padding:8px 10px; text-align:right; white-space:nowrap; }
-.data-table th:first-child,.data-table td:first-child{ text-align:left; }
+/* ===================== */
+/*      TABLES (FIX)     */
+/* ===================== */
+.table-container{
+  display:grid;
+  grid-template-columns: minmax(0,1fr) minmax(0,1fr); /* allow shrinking in grid */
+  gap:18px;
+  width:100%;
+  align-items:start;
+}
+
+.table-wrapper{
+  max-width:100%;
+  min-width:0;                 /* critical for grid children */
+  overflow:auto;               /* scroll instead of spilling */
+  -webkit-overflow-scrolling: touch;
+}
+
+table.data-table{
+  width:100%;
+  max-width:100%;
+  border-collapse:collapse;
+  color:#e8eefc;
+  font-size:14px;
+  background:#0b0e14;
+  border:1px solid rgba(255,255,255,0.08);
+  table-layout: fixed;         /* stable column widths */
+}
+
+.data-table th,
+.data-table td{
+  border-bottom:1px solid rgba(255,255,255,0.08);
+  padding:8px 10px;
+  text-align:right;
+  white-space:nowrap;
+  overflow: visible;   /* no clipping */
+  text-overflow:ellipsis;      /* show … */
+}
+
+/* === Name column: give it more space + allow wrapping === */
+.data-table th:first-child,
+.data-table td:first-child{
+  text-align: left;
+  width: 13%;          /* more horizontal space */
+  min-width: 50px;    /* keep roomy even in wider views */
+  max-width: none;
+  text-overflow: clip; /* disable ellipsis */
+}
+
+@media (max-width: 980px){
+  .data-table th:first-child,
+  .data-table td:first-child{
+    width: 100%;       /* stack nicely on narrow screens */
+    min-width: 220px;
+  }
+}
+
+
 .data-table thead th{ background:#121722; font-weight:600; }
-.table-compact thead th, .table-compact td { white-space:nowrap; }
+
+.table-compact thead th,
+.table-compact td{
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
 .player-out{ color:#ff6b6b; }
 .player-dtd{ color:#ffd166; }
 a{ color:#63a0d4; text-decoration:none; }
 a:hover{ text-decoration:underline; }
-@media (max-width: 980px){ .table-container{ grid-template-columns:1fr; } }
+
+@media (max-width: 980px){
+  .table-container{ grid-template-columns:1fr; }
+  .data-table{ font-size:13px; }
+  .data-table th:first-child,
+  .data-table td:first-child{ max-width: 200px; }
+}
 
 /* Graph sections */
 .graph-section{ padding:12px; }
@@ -128,6 +194,7 @@ svg .domain, svg .tick line{ stroke:rgba(255,255,255,0.35); }
   background-repeat: repeat-x;
   background-color: transparent;
 }
+
 /* ====== ODDS (v2) — single centered bar per category ====== */
 .odds-card-v2 { padding: 16px 18px; }
 

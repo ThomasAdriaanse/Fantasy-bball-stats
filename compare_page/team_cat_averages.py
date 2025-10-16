@@ -1,83 +1,73 @@
 from __future__ import annotations
-
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 import numpy as np
 import pandas as pd
 
 import compare_page.compare_page_data as cpd
-import compare_page.team_stats_data as tsd  # kept for compatibility, not directly used here
+import compare_page.team_stats_data as tsd  # compatibility
 
 
-def _team_category_averages(league, year: int, stat_window: str = 'projected') -> Dict[str, Any]:
+def _team_category_averages(league, year: int, stat_window: str = "projected") -> Dict[str, Any]:
     """
-    Compute league-wide per-team category averages for a given ESPN stats window.
-
     Returns:
       {
-        'categories': ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS'],
+        'categories': [...],
         'teams': [
           {
             'team_name': '…',
             'abbrev': '…',
-            'cats': {'FG%': 0.48, 'FT%': 0.79, '3PM': 10.2, 'REB': 48.7, 'AST': 23.4, 'STL': 7.9, 'BLK': 4.2, 'TO': 13.7, 'PTS': 108.3},
-            'z':     {'FG%': 0.50, 'FT%': -0.12, '3PM': 0.8, ...},   # z > 0 = better (including inverted for TO)
-            'punts': ['FT%', 'AST']
+            # Raw values (FG%/FT% in proportions)
+            'cats': {'FG%': 0.48, 'FT%': 0.79, '3PM': ..., 'TO': ..., ...},
+
+            # League-relative analytics per cat:
+            'z': {'FG%': 0.41, 'TO': 0.55, ...},                # z>0 is better (TO inverted)
+            'rank': {'FG%': 4, 'TO': 3, ...},                   # 1 = best (TO ranks use “low TO is best”)
+            'pct': {'FG%': 0.72, 'TO': 0.81, ...},              # percentile 0..1 where higher = better (TO inverted)
+            'strength': {'FG%': 0.76, 'TO': 0.84, ...},         # min-max 0..1 for bar length (higher = better)
+            'punts': ['FG%', 'AST']                             # stricter heuristic below
           },
           ...
         ]
       }
-    Notes:
-      • Percentages are returned as proportions (e.g., 0.476), not 47.6.
-      • We derive FG%/FT% from summed makes/attempts (more stable than mean of player %).
-      • Z-scores invert TO so that lower TO => higher (better) z.
     """
+    categories = ['FG%','FT%','3PM','REB','AST','STL','BLK','TO','PTS']
 
-    # Columns that cpd.get_team_player_data expects/returns
-    cols: List[str] = [
+    cols = [
         'player_name','min','fgm','fga','fg%','ftm','fta','ft%','threeptm',
         'reb','ast','stl','blk','turno','pts','inj','fpts','games'
     ]
 
-    # Build records per team
     records: List[Dict[str, Any]] = []
+    vol_meta: List[Dict[str, float]] = []  # for % volume (attempts)
+
     for ti, team in enumerate(league.teams):
-        # Get strict-window player rows (no fallbacks)
         df = cpd.get_team_player_data(
-            league=league,
-            team_num=ti,
-            columns=cols,
-            year=year,
-            league_scoring_rules={
-                'fgm':0,'fga':0,'ftm':0,'fta':0,'threeptm':0,
-                'reb':0,'ast':0,'stl':0,'blk':0,'turno':0,'pts':0
-            },
-            week_data=None,
-            stat_window=stat_window
+            league=league, team_num=ti, columns=cols, year=year,
+            league_scoring_rules={'fgm':0,'fga':0,'ftm':0,'fta':0,'threeptm':0,'reb':0,'ast':0,'stl':0,'blk':0,'turno':0,'pts':0},
+            week_data=None, stat_window=stat_window
         )
 
-        # Coerce numeric columns, ignore 'N/A'
-        num_cols = ['fgm','fga','ftm','fta','threeptm','reb','ast','stl','blk','turno','pts']
-        for c in num_cols + ['fg%','ft%']:
+        # coerce numerics
+        for c in ['fgm','fga','ftm','fta','threeptm','reb','ast','stl','blk','turno','pts','fg%','ft%']:
             df[c] = pd.to_numeric(df[c], errors='coerce')
 
-        # Sum player averages to get a team per-game estimate
-        s = df[num_cols].sum(numeric_only=True)
+        s = df[['fgm','fga','ftm','fta','threeptm','reb','ast','stl','blk','turno','pts']].sum(numeric_only=True)
 
-        # Robust percentage derivation from team makes/attempts
-        fgm, fga, ftm, fta = float(s.get('fgm', 0.0)), float(s.get('fga', 0.0)), float(s.get('ftm', 0.0)), float(s.get('fta', 0.0))
+        fgm, fga = float(s.get('fgm',0)), float(s.get('fga',0))
+        ftm, fta = float(s.get('ftm',0)), float(s.get('fta',0))
         fg_pct = (fgm / fga) if fga else 0.0
         ft_pct = (ftm / fta) if fta else 0.0
 
         cats = {
             'FG%': round(fg_pct, 4),
             'FT%': round(ft_pct, 4),
-            '3PM': round(float(s.get('threeptm', 0.0)), 2),
-            'REB': round(float(s.get('reb', 0.0)), 2),
-            'AST': round(float(s.get('ast', 0.0)), 2),
-            'STL': round(float(s.get('stl', 0.0)), 2),
-            'BLK': round(float(s.get('blk', 0.0)), 2),
-            'TO' : round(float(s.get('turno', 0.0)), 2),
-            'PTS': round(float(s.get('pts', 0.0)), 2),
+            '3PM': round(float(s.get('threeptm',0)), 2),
+            'REB': round(float(s.get('reb',0)), 2),
+            'AST': round(float(s.get('ast',0)), 2),
+            'STL': round(float(s.get('stl',0)), 2),
+            'BLK': round(float(s.get('blk',0)), 2),
+            'TO' : round(float(s.get('turno',0)), 2),
+            'PTS': round(float(s.get('pts',0)), 2),
         }
 
         records.append({
@@ -85,39 +75,68 @@ def _team_category_averages(league, year: int, stat_window: str = 'projected') -
             'abbrev': getattr(team, 'team_abbrev', None) or getattr(team, 'teamAbbrev', ''),
             'cats': cats
         })
+        vol_meta.append({'FGA': fga, 'FTA': fta})
 
-    # Compute z-scores across teams per category
-    categories = ['FG%','FT%','3PM','REB','AST','STL','BLK','TO','PTS']
-    mat = {c: np.array([r['cats'][c] for r in records], dtype=float) for c in categories}
+    # Build league arrays
+    league_vals = {c: np.array([r['cats'][c] for r in records], dtype=float) for c in categories}
 
-    # For TO, lower is better — invert for z so that low TO -> positive z
+    # Invert for “better is higher”
+    def better_is_higher(cat: str, arr: np.ndarray) -> np.ndarray:
+        return -arr if cat == 'TO' else arr
+
+    # z / rank / percentile / strength (min-max)
     for c in categories:
-        arr = mat[c]
-        arr_for_z = -arr if c == 'TO' else arr
-        mu = float(np.mean(arr_for_z))
-        sd = float(np.std(arr_for_z, ddof=0)) or 1.0
-        zs = (arr_for_z - mu) / sd
-        for i, r in enumerate(records):
-            r.setdefault('z', {})[c] = round(float(zs[i]), 3)
+        raw = league_vals[c]
+        adj = better_is_higher(c, raw)
 
-    # Punt heuristic:
-    #   - z <= -0.6  OR  team ranks in bottom 3 for that category
-    for c in categories:
-        vals = mat[c]
-        order = np.argsort(vals)  # ascending by raw value
-        if c != 'TO':
-            bottom3_idx = set(order[:3])     # low values are bad
-        else:
-            bottom3_idx = set(order[-3:])    # high TO is bad
+        mu  = float(adj.mean())
+        sd  = float(adj.std(ddof=0)) or 1.0
+        z   = (adj - mu) / sd
 
+        # percentile (empirical CDF); strength uses min-max on adj
+        order = np.argsort(adj)              # ascending
+        ranks = np.empty_like(order)
+        ranks[order] = np.arange(1, len(adj)+1)  # 1..N where higher adj => higher rank (better)
+        pct   = ranks / float(len(adj))          # 0..1 (higher is better)
+
+        mn, mx = float(adj.min()), float(adj.max())
+        strength = (adj - mn) / (mx - mn) if mx > mn else np.full_like(adj, 0.5)
+
+        # store back per-team
         for i, r in enumerate(records):
+            r.setdefault('z', {})[c]         = round(float(z[i]), 3)
+            r.setdefault('rank', {})[c]      = int(len(adj) - ranks[i] + 1)  # 1 = best
+            r.setdefault('pct', {})[c]       = round(float(pct[i]), 3)
+            r.setdefault('strength', {})[c]  = round(float(strength[i]), 3)
+
+    # Stricter, volume-aware punts
+    # Rule: A cat is “punt” if ALL are true:
+    #  - z <= -0.7
+    #  - bottom 3 by rank
+    #  - for FG%/FT% require meaningful attempts: FGA >= league median*0.6 / FTA >= median*0.6 (avoid tiny-volume fake punts)
+    # Limit to the 3 worst cats by z to avoid “everything is red” teams.
+    fga_all = np.array([v['FGA'] for v in vol_meta], dtype=float)
+    fta_all = np.array([v['FTA'] for v in vol_meta], dtype=float)
+    fga_med = float(np.median(fga_all)) or 0.0
+    fta_med = float(np.median(fta_all)) or 0.0
+
+    for i, r in enumerate(records):
+        # score candidates by z (ascending = worse first)
+        candidates: List[Tuple[str, float]] = []
+        for c in categories:
             z = r['z'][c]
-            is_bottom = i in bottom3_idx
-            if z <= -0.6 or is_bottom:
-                r.setdefault('punts', []).append(c)
+            is_bottom3 = r['rank'][c] >= (len(records)-2)  # ranks: 1 best, N worst
+            vol_ok = True
+            if c == 'FG%':
+                vol_ok = (vol_meta[i]['FGA'] >= 0.6 * fga_med)
+            elif c == 'FT%':
+                vol_ok = (vol_meta[i]['FTA'] >= 0.6 * fta_med)
 
-    # Normalize output (stable sort of punts)
-    for r in records:
-        r['punts'] = sorted(r.get('punts', []))
+            if (z <= -0.7) and is_bottom3 and vol_ok:
+                candidates.append((c, z))
+
+        # take up to 3 worst by z
+        candidates.sort(key=lambda t: t[1])  # most negative first
+        r['punts'] = [c for c, _ in candidates[:3]]
 
     return {'categories': categories, 'teams': records}
