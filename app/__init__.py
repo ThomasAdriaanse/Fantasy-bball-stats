@@ -22,5 +22,9 @@ def create_app():
 
     from .blueprints.overview.routes import bp as overview_bp
     app.register_blueprint(overview_bp, url_prefix="/overview")
+    
+    from .blueprints.trades.routes import bp as trades_bp
+    app.register_blueprint(trades_bp, url_prefix="/trades")
+
 
     return app

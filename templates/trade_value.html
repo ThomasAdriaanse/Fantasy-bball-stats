@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Trade Value (Z-Scores){% endblock %}
+
+{% block head_extra %}
+  <style>
+    .trade-wrap{max-width:1100px;margin:0 auto;padding:16px;}
+    .card{background:#10131a;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:16px 18px;box-shadow:0 6px 18px rgba(0,0,0,0.25);margin: 10px 0;}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    .side-title{font-weight:700;margin-bottom:8px}
+    label{font-size:12px;opacity:.9}
+    select,input{width:100%;background:#0b0e14;color:#e8eefc;border:1px solid rgba(255,255,255,0.18);border-radius:8px;padding:8px 10px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .submit-row{display:flex;gap:10px;align-items:center;justify-content:flex-start;margin-top:10px}
+    .btn{background:#0b0e14;border:1px solid rgba(255,255,255,0.18);padding:10px 14px;border-radius:8px;color:#e8eefc;cursor:pointer}
+    .btn:hover{filter:brightness(1.1)}
+    table{width:100%;border-collapse:collapse;color:#e8eefc;font-size:14px}
+    th,td{border-bottom:1px solid rgba(255,255,255,0.08);padding:8px 10px;text-align:right;white-space:nowrap}
+    th:first-child,td:first-child{text-align:left}
+    thead th{background:#121722;font-weight:600}
+    .score-box{display:flex;gap:16px;align-items:baseline;margin-top:6px}
+    .score-box .big{font-size:24px;font-weight:800}
+    .diff-pos{color:#63a0d4}
+    .diff-neg{color:#ff7a7a}
+    .verdict{font-weight:700;margin-top:6px}
+    .hint{font-size:12px;opacity:.7;margin-top:6px}
+  </style>
+{% endblock head_extra %}
+
+{% block content %}
+<div class="trade-wrap">
+
+  <h1>Trade Value (Z-Scores)</h1>
+  <div class="card">
+    <form method="POST" action="{{ url_for('trades.trade_analyzer') }}">
+      <div class="grid">
+        <div>
+          <div class="side-title">Side A (you receive)</div>
+          {% for i in range(4) %}
+          <div style="margin-bottom:8px">
+            <label>Player {{ i+1 }}</label>
+            <select name="a{{ i+1 }}">
+              <option value=""></option>
+              {% for n in player_names %}
+                <option value="{{ n }}" {{ 'selected' if side_a[i]==n else '' }}>{{ n }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div>
+          <div class="side-title">Side B (you send)</div>
+          {% for i in range(4) %}
+          <div style="margin-bottom:8px">
+            <label>Player {{ i+1 }}</label>
+            <select name="b{{ i+1 }}">
+              <option value=""></option>
+              {% for n in player_names %}
+                <option value="{{ n }}" {{ 'selected' if side_b[i]==n else '' }}>{{ n }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="submit-row">
+        <div>
+          <label for="num_games">Average Z over last N games (0 = full season)</label>
+          <input id="num_games" type="number" min="0" name="num_games" value="{{ num_games }}">
+        </div>
+        <button class="btn" type="submit">Evaluate Trade</button>
+      </div>
+      <div class="hint">Z categories used: {{ ', '.join(z_categories) }}. Higher total Z is better (Z_TOV is already negative when TO is bad).</div>
+    </form>
+  </div>
+
+  {% if results %}
+  <div class="card">
+    <h2>Results</h2>
+    <div class="grid">
+      <div>
+        <h3>Side A — Category Totals</h3>
+        <table>
+          <thead><tr><th>Category</th><th>Z Total</th></tr></thead>
+          <tbody>
+            {% for c in z_categories %}
+              <tr><td>{{ c }}</td><td>{{ '%.3f'|format(results.a_totals[c]) }}</td></tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr><th>Overall Z</th><th class="big">{{ '%.3f'|format(results.a_score) }}</th></tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div>
+        <h3>Side B — Category Totals</h3>
+        <table>
+          <thead><tr><th>Category</th><th>Z Total</th></tr></thead>
+          <tbody>
+            {% for c in z_categories %}
+              <tr><td>{{ c }}</td><td>{{ '%.3f'|format(results.b_totals[c]) }}</td></tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr><th>Overall Z</th><th class="big">{{ '%.3f'|format(results.b_score) }}</th></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="score-box">
+      <div>Difference (A − B):</div>
+      {% set cls = 'diff-pos' if results.diff > 0 else ('diff-neg' if results.diff < 0 else '') %}
+      <div class="big {{ cls }}">{{ '%.3f'|format(results.diff) }}</div>
+    </div>
+    <div class="verdict">{{ results.verdict }}</div>
+    <div class="hint">Tip: If you punt categories, mentally de-weight those columns when reading the tables.</div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
