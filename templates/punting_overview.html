@@ -18,6 +18,12 @@
     </div>
   </div>
 
+  <!-- View toggle -->
+  <div class="view-toggle">
+    <button id="btnByTeam" class="tab active">By Team</button>
+    <button id="btnByCategory" class="tab">By Category</button>
+  </div>
+
   <div class="legend">
     <span class="swatch blue"></span> Above average (z &gt; 0)
     <span class="swatch mid"></span> Around average (z ≈ 0)
@@ -29,7 +35,15 @@
     Percentages are proportions (e.g., 0.476 → 47.6%).
   </div>
 
-  <div id="grid" class="grid"></div>
+  <!-- By Team (cards grid) -->
+  <div id="viewTeam">
+    <div id="grid" class="grid"></div>
+  </div>
+
+  <!-- By Category (one table per category) -->
+  <div id="viewCategory" class="hidden">
+    <div id="catTables"></div>
+  </div>
 </div>
 {% endblock content %}
 
@@ -48,6 +62,20 @@
 select, .pill{
   background:#0b0e14; color:var(--text); border:1px solid var(--border-strong); border-radius:8px; padding:8px 10px;
 }
+
+.view-toggle{ display:flex; gap:8px; margin:8px 0 14px; }
+.tab{
+  background:#0b0e14; color:var(--text); border:1px solid var(--border);
+  padding:8px 12px; border-radius:999px; cursor:pointer;
+}
+.tab.active{ border-color:var(--border-strong); box-shadow:0 0 0 1px var(--border-strong) inset; }
+
+.legend{ display:flex; gap:16px; align-items:center; font-size:12px; opacity:.9; margin: 6px 2px 10px; }
+.swatch{ width:24px; height:6px; border-radius:3px; display:inline-block; }
+.swatch.blue{ background:rgb(70,130,180); }
+.swatch.mid{ background:rgb(160,170,185); }
+.swatch.red{ background:rgb(255,72,72); }
+.hint{ font-size:12px; opacity:.75; margin: 6px 2px 12px; }
 
 .grid{
   display:grid;
@@ -69,50 +97,96 @@ select, .pill{
 .bar-row{ display:grid; grid-template-columns: 64px 1fr auto; align-items:center; gap:10px; margin:8px 0; }
 .cat-label{ font-size:12px; opacity:.9; text-align:right; }
 .bar-track{ background:#0b0e14; border:1px solid var(--border); border-radius:999px; height:12px; position:relative; overflow:hidden; }
-.bar-fill{ position:absolute; top:0; left:0; bottom:0; border-radius:999px; background:#8fa1b8; } /* color set via JS */
+.bar-fill{ position:absolute; top:0; left:0; bottom:0; border-radius:999px; background:#8fa1b8; }
 .bar-value{ font-size:12px; opacity:.85; min-width:54px; text-align:right; }
-
-/* Don’t override color; just outline punts */
 .bar-row.is-punt .bar-track{ border-color:#ff4a4a; box-shadow:0 0 0 1px rgba(255,74,74,0.35) inset; }
 
-.legend{ display:flex; gap:16px; align-items:center; font-size:12px; opacity:.9; margin: 6px 2px 10px; }
-.swatch{ width:24px; height:6px; border-radius:3px; display:inline-block; }
-.swatch.blue{ background:rgb(70,130,180); }
-.swatch.mid{ background:rgb(160,170,185); }
-.swatch.red{ background:rgb(255,72,72); }
-.hint{ font-size:12px; opacity:.75; margin: 6px 2px 12px; }
+.hidden{ display:none; }
+
+/* Category tables */
+.cat-section{ margin:18px 0 28px; }
+.cat-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.cat-title{ font-weight:700; font-size:18px; }
+.cat-table{
+  width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--border); box-shadow:var(--shadow);
+}
+.cat-table th, .cat-table td{
+  padding:10px 12px; border-bottom:1px solid var(--border);
+  font-size:14px; color:var(--text);
+}
+.cat-table th{ text-align:left; opacity:.9; background:#0f1219; }
+.cat-table tr:last-child td{ border-bottom:none; }
+.cat-miniBar{ height:10px; background:#0b0e14; border:1px solid var(--border); border-radius:999px; overflow:hidden; }
+.cat-miniFill{ height:100%; width:0%; background:#8fa1b8; border-radius:999px; }
+.badge-punt{ border:1px solid #ff4a4a; color:#ff9a9a; background:#0b0e14; padding:2px 6px; border-radius:999px; font-size:12px; }
+.zchip{ font-variant-numeric: tabular-nums; padding:2px 6px; border-radius:6px; background:#0b0e14; border:1px solid var(--border); }
 </style>
 {% endblock head_extra %}
 
 {% block body_js %}
 <script>
-  // Data comes from the server
+  // ---------- Data + helpers ----------
   const DATA = {{ data_json|safe }};
   const categories = DATA.categories;
   const teams = DATA.teams;
 
-  const grid = document.getElementById('grid');
+  // If server didn’t send rank/strength, compute them here.
+  // strength: 0..1 using min-max on "goodness" value per category (invert TO).
+  // rank: 1..N, better first (invert TO for comparison too).
+  function computeDerived(){
+    const N = teams.length;
+    teams.forEach(t => { t.rank = t.rank || {}; t.strength = t.strength || {}; });
+
+    categories.forEach(cat => {
+      // gather values
+      const vals = teams.map(t => t.cats?.[cat] ?? 0);
+      // invert for TO “goodness”
+      const goodVals = (cat === 'TO') ? vals.map(v => -v) : vals.slice();
+
+      const min = Math.min(...goodVals);
+      const max = Math.max(...goodVals);
+      const range = (max - min) || 1;
+
+      // compute strength + rank
+      const order = goodVals
+        .map((v,i) => ({i,v}))
+        .sort((a,b) => b.v - a.v)  // better (higher goodness) first
+        .map((o,idx) => ({i:o.i, rank:idx+1}));
+
+      order.forEach(o => teams[o.i].rank[cat] = o.rank);
+      teams.forEach((t, i) => {
+        const s = (goodVals[i] - min) / range;
+        t.strength[cat] = s;
+      });
+
+      // also ensure z exists
+      teams.forEach(t => { if (!t.z) t.z = {}; if (typeof t.z[cat] !== 'number') t.z[cat] = 0; });
+    });
+  }
+  computeDerived();
 
   function fmt(cat, v){
     if (cat === 'FG%' || cat === 'FT%') return (v*100).toFixed(1) + '%';
     return (Math.round(v*100)/100).toString();
   }
 
-  // simple diverging palette from red -> gray -> blue driven by z
   function colorFromZ(z){
     const zClamped = Math.max(-2.0, Math.min(2.0, z));
     const t = (zClamped + 2) / 4; // 0..1
     const red  = [255, 72, 72];
     const gray = [160,170,185];
     const blue = [70,130,180];
-    function lerp(a,b,t){ return a + (b-a)*t; }
-    function mix(c1,c2,t){ return [lerp(c1[0],c2[0],t), lerp(c1[1],c2[1],t), lerp(c1[2],c2[2],t)]; }
     const mid = 0.5;
+    const lerp = (a,b,t) => a + (b-a)*t;
+    const mix = (c1,c2,t) => [lerp(c1[0],c2[0],t), lerp(c1[1],c2[1],t), lerp(c1[2],c2[2],t)];
     const rgb = (t < mid) ? mix(red, gray, t/mid) : mix(gray, blue, (t-mid)/(1-mid));
     return `rgb(${rgb.map(x=>Math.round(x)).join(',')})`;
   }
 
-  function render(){
+  // ---------- By Team (cards) ----------
+  const grid = document.getElementById('grid');
+
+  function renderByTeam(){
     grid.innerHTML = '';
     teams.forEach(team => {
       const card = document.createElement('div');
@@ -189,9 +263,144 @@ select, .pill{
     });
   }
 
-  render();
+  // ---------- By Category (tables) ----------
+  const catRoot = document.getElementById('catTables');
 
-  // window selector -> reload page to recompute from server
+  function renderByCategory(){
+    catRoot.innerHTML = '';
+
+    categories.forEach(cat => {
+      // sort teams by rank (best first)
+      const rows = teams
+        .map((t,i) => ({
+          team_name: t.team_name,
+          value: t.cats?.[cat] ?? 0,
+          z: (t.z && typeof t.z[cat] === 'number') ? t.z[cat] : 0,
+          rank: (t.rank && t.rank[cat]) || i+1,
+          strength: (t.strength && t.strength[cat] != null) ? t.strength[cat] : 0,
+          punt: Array.isArray(t.punts) && t.punts.includes(cat)
+        }))
+        .sort((a,b) => a.rank - b.rank);
+
+      const section = document.createElement('div');
+      section.className = 'cat-section';
+
+      const header = document.createElement('div');
+      header.className = 'cat-header';
+
+      const title = document.createElement('div');
+      title.className = 'cat-title';
+      title.textContent = cat;
+
+      const sub = document.createElement('div');
+      sub.className = 'hint';
+
+      header.appendChild(title);
+      header.appendChild(sub);
+      section.appendChild(header);
+
+      const table = document.createElement('table');
+      table.className = 'cat-table';
+
+      const thead = document.createElement('thead');
+      thead.innerHTML = `
+        <tr>
+          <th style="width:56px;">Rank</th>
+          <th>Team</th>
+          <th style="width:160px;">Value</th>
+          <th style="width:160px;">z</th>
+          <th style="width:200px;">Strength</th>
+          <th style="width:80px;">&nbsp;</th>
+        </tr>`;
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+
+      rows.forEach(r => {
+        const tr = document.createElement('tr');
+
+        const tdRank = document.createElement('td');
+        tdRank.textContent = r.rank;
+
+        const tdTeam = document.createElement('td');
+        tdTeam.textContent = r.team_name;
+
+        const tdVal = document.createElement('td');
+        tdVal.textContent = fmt(cat, r.value);
+
+        const tdZ = document.createElement('td');
+        const zchip = document.createElement('span');
+        zchip.className = 'zchip';
+        zchip.style.borderColor = 'transparent';
+        zchip.style.color = '#fff';
+        zchip.style.background = colorFromZ(r.z);
+        zchip.textContent = (Math.round(r.z * 100) / 100).toFixed(2);
+        tdZ.appendChild(zchip);
+
+        const tdBar = document.createElement('td');
+        const bar = document.createElement('div');
+        bar.className = 'cat-miniBar';
+        const fill = document.createElement('div');
+        fill.className = 'cat-miniFill';
+        fill.style.width = (r.strength * 100).toFixed(1) + '%';
+        fill.style.background = colorFromZ(r.z);
+        bar.appendChild(fill);
+        tdBar.appendChild(bar);
+
+        const tdPunt = document.createElement('td');
+        if (r.punt){
+          const badge = document.createElement('span');
+          badge.className = 'badge-punt';
+          badge.textContent = 'Punt';
+          tdPunt.appendChild(badge);
+        } else {
+          tdPunt.innerHTML = '&nbsp;';
+        }
+
+        tr.appendChild(tdRank);
+        tr.appendChild(tdTeam);
+        tr.appendChild(tdVal);
+        tr.appendChild(tdZ);
+        tr.appendChild(tdBar);
+        tr.appendChild(tdPunt);
+
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(tbody);
+      section.appendChild(table);
+      catRoot.appendChild(section);
+    });
+  }
+
+  // initial render
+  renderByTeam();
+
+  // ---------- Toggle wiring ----------
+  const viewTeam = document.getElementById('viewTeam');
+  const viewCategory = document.getElementById('viewCategory');
+  const btnByTeam = document.getElementById('btnByTeam');
+  const btnByCategory = document.getElementById('btnByCategory');
+
+  function setActive(which){
+    if (which === 'team'){
+      viewTeam.classList.remove('hidden');
+      viewCategory.classList.add('hidden');
+      btnByTeam.classList.add('active');
+      btnByCategory.classList.remove('active');
+      renderByTeam();
+    } else {
+      viewCategory.classList.remove('hidden');
+      viewTeam.classList.add('hidden');
+      btnByCategory.classList.add('active');
+      btnByTeam.classList.remove('active');
+      renderByCategory();
+    }
+  }
+  btnByTeam.addEventListener('click', () => setActive('team'));
+  btnByCategory.addEventListener('click', () => setActive('cat'));
+
+  // stat window selector -> reload page (server recompute)
   document.getElementById('window').addEventListener('change', (e) => {
     const w = e.target.value;
     const params = new URLSearchParams(window.location.search);
