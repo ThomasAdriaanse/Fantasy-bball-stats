@@ -12,7 +12,7 @@
 
     <!-- Controls -->
     <div class="controls-card">
-      <form method="POST" action="{{ url_for('player_stats') }}">
+      <form method="POST" action="{{ url_for('players.player_stats') }}">
         <div class="controls-grid">
           <div>
             <label for="player_name">Select Player</label>
@@ -66,8 +66,10 @@
     stat: "{{ selected_stat }}"
   });
 
-  d3.json(`/api/player_stats?${params.toString()}`, { cache: "no-store" })
-    .then(function (data) {
+  const apiUrl = "{{ url_for('players.api_player_stats') }}";
+
+  d3.json(`${apiUrl}?${params.toString()}`, { cache: "no-store" })
+      .then(function (data) {
       if (!data || data.length === 0) {
         d3.select("#chart").append("p").text("No data available for this selection.");
         return;

@@ -13,6 +13,8 @@
     --shadow: 0 6px 18px rgba(0,0,0,.25);
     --radius: 12px;
     --space: 16px;
+    --team1-colour: rgba(70,130,180,0.35);
+    --team2-colour: rgba(255,0,0,0.35);
   }
   
   /* Reset-ish */
@@ -42,6 +44,7 @@
     backdrop-filter: saturate(1.2) blur(6px);
     justify-content: center;
     flex-wrap: wrap;
+    margin-bottom: 40px;
   }
   .topnav .brand {
     font-weight: 700; letter-spacing: .2px; margin-right: 4px;
@@ -70,15 +73,51 @@
     padding: var(--space);
   }
   
-  /* Buttons */
+  /* Buttons (neutral by default, flash red on hover) */
   .btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 10px 14px; border-radius: 10px;
-    background: linear-gradient(180deg, #ff4d4d, var(--accent-2));
-    color: #fff; border: 1px solid #b32626; cursor: pointer;
-    transition: transform .15s ease, box-shadow .15s ease, filter .12s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;                  /* match entry look */
+    background: var(--card);             /* neutral like old entry page */
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    cursor: pointer;
+    transition:
+      background .18s ease,
+      border-color .18s ease,
+      color .18s ease,
+      transform .15s ease,
+      box-shadow .15s ease,
+      filter .12s ease;
   }
-  .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 25px rgba(214,40,40,.35); filter: brightness(1.05); }
+
+  .btn:hover {
+    background: var(--accent-2);         /* highlight red */
+    border-color: #b32626;               /* subtle red border */
+    color: #fff;                         /* readable on red */
+    transform: translateY(-1px);
+    box-shadow: 0 10px 25px rgba(214,40,40,.35);
+    filter: brightness(1.02);
+  }
+
+  /* Optional: focus ring for keyboard users */
+  .btn:focus {
+    outline: none;
+    box-shadow:
+      0 0 0 2px rgba(214,40,40,0.35),
+      0 0 0 4px rgba(214,40,40,0.18);
+  }
+
+  /* If you still use a "primary" variant anywhere */
+  .btn-primary {
+    background: var(--accent-2);
+    color: #fff;
+    border: 1px solid #b32626;
+  }
+  .btn-primary:hover { filter: brightness(1.05); transform: translateY(-1px); }
+
   
   /* Inputs */
   select,

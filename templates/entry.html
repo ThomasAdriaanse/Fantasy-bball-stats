@@ -1,106 +1,80 @@
 {% extends "base.html" %}
 {% block title %}Home · Fantasy BBall{% endblock %}
 
-{% block head_extra %}
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico">
-    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/entry_page.css') }}">
-    <title>Enter Information</title>
-</head>
-{% endblock head_extra %}
+{% block head_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/entry_page.css') }}">
+{% endblock head_css %}
 
 {% block content %}
-    
-<!DOCTYPE html>
-<html lang="en">
+<div class="container card">
+  <h1>Fantasy Basketball Matchup Predictor</h1>
 
+  <div class="flex-container">
+    <div class="form-container">
+      <form id="matchupForm" action="{{ url_for('main.process_information') }}" method="post">
+        <label for="league_id">League ID:</label>
+        <input type="text" id="league_id" name="league_id" required>
 
+        <label for="year">Year:</label>
+        <input type="text" id="year" name="year" required>
 
+        <label for="espn_s2">ESPN S2:</label>
+        <input type="text" id="espn_s2" name="espn_s2">
+
+        <label for="swid">SWID:</label>
+        <input type="text" id="swid" name="swid">
+
+        <!-- Use the global .btn style from base.css -->
+        <button type="submit" class="btn">Submit</button>
+      </form>
+
+      {% if error_message %}
+      <div class="error-message">
+        {{ error_message }}
+      </div>
+      {% endif %}
+
+      <div class="note">
+        <p><b>Note:</b> Your league ID can be found in your ESPN league URL. The year is the season end year (this season is 2025).</p>
+        <p>You only need <code>espn_s2</code> and <code>swid</code> if your league is private.</p>
+        <p><u>How to find your espn_s2 and swid:</u><br>
+          Log in to ESPN fantasy basketball. Open DevTools → Application/Storage → Cookies for fantasy.espn.com to copy values.
+        </p>
+
+        <p><b>If you want to test this tool out, click one of the buttons below to use an example league:</b></p>
+        <div class="button-wrapper">
+          <button class="btn" id="examplePointsButton" onclick="fillPointsLeague()">Use Example Points League</button>
+          <button class="btn" id="exampleCatButton" onclick="fillCatLeague()">Use Example Categories League</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock content %}
+
+{% block body_js %}
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-EZ4LV1SKJ1"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
+  function gtag(){ dataLayer.push(arguments); }
   gtag('js', new Date());
-
   gtag('config', 'G-EZ4LV1SKJ1');
+
+  function fillPointsLeague() {
+    document.getElementById('league_id').value = '32144018';
+    document.getElementById('year').value = '2025';
+    document.getElementById('espn_s2').value = '';
+    document.getElementById('swid').value = '';
+    document.getElementById('matchupForm').submit();
+  }
+
+  function fillCatLeague() {
+    document.getElementById('league_id').value = '2116212845';
+    document.getElementById('year').value = '2025';
+    document.getElementById('espn_s2').value = '';
+    document.getElementById('swid').value = '';
+    document.getElementById('matchupForm').submit();
+  }
 </script>
-
-<body>
-    <div class="container">
-        <h1>Fantasy Basketball Matchup Predictor</h1>
-            
-        <div class="flex-container">
-
-            <!-- Form for Matchup Predictor -->
-            <div class="form-container">
-                <form id="matchupForm" action="/process" method="post">
-                    <label for="league_id">League ID:</label>
-                    <input type="text" id="league_id" name="league_id" required>
-
-                    <label for="year">Year:</label>
-                    <input type="text" id="year" name="year" required>
-
-                    <label for="espn_s2">ESPN S2:</label>
-                    <input type="text" id="espn_s2" name="espn_s2">
-
-                    <label for="swid">SWID:</label>
-                    <input type="text" id="swid" name="swid">
-
-                    <input type="submit" value="Submit">
-                </form>
-                {% if error_message %}
-                <div class="error-message">
-                    {{ error_message }}
-                </div>
-                {% endif %}
-                <div class="note">
-                    <p><b>Note:</b> Your league ID can be found in your URL on ESPN when viewing your league. The year field should be the year when the season ends (this season is 2025).</p>
-                    <p>You only need espn_s2 and swid cookies if your league is private.</p>
-                    <p><u>How to find your espn_s2 and swid:</u><br>
-                        Log in to your account on ESPN's fantasy basketball website. Right-click anywhere on the website and select
-                        "Inspect". From there, click on "Storage" in the top bar. Then click the "Cookies" section for
-                        http://fantasy.espn.com. You should be able to find your swid and espn_s2 values there. They remain the
-                        same through different sessions.
-                    </p>
-                    <p><b>If you want to test this tool out, click one of the buttons below to use an example league:</b></p>
-                    <div class="button-wrapper">
-                        <button id="examplePointsButton" onclick="fillPointsLeague()">Use Example Points League</button>
-                        <button id="exampleCatButton" onclick="fillCatLeague()">Use Example Categories League</button>
-                    </div>                
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function fillPointsLeague() {
-            // Set the form field values with example points league data
-            document.getElementById('league_id').value = '32144018';
-            document.getElementById('year').value = '2025';
-            document.getElementById('espn_s2').value = ''; // Leave blank
-            document.getElementById('swid').value = ''; // Leave blank
-
-            // Submit the form
-            document.getElementById('matchupForm').submit();
-        }
-
-        function fillCatLeague() {
-            // Set the form field values with example categories league data
-            document.getElementById('league_id').value = '2116212845';
-            document.getElementById('year').value = '2025';
-            document.getElementById('espn_s2').value = ''; // Leave blank
-            document.getElementById('swid').value = ''; // Leave blank
-
-            // Submit the form
-            document.getElementById('matchupForm').submit();
-        }
-    </script>
-</body>
-
-</html>
-
-{% endblock content %}
-
+{% endblock body_js %}

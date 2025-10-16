@@ -1,237 +1,137 @@
-/* === Keep your current layout; only colors + minor spacing fixes === */
+/* Keep the general look, simplify where possible. Buttons inherit .btn from base.css */
 
-/* Use base theme tokens */
-:root{
-    --bg: #0b0e14;
-    --card: #10131a;
-    --text: #e8eefc;
-    --muted: rgba(232,238,252,.75);
-    --border: rgba(255,255,255,.10);
-    --border-strong: rgba(255,255,255,.18);
-    --accent: steelblue;
-    --accent-2: #d62828;
-  }
-  
-  /* Body: same structure, just colors from theme */
-  body {
-    font-family: Arial, sans-serif;
-    background-color: var(--bg);
-    margin: 0;
-    padding: 0;
-    display: flex;
-    justify-content: center;
-    flex-direction: column;
-    color: var(--text);
-  }
-  
-  /* Prevent header from feeling “cut off” under sticky nav */
-  h1 { 
-    text-align: center;
-    font-size: 24px;
-    color: #ff4c4c;        /* keep your red title color */
-    margin-top: 14px;      /* add a little space below the nav */
-  }
-  
-  /* Container from first page: just colors */
-  .container {
-    background-color: var(--card);
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
-    width: 100%;
-    max-width: 500px;
-  }
-  
-  .body-container { align-items: center; }
-  
-  /* Form + inputs: theme colors */
-  form { display: flex; flex-direction: column; align-items: center; }
-  
-  label { margin-top: 10px; font-weight: bold; color: var(--muted); }
-  
-  input[type="text"] {
-    padding: 10px;
-    margin-top: 5px; margin-bottom: 15px;
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    font-size: 16px;
-    background-color: #0b0e14;
-    color: var(--text);
-  }
-  input[type="text"]:focus { border-color: #ff4c4c; outline: none; }
-  
-  /* Buttons (but not team buttons) — keep your style, align with theme */
-  input[type="submit"], button:not(.team-button) {
-    background: linear-gradient(180deg, #ff4d4d, var(--accent-2));
-    color: #fff;
-    padding: 10px;
-    border: 1px solid #b32626;
-    border-radius: 10px;
-    cursor: pointer;
-    font-size: 18px;
-    transition: background-color .3s, transform .3s, filter .15s, box-shadow .15s;
-    margin-top: 20px;
-  }
-  input[type="submit"]:hover, button[type="button"]:hover {
-    background-color: #e04343;
-    transform: translateY(-2px);
-  }
-  
-  /* Notes + errors */
-  .note { font-size: 14px; color: var(--muted); margin-top: 20px; }
-  .note b { color: var(--text); }
-  .note u { color: #ff4c4c; }
-  
-  .error-message { text-align: center; color: #ff4c4c; padding: 15px; }
-  .error-message p { margin: 0; }
-  
-  /* Teams layout (unchanged) */
-  .teams-container {
-    display: flex;
-    justify-content: center;
-    margin-top: 20px;
-  }
-  .team-column { margin: 0 20px; }
-  
-  /* Section headers */
-  .team-selector {
-    background-color: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px;
-    margin-bottom: 10px;
-    color: var(--text);
-    font-weight: bold;
-    text-align: center;
-  }
-  .my-team, .opponents-team {
-    background-color: #0f1219;
-    border-color: var(--border-strong);
-  }
-  
-  /* Team buttons: same layout, themed colors */
-  .team-button {
-    display: block;
-    padding: 10px;
-    margin: 10px 0;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background-color: #0b0e14;
-    color: var(--text);
-    cursor: pointer;
-    transition: background-color .3s, transform .3s, border-color .15s;
-  }
-  .team-button:hover { background-color: rgba(255,255,255,.05); transform: translateY(-2px); }
-  
-  /* Selected buttons: subtle blue tint (like Player Stats) */
-  .team-selected-my, .team-selected-opponent {
-    background-color: rgba(70,130,180,.16);
-    color: var(--text);
-    border-color: rgba(70,130,180,.35);
-  }
-  
-  /* Loading overlay (unchanged; colors aligned) */
-  #loading {
-    position: fixed;
-    width: 100%; height: 100%;
-    top: 0; left: 0;
-    background-color: rgba(0, 0, 0, 0.8);
-    z-index: 9999;
-    display: none;
-    justify-content: center; align-items: center;
-    font-size: 24px; font-family: Arial, sans-serif;
-    color: #ff4c4c;
-  }
-  #loading:before {
-    content: "";
-    border: 6px solid #f3f3f3;
-    border-top: 6px solid #ff4c4c;
-    border-radius: 50%;
-    width: 40px; height: 40px;
-    animation: spin 1s linear infinite;
-    margin-right: 10px;
-  }
-  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-  
-  /* Scoring panel layout (unchanged) */
-  .main-container { display: flex; justify-content: space-between; align-items: flex-start; }
-  .scoring-area { width: 400px; margin-right: 20px; }
-  .scoring-container { display: flex; flex-wrap: wrap; justify-content:center; }
-  .scoring-box { width: 42%; margin-bottom: 0px; margin-right: 8%; }
-  .scoring-box:nth-child(2n) { margin-right: 0; }
-  .scoring-box label { display: block; margin-bottom: 5px; font-weight: bold; }
-  .scoring-box input[type="text"] {
-    width: 100%; padding: 5px;
-    border: 1px solid var(--border); border-radius: 5px;
-    background-color: #0b0e14; color: var(--text);
-  }
-  h2 { margin-bottom: 10px; }
-  .teams-container { flex-grow: 1; }
-  
-  /* Back button (kept as-is if visible) */
-  .back-button {
-    background: linear-gradient(180deg, #ff4d4d, var(--accent-2));
-    color: white;
-    padding: 10px; border: 1px solid #b32626;
-    border-radius: 10px; cursor: pointer; font-size: 18px;
-    transition: background-color .3s, transform .3s, filter .15s, box-shadow .15s;
-    text-decoration: none;
-    display: inline-block; width: 45px;
-  }
-  .back-button:hover { transform: translateY(-1px); box-shadow: 0 10px 25px rgba(214,40,40,.35); }
-  
-  /* Center the dropdown container (unchanged, just ensure it’s centered) */
-  .dropdown-container { text-align: center; margin: 20px 0; }
-  
-  /* Dropdown (week selector) stays the same, recolored; menu layered above */
-  .dropdown { display: inline-block; position: relative; }
-  .dropbtn {
-    width: 200px;
-    background: linear-gradient(180deg, #ff4d4d, var(--accent-2));
-    color: #fff;
-    padding: 10px; font-size: 18px;
-    border: 1px solid #b32626;
-    border-radius: 10px; cursor: pointer;
-    transition: background-color .3s, transform .3s, filter .15s, box-shadow .15s;
-    text-align: center;
-  }
-  .dropbtn:hover { background-color: #e04343; filter: brightness(1.05); transform: translateY(-2px); }
-  
-  .dropdown-content {
-    display: none;
-    position: absolute;
-    top: 100%; left: 0;
-    width: 200px;
-    background-color: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
-    z-index: 1100; /* ensure it sits above content and nav */
-  }
-  .dropdown-content a {
-    display: block; color: var(--text);
-    padding: 12px 16px; text-decoration: none;
-    border-top: 1px solid var(--border);
-  }
-  .dropdown-content a:first-child { border-top: none; }
-  .dropdown-content a:hover { background-color: rgba(255,255,255,.05); }
-  .dropdown:hover .dropdown-content { display: block; }
-  /* --- keep content from hiding under the sticky topnav --- */
-.page-wrap { padding-top: 64px; }          /* nudge page below nav */
-.page-wrap h1:first-child {
-margin-top: 0;                           /* prevent margin-collapsing with sticky header */
-padding-top: 8px;
+.body-container { max-width: 1100px; margin: 0 auto; }
+
+/* remove extra page-wrap padding on this page (we're not adding page-wrap here) */
+/* (deleted previous .page-wrap padding overrides) */
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+
+.form-row { display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+
+.main-container { display:flex; justify-content:space-between; align-items:flex-start; gap: 20px; }
+
+/* Left rail stacks Week + Stat panels (and Scoring when present) */
+.left-rail { width: 400px; display:flex; flex-direction:column; gap:12px; }
+
+/* Unified select look */
+.select-like,
+select#stat_window,
+select#week_select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: #0b0e14;
+  color: #e8eefc;
+  font-size: 14px;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #e8eefc 50%),
+    linear-gradient(135deg, #e8eefc 50%, transparent 50%),
+    linear-gradient(to right, transparent, transparent);
+  background-position:
+    calc(100% - 18px) calc(50% - 3px),
+    calc(100% - 13px) calc(50% - 3px),
+    calc(100% - 40px) 0.5em;
+  background-size: 5px 5px, 5px 5px, 1px 1.4em;
+  background-repeat: no-repeat;
 }
 
-/* --- center the week selector row --- */
-.dropdown-container {
-display: flex;
-justify-content: center;
+/* Teams layout */
+.teams-container { flex-grow: 1; display: flex; gap: 40px; justify-content: center; }
+
+.team-column { min-width: 320px; }
+
+.team-selector {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+  color: var(--text);
+  font-weight: 700;
+  text-align: center;
 }
 
-/* --- center the "Compare Teams" button --- */
-#compareForm button[type="button"] {
-display: block;
-margin: 16px auto 0;                     /* center horizontally */
+/* Team buttons (distinct from .btn) */
+.team-button {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0b0e14;
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color .2s, transform .2s, border-color .2s;
+  text-align: left;
+}
+.team-button:hover {
+  background-color: var(--accent-2);
+  transform: translateY(-1px);
+  border-color: var(--border-strong);
 }
 
+/* Selected state */
+.team-selected-my{
+  background-color: rgba(70,130,180,.16);
+  color: var(--text);
+  border-color: rgba(70,130,180,.35);
+}
+.team-selected-opponent {
+  background-color: rgba(255,72,72,.16);
+  color: var(--text);
+  border-color: rgba(255,72,72,.35);
+}
+
+/* Scoring controls */
+.mb-10 { margin-bottom: 10px; }
+
+.scoring-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 8%; }
+.scoring-box { width: 42%; }
+.scoring-box label { display: block; margin-bottom: 5px; font-weight: 600; color: var(--muted); }
+.scoring-box input[type="text"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: #0b0e14;
+  color: var(--text);
+}
+
+/* Compare button uses global .btn; center it */
+#compareForm .btn { display: block; margin: 16px auto 0; }
+
+/* Errors */
+.error-message { text-align: center; color: var(--accent-2); padding: 10px; }
+.error-message p { margin: 0; }
+
+/* Loading overlay */
+#loading {
+  position: fixed; inset: 0;
+  background-color: rgba(0,0,0,0.8);
+  z-index: 9999;
+  display: none;
+  justify-content: center; align-items: center;
+  font-size: 24px; font-family: inherit; color: var(--accent-2);
+}
+#loading:before {
+  content: "";
+  border: 6px solid #f3f3f3;
+  border-top: 6px solid var(--accent-2);
+  border-radius: 50%;
+  width: 40px; height: 40px;
+  animation: spin 1s linear infinite;
+  margin-right: 10px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Responsive */
+@media (max-width: 1080px) {
+  .main-container { flex-direction: column; }
+  .left-rail { width: 100%; }
+  .teams-container { gap: 20px; }
+  .team-column { min-width: 0; width: 100%; }
+}
