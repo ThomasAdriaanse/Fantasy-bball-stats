@@ -1,123 +1,354 @@
 {% extends "base.html" %}
-{% block title %}Trade Value (Z-Scores){% endblock %}
+{% block title %}Trade Value · Fantasy BBall{% endblock %}
 
 {% block head_extra %}
-  <style>
-    .trade-wrap{max-width:1100px;margin:0 auto;padding:16px;}
-    .card{background:#10131a;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:16px 18px;box-shadow:0 6px 18px rgba(0,0,0,0.25);margin: 10px 0;}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-    .side-title{font-weight:700;margin-bottom:8px}
-    label{font-size:12px;opacity:.9}
-    select,input{width:100%;background:#0b0e14;color:#e8eefc;border:1px solid rgba(255,255,255,0.18);border-radius:8px;padding:8px 10px}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .submit-row{display:flex;gap:10px;align-items:center;justify-content:flex-start;margin-top:10px}
-    .btn{background:#0b0e14;border:1px solid rgba(255,255,255,0.18);padding:10px 14px;border-radius:8px;color:#e8eefc;cursor:pointer}
-    .btn:hover{filter:brightness(1.1)}
-    table{width:100%;border-collapse:collapse;color:#e8eefc;font-size:14px}
-    th,td{border-bottom:1px solid rgba(255,255,255,0.08);padding:8px 10px;text-align:right;white-space:nowrap}
-    th:first-child,td:first-child{text-align:left}
-    thead th{background:#121722;font-weight:600}
-    .score-box{display:flex;gap:16px;align-items:baseline;margin-top:6px}
-    .score-box .big{font-size:24px;font-weight:800}
-    .diff-pos{color:#63a0d4}
-    .diff-neg{color:#ff7a7a}
-    .verdict{font-weight:700;margin-top:6px}
-    .hint{font-size:12px;opacity:.7;margin-top:6px}
-  </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+<style>
+  :root{
+    --bg:#0b0e14; --card:#10131a; --text:#e8eefc; --muted:#9fb2cf;
+    --border:rgba(255,255,255,0.10); --border-2:rgba(255,255,255,0.18);
+    --shadow:0 6px 18px rgba(0,0,0,0.25);
+    --blue:#63a0d4; --blue-soft:rgba(70,130,180,.65);
+    --red:#ff7a7a; --red-soft:rgba(255,72,72,.65);
+  }
+  .card{ background:var(--card); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:14px; }
+  .body-container{ max-width:1200px; margin:0 auto; padding:14px 12px 32px; }
+
+  /* ------- Form layout ------- */
+  .trade-form{ display:grid; grid-template-columns: 1fr; gap:12px; }
+  .sides-grid{
+    display:grid; grid-template-columns: 1fr 1fr; gap:12px;
+  }
+  .side-card{ border-radius:12px; border:1px solid var(--border); padding:12px; }
+  .side-title{ font-weight:700; opacity:.95; display:flex; align-items:center; justify-content:space-between; }
+  .select-row{ display:grid; grid-template-columns: 1fr; gap:8px; margin-top:10px; }
+  .select-row .row-2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  label{ font-size:12px; opacity:.8; display:block; margin-bottom:4px; }
+  select{
+    width:100%; background:var(--bg); color:var(--text);
+    border:1px solid var(--border-2); border-radius:8px; padding:8px 10px;
+  }
+  .window-row{ display:flex; gap:10px; align-items:end; }
+  .window-row .spacer{ flex:1; }
+  .btn{ background:#0b0e14; color:var(--text); border:1px solid var(--border-2); border-radius:8px; padding:9px 14px; cursor:pointer; }
+  .btn:hover{ filter:brightness(1.06); }
+
+  @media (max-width: 820px){
+    .sides-grid{ grid-template-columns: 1fr; }
+    .select-row .row-2{ grid-template-columns:1fr; }
+  }
+
+  /* ------- Summary chips ------- */
+  .summary-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:10px; }
+  .sum-box{ padding:10px 12px; border-radius:10px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  .sum-a{ box-shadow: inset 0 0 0 1px rgba(70,130,180,.35); }
+  .sum-b{ box-shadow: inset 0 0 0 1px rgba(255,72,72,.35); }
+  .sum-title{ font-weight:700; }
+  .sum-sub{ font-size:12px; opacity:.85; }
+
+  /* ------- Tables ------- */
+  table{ width:100%; border-collapse:collapse; }
+  th, td{ border-bottom:1px solid var(--border); padding:8px 10px; white-space:nowrap; font-size:14px; }
+  thead th{ background:#121722; text-align:center; }
+  td:first-child, th:first-child{ text-align:left; }
+
+  /* Player z-color cells */
+  .zcell{
+    text-align:center;
+    color:#fff;
+    text-shadow:0 1px 2px rgba(0,0,0,.35);
+  }
+  .player-tables{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width: 980px){ .player-tables{ grid-template-columns:1fr; } }
+
+  /* ------- Radar block ------- */
+  .viz-grid{ display:grid; grid-template-columns: 1fr; gap:12px; } /* radar only now */
+  #radar svg{ width:100%; height:420px; display:block; }
+</style>
+<script src="https://d3js.org/d3.v7.min.js"></script>
 {% endblock head_extra %}
 
 {% block content %}
-<div class="trade-wrap">
+<div class="body-container">
 
-  <h1>Trade Value (Z-Scores)</h1>
-  <div class="card">
-    <form method="POST" action="{{ url_for('trades.trade_analyzer') }}">
-      <div class="grid">
-        <div>
-          <div class="side-title">Side A (you receive)</div>
-          {% for i in range(4) %}
-          <div style="margin-bottom:8px">
-            <label>Player {{ i+1 }}</label>
-            <select name="a{{ i+1 }}">
-              <option value=""></option>
-              {% for n in player_names %}
-                <option value="{{ n }}" {{ 'selected' if side_a[i]==n else '' }}>{{ n }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          {% endfor %}
+  <!-- FORM -->
+  <form class="card trade-form" method="POST" action="{{ url_for('trades.trade_analyzer') }}">
+    <div class="sides-grid">
+      <!-- Side A -->
+      <div class="side-card">
+        <div class="side-title">
+          <div>Side A (receiving)</div>
         </div>
-
-        <div>
-          <div class="side-title">Side B (you send)</div>
-          {% for i in range(4) %}
-          <div style="margin-bottom:8px">
-            <label>Player {{ i+1 }}</label>
-            <select name="b{{ i+1 }}">
-              <option value=""></option>
-              {% for n in player_names %}
-                <option value="{{ n }}" {{ 'selected' if side_b[i]==n else '' }}>{{ n }}</option>
-              {% endfor %}
-            </select>
+        <div class="select-row">
+          <div class="row-2">
+            <div>
+              <label for="a1">Player 1</label>
+              <select id="a1" name="a1">
+                <option value=""></option>
+                {% for n in player_names %}
+                  <option value="{{ n }}" {% if side_a[0]==n %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="a2">Player 2</label>
+              <select id="a2" name="a2">
+                <option value=""></option>
+                {% for n in player_names %}
+                  <option value="{{ n }}" {% if side_a[1]==n %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+              </select>
+            </div>
           </div>
-          {% endfor %}
+          <div class="row-2">
+            <div>
+              <label for="a3">Player 3</label>
+              <select id="a3" name="a3">
+                <option value=""></option>
+                {% for n in player_names %}
+                  <option value="{{ n }}" {% if side_a[2]==n %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="a4">Player 4</label>
+              <select id="a4" name="a4">
+                <option value=""></option>
+                {% for n in player_names %}
+                  <option value="{{ n }}" {% if side_a[3]==n %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="submit-row">
-        <div>
-          <label for="num_games">Average Z over last N games (0 = full season)</label>
-          <input id="num_games" type="number" min="0" name="num_games" value="{{ num_games }}">
+      <!-- Side B -->
+      <div class="side-card">
+        <div class="side-title">
+          <div>Side B (sending)</div>
         </div>
-        <button class="btn" type="submit">Evaluate Trade</button>
+        <div class="select-row">
+          <div class="row-2">
+            <div>
+              <label for="b1">Player 1</label>
+              <select id="b1" name="b1">
+                <option value=""></option>
+                {% for n in player_names %}
+                  <option value="{{ n }}" {% if side_b[0]==n %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="b2">Player 2</label>
+              <select id="b2" name="b2">
+                <option value=""></option>
+                {% for n in player_names %}
+                  <option value="{{ n }}" {% if side_b[1]==n %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="row-2">
+            <div>
+              <label for="b3">Player 3</label>
+              <select id="b3" name="b3">
+                <option value=""></option>
+                {% for n in player_names %}
+                  <option value="{{ n }}" {% if side_b[2]==n %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="b4">Player 4</label>
+              <select id="b4" name="b4">
+                <option value=""></option>
+                {% for n in player_names %}
+                  <option value="{{ n }}" {% if side_b[3]==n %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="hint">Z categories used: {{ ', '.join(z_categories) }}. Higher total Z is better (Z_TOV is already negative when TO is bad).</div>
-    </form>
-  </div>
+    </div>
+
+    <!-- Window / action row -->
+    <div class="window-row">
+      <div>
+        <label for="window">Stats (window)</label>
+        <select id="window" name="window">
+          {% for w in window_choices %}
+            <option value="{{ w }}" {% if stat_window==w %}selected{% endif %}>{{ w }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn" type="submit">Evaluate</button>
+    </div>
+  </form>
 
   {% if results %}
-  <div class="card">
-    <h2>Results</h2>
-    <div class="grid">
+  <!-- SUMMARY -->
+  <div class="summary-grid">
+    <div class="sum-box sum-a">
       <div>
-        <h3>Side A — Category Totals</h3>
+        <div class="sum-title">Side A</div>
+        <div class="sum-sub">Overall Z</div>
+      </div>
+      <div style="font-weight:700;">{{ '%.3f' % results.a_totals['_overall'] }}</div>
+    </div>
+    <div class="sum-box sum-b">
+      <div>
+        <div class="sum-title">Side B</div>
+        <div class="sum-sub">Overall Z</div>
+      </div>
+      <div style="font-weight:700;">{{ '%.3f' % results.b_totals['_overall'] }}</div>
+    </div>
+  </div>
+
+  <!-- PLAYER TABLES -->
+  <div class="card" style="margin-top:12px;">
+    <div class="player-tables">
+      <div>
+        <div style="font-weight:700; margin-bottom:6px;">Side A — player z’s ({{ stat_window }})</div>
         <table>
-          <thead><tr><th>Category</th><th>Z Total</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Player</th>
+              {% for c in categories %}<th>{{ c }}</th>{% endfor %}
+            </tr>
+          </thead>
           <tbody>
-            {% for c in z_categories %}
-              <tr><td>{{ c }}</td><td>{{ '%.3f'|format(results.a_totals[c]) }}</td></tr>
+            {% for row in results.a_players_rows %}
+              <tr>
+                <td>{{ row.player_name }}</td>
+                {% for cell in row.cells %}
+                  <td class="zcell" style="background: {{ cell.bg }};">{{ '%.2f' % cell.z }}</td>
+                {% endfor %}
+              </tr>
             {% endfor %}
           </tbody>
-          <tfoot>
-            <tr><th>Overall Z</th><th class="big">{{ '%.3f'|format(results.a_score) }}</th></tr>
-          </tfoot>
         </table>
       </div>
 
       <div>
-        <h3>Side B — Category Totals</h3>
+        <div style="font-weight:700; margin-bottom:6px;">Side B — player z’s ({{ stat_window }})</div>
         <table>
-          <thead><tr><th>Category</th><th>Z Total</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Player</th>
+              {% for c in categories %}<th>{{ c }}</th>{% endfor %}
+            </tr>
+          </thead>
           <tbody>
-            {% for c in z_categories %}
-              <tr><td>{{ c }}</td><td>{{ '%.3f'|format(results.b_totals[c]) }}</td></tr>
+            {% for row in results.b_players_rows %}
+              <tr>
+                <td>{{ row.player_name }}</td>
+                {% for cell in row.cells %}
+                  <td class="zcell" style="background: {{ cell.bg }};">{{ '%.2f' % cell.z }}</td>
+                {% endfor %}
+              </tr>
             {% endfor %}
           </tbody>
-          <tfoot>
-            <tr><th>Overall Z</th><th class="big">{{ '%.3f'|format(results.b_score) }}</th></tr>
-          </tfoot>
         </table>
       </div>
     </div>
+  </div>
 
-    <div class="score-box">
-      <div>Difference (A − B):</div>
-      {% set cls = 'diff-pos' if results.diff > 0 else ('diff-neg' if results.diff < 0 else '') %}
-      <div class="big {{ cls }}">{{ '%.3f'|format(results.diff) }}</div>
-    </div>
-    <div class="verdict">{{ results.verdict }}</div>
-    <div class="hint">Tip: If you punt categories, mentally de-weight those columns when reading the tables.</div>
+  <!-- NET IMPACT (ΔZ) — single-row table -->
+  <div class="card" style="margin-top:12px;">
+    <div style="font-weight:700; margin-bottom:6px;">Trade impact — ΔZ (A − B)</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Δ Overall</th>
+          {% for c in categories %}<th>{{ c }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="zcell" style="background: {{ results.delta_overall_bg }};">{{ '%.2f' % results.delta_overall }}</td>
+          {% for cell in results.delta_cells %}
+            <td class="zcell" style="background: {{ cell.bg }};">{{ '%.2f' % cell.z }}</td>
+          {% endfor %}
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- RADAR -->
+  <div class="card viz-grid" style="margin-top:12px;">
+    <div id="radar"></div>
   </div>
   {% endif %}
 </div>
-{% endblock %}
+{% endblock content %}
+
+{% block body_js %}
+{% if results %}
+<script>
+(function(){
+  // Radar from totals (capped & normalized to show shape)
+  const cats = {{ categories|tojson }};
+  const A = {{ results.a_totals|tojson }};
+  const B = {{ results.b_totals|tojson }};
+  const cap = 3;
+  const norm = (v)=> Math.max(0, Math.min(1, (v + cap) / (2*cap)));
+
+  const dataA = cats.map(c => ({axis:c, val:norm(A[c])}));
+  const dataB = cats.map(c => ({axis:c, val:norm(B[c])}));
+
+  const wrap = d3.select("#radar");
+  const w = wrap.node().clientWidth || 600, h = 420, rPad = 50;
+  const cx = w/2, cy = h/2, radius = Math.min(w,h)/2 - rPad;
+  const angle = (i)=> (i / cats.length) * 2 * Math.PI;
+  const r = d3.scaleLinear().domain([0,1]).range([0, radius]);
+
+  const svg = wrap.append("svg").attr("viewBox", `0 0 ${w} ${h}`);
+  const g = svg.append("g").attr("transform", `translate(${cx},${cy})`);
+
+  // grid
+  const rings = [0.25, 0.5, 0.75, 1];
+  g.selectAll(".grid")
+    .data(rings).enter().append("circle")
+    .attr("r", d => r(d))
+    .attr("fill","none").attr("stroke","rgba(255,255,255,.18)");
+
+  // axes + labels
+  const axes = g.selectAll(".axis")
+    .data(cats).enter().append("g").attr("class","axis");
+
+  axes.append("line")
+    .attr("x1",0).attr("y1",0)
+    .attr("x2",(d,i)=> Math.cos(angle(i))*radius)
+    .attr("y2",(d,i)=> Math.sin(angle(i))*radius)
+    .attr("stroke","rgba(255,255,255,.22)");
+
+  axes.append("text")
+    .attr("x",(d,i)=> Math.cos(angle(i))*(radius+12))
+    .attr("y",(d,i)=> Math.sin(angle(i))*(radius+12))
+    .attr("text-anchor",(d,i)=>{
+      const a = Math.cos(angle(i));
+      return a>0.15 ? "start" : (a<-0.15 ? "end" : "middle");
+    })
+    .style("font-size","12px").style("fill","#e8eefc")
+    .text(d=>d);
+
+  function polyPath(data){
+    const points = data.map((d,i)=>{
+      const a = angle(i), rr = r(d.val);
+      return [Math.cos(a)*rr, Math.sin(a)*rr];
+    });
+    return d3.line().curve(d3.curveCardinalClosed.tension(0.6))(points);
+  }
+
+  g.append("path").attr("d", polyPath(dataA))
+    .attr("fill","rgba(70,130,180,0.25)").attr("stroke","steelblue").attr("stroke-width",2);
+
+  g.append("path").attr("d", polyPath(dataB))
+    .attr("fill","rgba(255,72,72,0.25)").attr("stroke","red").attr("stroke-width",2);
+})();
+</script>
+{% endif %}
+{% endblock body_js %}
