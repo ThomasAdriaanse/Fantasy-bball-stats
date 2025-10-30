@@ -4,7 +4,7 @@
 {% block content %}
 <div class="body-container">
   <div class="page-header">
-    <div class="title">Punting Overview — {{ year }}</div>
+    <div class="title">Punting Overview</div>
     <div class="controls">
       <span class="pill">League: {{ league_id }}</span>
       <label for="window">Window:</label>
@@ -25,14 +25,13 @@
   </div>
 
   <div class="legend">
-    <span class="swatch blue"></span> Above average (z &gt; 0)
-    <span class="swatch mid"></span> Around average (z ≈ 0)
-    <span class="swatch red"></span> Below average (z &lt; 0)
+    <span class="swatch blue"></span> Above average
+    <span class="swatch mid"></span> Average
+    <span class="swatch red"></span> Below average
     <span class="chip punt">Punt</span> Likely punted category
   </div>
   <div class="hint">
-    Bar length shows team <b>strength</b> (0–100%) within the league; color shows <b>relative to average</b> by z-score.
-    Percentages are proportions (e.g., 0.476 → 47.6%).
+    Bar length and colour shows category strength per team within the league by team average Z-score; 
   </div>
 
   <!-- By Team (cards grid) -->
