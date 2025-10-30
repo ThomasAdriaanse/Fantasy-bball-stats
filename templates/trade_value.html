@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Trade Value · Fantasy BBall{% endblock %}
+{% block title %}Trade Value{% endblock %}
 
 {% block head_extra %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
@@ -8,17 +8,13 @@
     --bg:#0b0e14; --card:#10131a; --text:#e8eefc; --muted:#9fb2cf;
     --border:rgba(255,255,255,0.10); --border-2:rgba(255,255,255,0.18);
     --shadow:0 6px 18px rgba(0,0,0,0.25);
-    --blue:#63a0d4; --blue-soft:rgba(70,130,180,.65);
-    --red:#ff7a7a; --red-soft:rgba(255,72,72,.65);
   }
   .card{ background:var(--card); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:14px; }
   .body-container{ max-width:1200px; margin:0 auto; padding:14px 12px 32px; }
 
   /* ------- Form layout ------- */
   .trade-form{ display:grid; grid-template-columns: 1fr; gap:12px; }
-  .sides-grid{
-    display:grid; grid-template-columns: 1fr 1fr; gap:12px;
-  }
+  .sides-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
   .side-card{ border-radius:12px; border:1px solid var(--border); padding:12px; }
   .side-title{ font-weight:700; opacity:.95; display:flex; align-items:center; justify-content:space-between; }
   .select-row{ display:grid; grid-template-columns: 1fr; gap:8px; margin-top:10px; }
@@ -53,17 +49,40 @@
   td:first-child, th:first-child{ text-align:left; }
 
   /* Player z-color cells */
-  .zcell{
-    text-align:center;
-    color:#fff;
-    text-shadow:0 1px 2px rgba(0,0,0,.35);
-  }
+  .zcell{ text-align:center; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.35); }
   .player-tables{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   @media (max-width: 980px){ .player-tables{ grid-template-columns:1fr; } }
 
   /* ------- Radar block ------- */
-  .viz-grid{ display:grid; grid-template-columns: 1fr; gap:12px; } /* radar only now */
+  .viz-grid{ display:grid; grid-template-columns: 1fr; gap:12px; }
   #radar svg{ width:100%; height:420px; display:block; }
+
+  /* ------- Difference bars (A − B) ------- */
+  .dz-title { font-weight:700; margin-bottom:4px; }
+  #dz-chart svg{ width:100%; height:360px; display:block; }
+  .dz-axis line, .dz-axis path { stroke: rgba(255,255,255,0.22); }
+  .dz-axis text { fill: var(--text); font-size: 12px; }
+  .dz-baseline { stroke: rgba(255,255,255,0.35); stroke-width: 1.2; }
+  .dz-bar { shape-rendering: crispEdges; }
+  .dz-label { fill: var(--text); font-size: 11px; text-anchor: middle; }
+  .dz-xlab { fill: var(--muted); font-size: 11px; text-anchor: end; }
+  .dz-ylab { fill: var(--muted); font-size: 11px; text-anchor: middle; }
+
+  /* ------- Overall difference chip ------- */
+  .overall-wrap{ margin-top:12px; display:flex; justify-content:center; }
+  .overall-pill{
+    display:inline-flex; gap:10px; align-items:center;
+    padding:10px 14px; border-radius:999px; border:1px solid var(--border);
+    background: rgba(255,255,255,0.04);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+    font-weight:700; color:var(--text);
+  }
+  .overall-amt{
+    font-size:13px; padding:4px 8px; border-radius:8px;
+    background: rgba(255,255,255,0.06);
+  }
+  .amt-pos{ color:#9fe6a1; }
+  .amt-neg{ color:#ff9a9a; }
 </style>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 {% endblock head_extra %}
@@ -77,7 +96,7 @@
       <!-- Side A -->
       <div class="side-card">
         <div class="side-title">
-          <div>Side A (receiving)</div>
+          <div>Side A</div>
         </div>
         <div class="select-row">
           <div class="row-2">
@@ -126,7 +145,7 @@
       <!-- Side B -->
       <div class="side-card">
         <div class="side-title">
-          <div>Side B (sending)</div>
+          <div>Side B</div>
         </div>
         <div class="select-row">
           <div class="row-2">
@@ -189,19 +208,19 @@
   </form>
 
   {% if results %}
-  <!-- SUMMARY -->
+  <!-- SUMMARY (Team Z-Score after selection) -->
   <div class="summary-grid">
     <div class="sum-box sum-a">
       <div>
         <div class="sum-title">Side A</div>
-        <div class="sum-sub">Overall Z</div>
+        <div class="sum-sub">Team Z-Score</div>
       </div>
       <div style="font-weight:700;">{{ '%.3f' % results.a_totals['_overall'] }}</div>
     </div>
     <div class="sum-box sum-b">
       <div>
         <div class="sum-title">Side B</div>
-        <div class="sum-sub">Overall Z</div>
+        <div class="sum-sub">Team Z-Score</div>
       </div>
       <div style="font-weight:700;">{{ '%.3f' % results.b_totals['_overall'] }}</div>
     </div>
@@ -211,7 +230,7 @@
   <div class="card" style="margin-top:12px;">
     <div class="player-tables">
       <div>
-        <div style="font-weight:700; margin-bottom:6px;">Side A — player z’s ({{ stat_window }})</div>
+        <div style="font-weight:700; margin-bottom:6px;">Side A — Player Z-Scores</div>
         <table>
           <thead>
             <tr>
@@ -233,7 +252,7 @@
       </div>
 
       <div>
-        <div style="font-weight:700; margin-bottom:6px;">Side B — player z’s ({{ stat_window }})</div>
+        <div style="font-weight:700; margin-bottom:6px;">Side B — Player Z-Scores</div>
         <table>
           <thead>
             <tr>
@@ -256,25 +275,21 @@
     </div>
   </div>
 
-  <!-- NET IMPACT (ΔZ) — single-row table -->
+  <!-- DIFFERENCE (A − B) by category; Overall shown separately -->
   <div class="card" style="margin-top:12px;">
-    <div style="font-weight:700; margin-bottom:6px;">Trade impact — ΔZ (A − B)</div>
-    <table>
-      <thead>
-        <tr>
-          <th>Δ Overall</th>
-          {% for c in categories %}<th>{{ c }}</th>{% endfor %}
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td class="zcell" style="background: {{ results.delta_overall_bg }};">{{ '%.2f' % results.delta_overall }}</td>
-          {% for cell in results.delta_cells %}
-            <td class="zcell" style="background: {{ cell.bg }};">{{ '%.2f' % cell.z }}</td>
-          {% endfor %}
-        </tr>
-      </tbody>
-    </table>
+    <div class="dz-title">Difference in Team Z-Score by Category (Side A − Side B)</div>
+    <div id="dz-chart"></div>
+
+    <!-- Overall difference (A − B) -->
+    {% set overall_diff = results.a_totals['_overall'] - results.b_totals['_overall'] %}
+    <div class="overall-wrap">
+      <div class="overall-pill">
+        <div>Overall Difference in Team Z-Score (Side A − Side B)</div>
+        <div class="overall-amt {{ 'amt-pos' if overall_diff>=0 else 'amt-neg' }}">
+          {{ '+' if overall_diff>=0 else '' }}{{ '%.2f' % overall_diff }}
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- RADAR -->
@@ -289,34 +304,32 @@
 {% if results %}
 <script>
 (function(){
-  // Radar from totals (capped & normalized to show shape)
+  /* ---------- Radar (unchanged) ---------- */
   const cats = {{ categories|tojson }};
   const A = {{ results.a_totals|tojson }};
   const B = {{ results.b_totals|tojson }};
-  const cap = 3;
-  const norm = (v)=> Math.max(0, Math.min(1, (v + cap) / (2*cap)));
+  const capRadar = 3;
+  const norm = (v)=> Math.max(0, Math.min(1, (v + capRadar) / (2*capRadar)));
 
   const dataA = cats.map(c => ({axis:c, val:norm(A[c])}));
   const dataB = cats.map(c => ({axis:c, val:norm(B[c])}));
 
-  const wrap = d3.select("#radar");
-  const w = wrap.node().clientWidth || 600, h = 420, rPad = 50;
-  const cx = w/2, cy = h/2, radius = Math.min(w,h)/2 - rPad;
+  const wrapR = d3.select("#radar");
+  const wR = wrapR.node().clientWidth || 600, hR = 420, rPad = 50;
+  const cx = wR/2, cy = hR/2, radius = Math.min(wR,hR)/2 - rPad;
   const angle = (i)=> (i / cats.length) * 2 * Math.PI;
   const r = d3.scaleLinear().domain([0,1]).range([0, radius]);
 
-  const svg = wrap.append("svg").attr("viewBox", `0 0 ${w} ${h}`);
-  const g = svg.append("g").attr("transform", `translate(${cx},${cy})`);
+  const svgR = wrapR.append("svg").attr("viewBox", `0 0 ${wR} ${hR}`);
+  const gR = svgR.append("g").attr("transform", `translate(${cx},${cy})`);
 
-  // grid
   const rings = [0.25, 0.5, 0.75, 1];
-  g.selectAll(".grid")
+  gR.selectAll(".grid")
     .data(rings).enter().append("circle")
     .attr("r", d => r(d))
     .attr("fill","none").attr("stroke","rgba(255,255,255,.18)");
 
-  // axes + labels
-  const axes = g.selectAll(".axis")
+  const axes = gR.selectAll(".axis")
     .data(cats).enter().append("g").attr("class","axis");
 
   axes.append("line")
@@ -343,11 +356,103 @@
     return d3.line().curve(d3.curveCardinalClosed.tension(0.6))(points);
   }
 
-  g.append("path").attr("d", polyPath(dataA))
+  gR.append("path").attr("d", polyPath(dataA))
     .attr("fill","rgba(70,130,180,0.25)").attr("stroke","steelblue").attr("stroke-width",2);
 
-  g.append("path").attr("d", polyPath(dataB))
+  gR.append("path").attr("d", polyPath(dataB))
     .attr("fill","rgba(255,72,72,0.25)").attr("stroke","red").attr("stroke-width",2);
+
+
+  /* ---------- Difference bars: (Side A − Side B) per category ---------- */
+  const W = (d3.select("#dz-chart").node().clientWidth || 1000);
+  const H = 360;
+  const m = { top: 20, right: 20, bottom: 70, left: 68 }; // a bit more room
+  const innerW = W - m.left - m.right;
+  const innerH = H - m.top - m.bottom;
+
+  const dzData = cats.map(c => ({
+    cat: c,
+    z: (+A[c] || 0) - (+B[c] || 0)   // Side A minus Side B
+  }));
+
+  const svg = d3.select("#dz-chart").append("svg").attr("viewBox", `0 0 ${W} ${H}`);
+  const g = svg.append("g").attr("transform", `translate(${m.left},${m.top})`);
+
+  // Domain cap (symmetric) + vertical padding so bars don't clip axes
+  const cap = 4;
+  const zMin = d3.min(dzData, d => d.z);
+  const zMax = d3.max(dzData, d => d.z);
+  const baseMin = Math.min(-0.5, Math.max(-cap, Math.floor(zMin*10)/10));
+  const baseMax = Math.max( 0.5, Math.min( cap, Math.ceil (zMax*10)/10));
+  const yPad = Math.max(0.2, (baseMax - baseMin) * 0.06);
+
+  const x = d3.scaleBand()
+    .domain(dzData.map(d => d.cat))
+    .range([0, innerW])
+    .padding(0.20);
+
+  const y = d3.scaleLinear()
+    .domain([baseMin - yPad, baseMax + yPad])
+    .nice()
+    .range([innerH, 0]);
+
+  function zColor(z){
+    if (!isFinite(z)) return "rgba(255,255,255,0.25)";
+    // 0 -> red (hurts Side A relative), 1 -> green (helps Side A relative)
+    const t = Math.max(0, Math.min(1, (z + cap) / (2*cap)));
+    const hue = 120 * t; // 0 red .. 120 green
+    return `hsl(${hue}, 70%, 45%)`;
+  }
+
+  // Baseline at 0
+  g.append("g")
+    .attr("class","dz-axis")
+    .attr("transform", `translate(0,${y(0)})`)
+    .append("line")
+    .attr("class","dz-baseline")
+    .attr("x1", 0).attr("x2", innerW).attr("y1", 0).attr("y2", 0);
+
+  // Axes
+  g.append("g").attr("class","dz-axis").call(d3.axisLeft(y).ticks(6));
+  g.append("g")
+    .attr("class","dz-axis")
+    .attr("transform", `translate(0,${innerH})`)
+    .call(d3.axisBottom(x))
+    .selectAll("text")
+    .attr("class","dz-xlab")
+    .attr("transform","rotate(-35)")
+    .style("text-anchor","end");
+
+  // Y axis label (explicit)
+  g.append("text")
+    .attr("class","dz-ylab")
+    .attr("transform", "rotate(-90)")
+    .attr("x", -innerH/2)
+    .attr("y", -50)
+    .text("Difference in Team Z-Score (Side A − Side B)");
+
+  // Bars
+  g.selectAll(".dz-bar")
+    .data(dzData)
+    .enter()
+    .append("rect")
+    .attr("class","dz-bar")
+    .attr("x", d => x(d.cat))
+    .attr("width", x.bandwidth())
+    .attr("y", d => d.z >= 0 ? y(d.z) : y(0))
+    .attr("height", d => Math.max(2, Math.abs(y(d.z) - y(0))))
+    .attr("fill", d => zColor(d.z));
+
+  // Value labels with a bit of clearance
+  g.selectAll(".dz-label")
+    .data(dzData)
+    .enter()
+    .append("text")
+    .attr("class","dz-label")
+    .attr("x", d => x(d.cat) + x.bandwidth()/2)
+    .attr("y", d => d.z >= 0 ? (y(d.z) - 10) : (y(d.z) + 16))
+    .text(d => isFinite(d.z) ? d.z.toFixed(2) : '—');
+
 })();
 </script>
 {% endif %}
