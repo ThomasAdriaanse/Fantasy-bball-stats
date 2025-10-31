@@ -192,7 +192,7 @@
                 <th>Player Name</th>
                 <th>MIN</th><th>FGM</th><th>FGA</th><th>FTM</th><th>FTA</th>
                 <th>3PTM</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th>
-                <th>TO</th><th>PTS</th><th>FPTS</th><th>Games Left</th>
+                <th>TO</th><th>PTS</th><th>Games</th>
               </tr>
             </thead>
             <tbody>
@@ -213,8 +213,7 @@
                 <td>{{ row['blk'] }}</td>
                 <td>{{ row['turno'] }}</td>
                 <td>{{ row['pts'] }}</td>
-                <td>{{ row['fpts'] }}</td>
-                <td>{{ row['games'] }}</td>
+                <td>{{ row.get('games_str', row['games']) }}</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -229,7 +228,7 @@
                 <th>Player Name</th>
                 <th>MIN</th><th>FGM</th><th>FGA</th><th>FTM</th><th>FTA</th>
                 <th>3PTM</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th>
-                <th>TO</th><th>PTS</th><th>FPTS</th><th>Games Left</th>
+                <th>TO</th><th>PTS</th><th>Games</th>
               </tr>
             </thead>
             <tbody>
@@ -250,8 +249,7 @@
                 <td>{{ row['blk'] }}</td>
                 <td>{{ row['turno'] }}</td>
                 <td>{{ row['pts'] }}</td>
-                <td>{{ row['fpts'] }}</td>
-                <td>{{ row['games'] }}</td>
+                <td>{{ row.get('games_str', row['games']) }}</td>
               </tr>
               {% endfor %}
             </tbody>
