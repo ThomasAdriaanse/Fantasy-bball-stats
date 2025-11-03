@@ -26,5 +26,9 @@ def create_app():
     from .blueprints.trades.routes import bp as trades_bp
     app.register_blueprint(trades_bp, url_prefix="/trades")
 
+    from .blueprints.streaming.routes import bp as streaming_bp
+    app.register_blueprint(streaming_bp, url_prefix="/streaming")
+
+
 
     return app

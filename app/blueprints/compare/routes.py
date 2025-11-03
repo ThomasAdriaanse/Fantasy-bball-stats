@@ -4,6 +4,7 @@ from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, 
 from datetime import timedelta
 import time
 import json
+from ...services.compare_presenter import build_snapshot_rows, build_odds_rows
 
 # use your existing compare modules in project root
 import compare_page.compare_page_data as cpd
@@ -155,19 +156,47 @@ def compare_page():
         (d1, d2, win1, win2, cur1, cur2) = tsd.get_team_stats_categories(
             league, team1_index, t1, team2_index, t2, scoring_rules, year, week_data
         )
+
         combined_dfs = cpd.get_compare_graphs_categories(league, team1_index, t1, team2_index, t2, year, week_data)
         combined_dicts = {cat: df.to_dict('records') for cat, df in combined_dfs.items()}
 
-        return render_template('compare_page_cat.html',
-                               data_team_players_1=t1.to_dict('records'),
-                               data_team_players_2=t2.to_dict('records'),
-                               data_team_stats_1=d1.to_dict('records'),
-                               data_team_stats_2=d2.to_dict('records'),
-                               team1_win_pct_data=win1.to_dict('records'),
-                               team2_win_pct_data=win2.to_dict('records'),
-                               team1_current_stats=cur1, team2_current_stats=cur2,
-                               combined_jsons=combined_dicts,
-                               scoring_type=scoring_type, week_data=week_data,
-                               stat_window=stat_window)
+        # Build a small map of end-of-week expected percentages from the fixed math
+        fg_t_exp, fg_o_exp, _, _ = tsd.get_cat_stats('fg%', 'FGM', t1, t2, cur1, cur2)
+        ft_t_exp, ft_o_exp, _, _ = tsd.get_cat_stats('ft%', 'FTM', t1, t2, cur1, cur2)
+        expected_pct_map = {
+            'FG%': {'t1': fg_t_exp, 't2': fg_o_exp},
+            'FT%': {'t1': ft_t_exp, 't2': ft_o_exp},
+        }
+
+        snapshot_rows = build_snapshot_rows(cur1, cur2)
+        odds_rows = build_odds_rows(
+            win1.to_dict('records'),
+            combined_dicts,
+            team1_current_stats=cur1,
+            team2_current_stats=cur2,
+            data_team_players_1=t1.to_dict('records'),
+            data_team_players_2=t2.to_dict('records'),
+            debug=True  # or set COMPARE_DEBUG=1 in docker-compose to keep logs on
+        )
+
+
+        return render_template(
+            "compare_page_cat.html",
+            data_team_players_1=t1.to_dict('records'),
+            data_team_players_2=t2.to_dict('records'),
+            data_team_stats_1=d1.to_dict('records'),
+            data_team_stats_2=d2.to_dict('records'),
+            team1_win_pct_data=win1.to_dict('records'),
+            team2_win_pct_data=win2.to_dict('records'),
+            team1_current_stats=cur1, team2_current_stats=cur2,
+            combined_jsons=combined_dicts,
+            scoring_type=scoring_type, week_data=week_data,
+            stat_window=stat_window,
+            expected_pct_map=expected_pct_map,  # keep if you want to inspect in UI
+            snapshot_rows=snapshot_rows,        # NEW (if you render snapshot server-side)
+            odds_rows=odds_rows                 # NEW ← the important one
+        )
+
+
 
     return redirect(url_for('main.entry_page', error_message=f"Unsupported scoring type: {scoring_type}"))

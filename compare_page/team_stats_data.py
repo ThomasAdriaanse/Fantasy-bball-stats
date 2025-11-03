@@ -5,6 +5,7 @@ from typing import Dict, Tuple, Any, List
 
 import pandas as pd
 from scipy.stats import norm
+import math
 
 # stays as-is since you kept the package at project root
 import compare_page.compare_page_data as cpd
@@ -306,39 +307,64 @@ def get_cat_stats(
         made = 'fgm' if cat == 'fg%' else 'ftm'
         att  = 'fga' if cat == 'fg%' else 'fta'
 
-        # ensure numeric
-        for df in (t_df, o_df):
-            df[made] = pd.to_numeric(df[made], errors='coerce')
-            df[att]  = pd.to_numeric(df[att],  errors='coerce')
-            df.dropna(subset=[made, att], inplace=True)
+        def _ensure_num(df, cols):
+            for c in cols:
+                df[c] = pd.to_numeric(df[c], errors='coerce')
+            return df.dropna(subset=cols)
 
+        # Filter and ensure numeric for per-player projected rates + games
+        t_df = _clean(team_player_data, made)
+        t_df = _ensure_num(t_df, [made, att, 'games'])
+        o_df = _clean(opponent_player_data, made)
+        o_df = _ensure_num(o_df, [made, att, 'games'])
+
+        # Project *future* makes/attempts (rate * remaining games)
         t_exp_makes = float((t_df[made] * t_df['games']).sum())
         t_exp_atts  = float((t_df[att]  * t_df['games']).sum())
         o_exp_makes = float((o_df[made] * o_df['games']).sum())
         o_exp_atts  = float((o_df[att]  * o_df['games']).sum())
 
-        t_cur_m = float((team_current_stats.get(made, {}) or {}).get('value', 0) or 0)
-        t_cur_a = float((team_current_stats.get(att,  {}) or {}).get('value', 0) or 0)
-        o_cur_m = float((opponent_current_stats.get(made, {}) or {}).get('value', 0) or 0)
-        o_cur_a = float((opponent_current_stats.get(att,  {}) or {}).get('value', 0) or 0)
+        # 🔧 FIX: current cumulative box totals use UPPERCASE keys in team_current_stats
+        made_key = made.upper()  # 'FGM' or 'FTM'
+        att_key  = att.upper()   # 'FGA' or 'FTA'
 
+        t_cur_m = float((team_current_stats.get(made_key, {}) or {}).get('value', 0) or 0)
+        t_cur_a = float((team_current_stats.get(att_key,  {}) or {}).get('value', 0) or 0)
+        o_cur_m = float((opponent_current_stats.get(made_key, {}) or {}).get('value', 0) or 0)
+        o_cur_a = float((opponent_current_stats.get(att_key,  {}) or {}).get('value', 0) or 0)
+
+        # End-of-week totals (projected)
         t_tot_m = t_cur_m + t_exp_makes
         t_tot_a = t_cur_a + t_exp_atts
         o_tot_m = o_cur_m + o_exp_makes
         o_tot_a = o_cur_a + o_exp_atts
 
-        t_expected = (t_tot_m / t_tot_a * 100) if t_tot_a > 0 else 0.0
-        o_expected = (o_tot_m / o_tot_a * 100) if o_tot_a > 0 else 0.0
+        # Expected proportions (0..1). Display as 0..100 later.
+        t_p = (t_tot_m / t_tot_a) if t_tot_a > 0 else None
+        o_p = (o_tot_m / o_tot_a) if o_tot_a > 0 else None
 
-        # rough variance proxy – more attempts => lower variance
-        t_std = 2.0 * (t_tot_a ** 0.5) if t_tot_a > 0 else 0.0
-        o_std = 2.0 * (o_tot_a ** 0.5) if o_tot_a > 0 else 0.0
-
-        denom = (t_std ** 2 + o_std ** 2) ** 0.5
-        if denom > 0:
-            twin = float(norm.cdf((t_expected - o_expected) / denom) * 100)
+        if t_p is None and o_p is None:
+            t_expected, o_expected, twin = 0.0, 0.0, 50.0
+        elif t_p is None:
+            t_expected, o_expected, twin = 0.0, o_p * 100.0, 0.0
+        elif o_p is None:
+            t_expected, o_expected, twin = t_p * 100.0, 0.0, 100.0
         else:
-            twin = 50.0 if t_expected == o_expected else (100.0 if t_expected > o_expected else 0.0)
+            # Variance of difference in proportions:
+            # Var(p1 - p2) ≈ p1(1-p1)/A1 + p2(1-p2)/A2
+            var_diff = (t_p * (1.0 - t_p)) / max(1.0, t_tot_a) + (o_p * (1.0 - o_p)) / max(1.0, o_tot_a)
+            sd = math.sqrt(max(var_diff, 1e-12))
+            z = (t_p - o_p) / sd
+            twin = float(norm.cdf(z) * 100.0)
+
+            t_expected = t_p * 100.0
+            o_expected = o_p * 100.0
+
+            print("[FT%/FG% DEBUG]",
+            {"t_cur": (t_cur_m, t_cur_a), "o_cur": (o_cur_m, o_cur_a),
+            "t_exp": (t_exp_makes, t_exp_atts), "o_exp": (o_exp_makes, o_exp_atts),
+            "t_tot": (t_tot_m, t_tot_a), "o_tot": (o_tot_m, o_tot_a)})
+
 
     else:
         # counting stats

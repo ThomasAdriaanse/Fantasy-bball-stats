@@ -86,7 +86,7 @@
     /* ===== Odds block ===== */
     .odds-card { padding: 16px 18px; }
 
-    /* Midline projected-stat tags (new) */
+    /* Midline projected-stat tags (your original look) */
     .odds-bar-v2 { position: relative; }
     .odds-mid-v2 { position:absolute; top:0; bottom:0; width:1px; left:50%;
       background: rgba(255,255,255,0.18); pointer-events:none; }
@@ -102,6 +102,24 @@
     }
     .odds-stat-tag-v2.left  { transform: translate(-110%,-50%); text-align:right; }
     .odds-stat-tag-v2.right { transform: translate(10%,-50%);   text-align:left; }
+
+    /* Percentage tags + bar sides (unchanged) */
+    .odds-list-v2 { display:grid; gap:10px; }
+    .odds-item-v2 { display:grid; grid-template-columns: 90px 1fr; gap:10px; align-items:center; }
+    .odds-label-v2 { text-align:right; font-size:14px; opacity:.9; }
+    .odds-left-v2 { height:100%; background:rgba(70,130,180,.8); }
+    .odds-right-v2{ height:100%; background:rgba(255,0,0,.8); float:right; }
+    .odds-tag-v2{ position:absolute; top:50%; transform:translateY(-50%); font-size:12px; padding:2px 6px; background:rgba(0,0,0,.25); border-radius:4px; color:#fff; }
+    .odds-tag-v2.left{ left:6px; }
+    .odds-tag-v2.right{ right:6px; }
+    .odds-tag-v2.strong{ font-weight:700; }
+    .odds-tag-v2.muted{ opacity:.75; }
+
+    /* Bar winner state */
+    .odds-bar-v2.is-tie .odds-left-v2,
+    .odds-bar-v2.is-tie .odds-right-v2 { opacity:.9; }
+    .odds-bar-v2.winner-left  .odds-right-v2 { opacity:.6; }
+    .odds-bar-v2.winner-right .odds-left-v2  { opacity:.6; }
 
     /* Toggle button */
     .toggle-row{ display:flex; align-items:center; gap:10px; margin:8px 0 12px; }
@@ -132,54 +150,41 @@
       </div>
     </div>
 
-    <!-- ===== CURRENT CATEGORY SNAPSHOT ===== -->
+    <!-- Streaming recommendations -->
+    <form method="post" action="{{ url_for('streaming.streaming_page') }}" style="margin:12px 0;">
+      <input type="hidden" name="myTeam"        value="{{ (data_team_stats_1|default([{'team_name':'Team 1'}], true))[0]['team_name'] }}">
+      <input type="hidden" name="opponentsTeam" value="{{ (data_team_stats_2|default([{'team_name':'Team 2'}], true))[0]['team_name'] }}">
+
+      <!-- Pass the exact data the compare page already has -->
+      <input type="hidden" name="week_data_json"            value='{{ week_data|tojson }}'>
+      <input type="hidden" name="stat_window"               value='{{ stat_window }}'>
+      <input type="hidden" name="scoring_type"              value='{{ scoring_type }}'>
+
+      <input type="hidden" name="team1_rows_json"           value='{{ data_team_players_1|tojson }}'>
+      <input type="hidden" name="team2_rows_json"           value='{{ data_team_players_2|tojson }}'>
+      <input type="hidden" name="team1_win_pct_json"        value='{{ team1_win_pct_data|tojson }}'>
+      <input type="hidden" name="team2_win_pct_json"        value='{{ team2_win_pct_data|tojson }}'>
+      <input type="hidden" name="team1_current_stats_json"  value='{{ team1_current_stats|tojson }}'>
+      <input type="hidden" name="team2_current_stats_json"  value='{{ team2_current_stats|tojson }}'>
+
+      <button type="submit" class="btn">Streaming recommendations for this matchup</button>
+    </form>
+
+    <!-- ===== CURRENT CATEGORY SNAPSHOT (server-computed) ===== -->
     <div class="card cat-snapshot">
       <div class="cat-grid">
-        {% set scale_map = {
-          'PTS':100,'REB':30,'AST':20,'STL':15,'BLK':10,'3PM':15,'FG%':0.5,'FT%':0.5,'TO':10
-        } %}
-        {% for c in ['PTS','REB','AST','STL','BLK','3PM','FG%','FT%','TO'] %}
-          {% set s1 = team1_current_stats.get(c) if team1_current_stats else None %}
-          {% set s2 = team2_current_stats.get(c) if team2_current_stats else None %}
-          {% set v1 = s1['value'] if s1 and 'value' in s1 else None %}
-          {% set v2 = s2['value'] if s2 and 'value' in s2 else None %}
-          {% if v1 is not none and v2 is not none %}
-            {% if c == 'TO' %}{% set t1_wins = v1 < v2 %}{% set t2_wins = v2 < v1 %}
-            {% else %}{% set t1_wins = v1 > v2 %}{% set t2_wins = v2 > v1 %}{% endif %}
-            {% set is_tie = (v1 == v2) %}
-          {% else %}
-            {% set t1_wins = false %}{% set t2_wins = false %}{% set is_tie = true %}
-          {% endif %}
-          {% set scale = scale_map.get(c,10) %}
-          {% if v1 is not none and v2 is not none %}
-            {% set diff = (v1 - v2) if (v1 - v2) >= 0 else -(v1 - v2) %}
-            {% set intensity = [1, [0, diff/scale]|max]|min %}
-          {% else %}
-            {% set intensity = 0 %}
-          {% endif %}
-          {% set alpha = 0.25 + 0.55 * intensity %}
-          {% if is_tie %}{% set a1 = 0 %}{% set a2 = 0 %}
-          {% elif t1_wins %}{% set a1 = alpha %}{% set a2 = 0 %}
-          {% else %}{% set a1 = 0 %}{% set a2 = alpha %}{% endif %}
-          {% if c in ['FG%','FT%'] %}
-            {% set disp1 = ('%.1f%%' % (((v1 or 0) * 100))) if v1 is not none else '-' %}
-            {% set disp2 = ('%.1f%%' % (((v2 or 0) * 100))) if v2 is not none else '-' %}
-          {% else %}
-            {% set disp1 = v1 if v1 is not none else '-' %}
-            {% set disp2 = v2 if v2 is not none else '-' %}
-          {% endif %}
+        {% for row in snapshot_rows %}
           <div class="cat-col">
-            <div class="cat-label">{{ c }}</div>
-            <div class="split-pill" style="--a1:{{ '%.3f' % a1 }}; --a2:{{ '%.3f' % a2 }};"
-                 title="{{ t1[0]['team_name'] }} / {{ t2[0]['team_name'] }}">
-              <div class="pill-left">{{ disp1 }}</div>
-              <div class="pill-right">{{ disp2 }}</div>
+            <div class="cat-label">{{ row.cat }}</div>
+            <div class="split-pill" style="--a1:{{ '%.3f' % row.a1 }}; --a2:{{ '%.3f' % row.a2 }};"
+                title="{{ t1[0]['team_name'] }} / {{ t2[0]['team_name'] }}">
+              <div class="pill-left">{{ row.disp1 }}</div>
+              <div class="pill-right">{{ row.disp2 }}</div>
             </div>
           </div>
         {% endfor %}
       </div>
     </div>
-    <!-- ===== END SNAPSHOT ===== -->
 
     <!-- Players + summary tables -->
     <div class="card">
@@ -257,45 +262,28 @@
         </div>
       </div>
 
-      <!-- ===== Odds (single full-width bar per row) ===== -->
+      <!-- Odds (server-rendered) -->
       <div class="card odds-card-v2" style="margin-top:12px;">
         <h3 class="win-title" style="margin-top:0">Odds of winning each category</h3>
-
         <div class="odds-list-v2">
-          {% set t1_pcts = team1_win_pct_data[0] %}
-          {% set display_map = {
-            'threeptm':'3PM','3ptm':'3PM','fg3m':'3PM','fg3_pm':'3PM',
-            'fg%':'FG%','fg_pct':'FG%','ft%':'FT%','ft_pct':'FT%',
-            'turno':'TO','to':'TO'
-          } %}
-
-          {% for cat, pct1 in t1_pcts.items() %}
-            {% set p1 = (pct1|float) %}
-            {% set p1 = 0 if p1 < 0 else (100 if p1 > 100 else p1) %}
-            {% set p2 = 100 - p1 %}
-            {% set t1_wins = p1 > p2 %}
-            {% set tie = p1 == p2 %}
-
-            {% set key_lower = (cat|string)|lower %}
-            {% set disp_cat = display_map.get(key_lower, (cat|string)|upper) %}
-
-            <div class="odds-item-v2" data-cat="{{ disp_cat }}">
-              <div class="odds-label-v2">{{ disp_cat }}</div>
-
-              <div class="odds-bar-v2
-                          {% if tie %}is-tie{% elif t1_wins %}winner-left{% else %}winner-right{% endif %}"
-                  title="{{ '%.1f' % p1 }}% vs {{ '%.1f' % p2 }}%">
-                <div class="odds-left-v2"  style="width: {{ '%.3f' % p1 }}%;"></div>
-                <div class="odds-right-v2" style="width: {{ '%.3f' % p2 }}%;"></div>
+          {% for row in odds_rows %}
+            <div
+              class="odds-item-v2"
+              data-cat="{{ row.cat }}"
+              data-p1="{{ row.p1 }}"
+              data-p2="{{ row.p2 }}"
+              data-mid-t1="{{ row.mid_t1 }}"
+              data-mid-t2="{{ row.mid_t2 }}"
+            >
+              <div class="odds-label-v2">{{ row.cat }}</div>
+              <div class="odds-bar-v2 {{ row.class_name }}" title="{{ row.p1 }}% vs {{ row.p2 }}%">
+                <div class="odds-left-v2"  style="width: {{ row.p1 }}%;"></div>
+                <div class="odds-right-v2" style="width: {{ row.p2 }}%;"></div>
                 <div class="odds-mid-v2"></div>
-
-                <!-- Percent tags -->
-                <div class="odds-tag-v2 left  {% if t1_wins %}strong{% elif tie %}{% else %}muted{% endif %}">{{ '%.0f' % p1 }}%</div>
-                <div class="odds-tag-v2 right {% if not t1_wins and not tie %}strong{% elif tie %}{% else %}muted{% endif %}">{{ '%.0f' % p2 }}%</div>
-
-                <!-- Midline projected-stat tags -->
-                <div class="odds-stat-tag-v2 left"></div>
-                <div class="odds-stat-tag-v2 right"></div>
+                <div class="odds-tag-v2 left  {{ 'strong' if row.p1 > row.p2 else ('muted' if row.p1 < row.p2 else '') }}">{{ row.p1|round(0) }}%</div>
+                <div class="odds-tag-v2 right {{ 'strong' if row.p2 > row.p1 else ('muted' if row.p2 < row.p1 else '') }}">{{ row.p2|round(0) }}%</div>
+                <div class="odds-stat-tag-v2 left">{{ row.mid_t1 }}</div>
+                <div class="odds-stat-tag-v2 right">{{ row.mid_t2 }}</div>
               </div>
             </div>
           {% endfor %}
@@ -360,7 +348,7 @@
       syncToggleBtn();
     });
 
-    // ===== Mini charts =====
+    // ===== Mini charts (unchanged) =====
     categories.forEach((cat) => {
       const graphData = (combinedJsons[cat] || []).map(d => ({
         date: new Date(d.date),
@@ -472,38 +460,13 @@
       `);
     });
 
-    // ===== Odds adjustments & midline stat labels =====
-
-    // Logistic mapping: a few % points swing => large win probability (FG%/FT%)
-    function pctWinProb(p1, p2, k = 100) {
-      const delta = (p1 - p2);
-      const prob  = 1 / (1 + Math.exp(-k * delta));
-      return Math.max(0, Math.min(1, prob));
-    }
-
-    function latestProjectedValue(cat, teamLabel) {
-      const series = combinedJsons[cat];
-      if (!series) return null;
-      const rows = series
-        .filter(d => d.team === teamLabel)
-        .map(d => ({ ...d, _dt: new Date(d.date) }))
-        .sort((a,b) => a._dt - b._dt);
-      if (!rows.length) return null;
-      const last = rows[rows.length - 1];
-      return +last.predicted_cat; // proportions for FG%/FT%; raw counts otherwise
-    }
-
-    function formatStat(cat, val) {
-      if (val == null || !isFinite(val)) return '-';
-      if (cat === 'FG%' || cat === 'FT%') return (val * 100).toFixed(1) + '%';
-      if (cat === 'TO') return Number(val).toFixed(1);
-      return (Math.abs(val) >= 5 ? Math.round(val) : Number(val).toFixed(1)) + '';
-    }
-
-    (function adjustOddsAndInjectMidline(){
+    // ===== Sync odds UI from server-provided values (no recompute) =====
+    (function syncServerOdds(){
       document.querySelectorAll('.odds-item-v2').forEach(item => {
-        const cat = item.getAttribute('data-cat'); // 'PTS','REB','FG%', etc.
-        if (!cat) return;
+        const p1 = Number(item.getAttribute('data-p1'));
+        const p2 = Number(item.getAttribute('data-p2'));
+        const m1 = item.getAttribute('data-mid-t1') || '-';
+        const m2 = item.getAttribute('data-mid-t2') || '-';
 
         const bar   = item.querySelector('.odds-bar-v2');
         const left  = item.querySelector('.odds-left-v2');
@@ -512,34 +475,31 @@
         const tagR  = item.querySelector('.odds-tag-v2.right');
         const statL = item.querySelector('.odds-stat-tag-v2.left');
         const statR = item.querySelector('.odds-stat-tag-v2.right');
+
         if (!bar || !left || !right || !tagL || !tagR || !statL || !statR) return;
 
-        // Pull projected end-of-week stat values
-        const t1v = latestProjectedValue(cat, 'Team 1');
-        const t2v = latestProjectedValue(cat, 'Team 2');
+        // widths + title
+        left.style.width  = `${p1}%`;
+        right.style.width = `${p2}%`;
+        bar.title = `${p1.toFixed(1)}% vs ${p2.toFixed(1)}%`;
 
-        // Show formatted values at the midline
-        statL.textContent = formatStat(cat, t1v);
-        statR.textContent = formatStat(cat, t2v);
+        // labels
+        tagL.textContent = `${Math.round(p1)}%`;
+        tagR.textContent = `${Math.round(p2)}%`;
+        statL.textContent = m1;
+        statR.textContent = m2;
 
-        // For FG%/FT%, also override odds via logistic so small deltas look decisive
-        if (cat === 'FG%' || cat === 'FT%') {
-          if (t1v != null && t2v != null) {
-            const p1 = pctWinProb(t1v, t2v) * 100;
-            const p2 = 100 - p1;
+        // class (winner/tie)
+        bar.classList.remove('is-tie','winner-left','winner-right');
+        if (Math.abs(p1 - p2) < 0.5) bar.classList.add('is-tie');
+        else if (p1 > p2) bar.classList.add('winner-left');
+        else bar.classList.add('winner-right');
 
-            left.style.width  = `${p1.toFixed(3)}%`;
-            right.style.width = `${p2.toFixed(3)}%`;
-            tagL.textContent  = `${Math.round(p1)}%`;
-            tagR.textContent  = `${Math.round(p2)}%`;
-            bar.title = `${p1.toFixed(1)}% vs ${p2.toFixed(1)}%`;
-
-            bar.classList.remove('is-tie','winner-left','winner-right');
-            if (Math.abs(p1 - p2) < 0.5) bar.classList.add('is-tie');
-            else if (p1 > p2) bar.classList.add('winner-left');
-            else bar.classList.add('winner-right');
-          }
-        }
+        // bolding vs muted
+        tagL.classList.toggle('strong', p1 > p2);
+        tagL.classList.toggle('muted',  p1 < p2);
+        tagR.classList.toggle('strong', p2 > p1);
+        tagR.classList.toggle('muted',  p2 < p1);
       });
     })();
   </script>
