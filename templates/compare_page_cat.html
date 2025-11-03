@@ -83,11 +83,32 @@
       background: repeating-linear-gradient(to right, red 0 3px, transparent 3px 6px);
     }
 
-    /* ===== Odds block ===== */
-    .odds-card { padding: 16px 18px; }
+     /* ===== Odds block ===== */
+  .odds-card { padding: 16px 18px; }
 
-    /* Midline projected-stat tags (your original look) */
-    .odds-bar-v2 { position: relative; }
+    /* Use a symmetric 3-column grid: [label][bar][spacer] */
+    .odds-list-v2 { display:grid; gap:10px; --label-w: 90px; }
+    .odds-item-v2 {
+      display:grid;
+      grid-template-columns: var(--label-w) 1fr var(--label-w);
+      gap:10px;
+      align-items:center;
+    }
+    .odds-label-v2 {
+      grid-column: 1 / 2;
+      text-align:right; font-size:14px; opacity:.9;
+    }
+    .odds-bar-v2 {
+      grid-column: 2 / 3;
+      position: relative;
+    }
+    /* Right spacer cell to balance the left label */
+    .odds-spacer {
+      grid-column: 3 / 4;
+      /* purely structural */
+    }
+
+    /* Midline + stat tags (unchanged look) */
     .odds-mid-v2 { position:absolute; top:0; bottom:0; width:1px; left:50%;
       background: rgba(255,255,255,0.18); pointer-events:none; }
     .odds-stat-tag-v2{
@@ -103,10 +124,7 @@
     .odds-stat-tag-v2.left  { transform: translate(-110%,-50%); text-align:right; }
     .odds-stat-tag-v2.right { transform: translate(10%,-50%);   text-align:left; }
 
-    /* Percentage tags + bar sides (unchanged) */
-    .odds-list-v2 { display:grid; gap:10px; }
-    .odds-item-v2 { display:grid; grid-template-columns: 90px 1fr; gap:10px; align-items:center; }
-    .odds-label-v2 { text-align:right; font-size:14px; opacity:.9; }
+    /* Bar rails + percentage tags (unchanged) */
     .odds-left-v2 { height:100%; background:rgba(70,130,180,.8); }
     .odds-right-v2{ height:100%; background:rgba(255,0,0,.8); float:right; }
     .odds-tag-v2{ position:absolute; top:50%; transform:translateY(-50%); font-size:12px; padding:2px 6px; background:rgba(0,0,0,.25); border-radius:4px; color:#fff; }
@@ -115,12 +133,18 @@
     .odds-tag-v2.strong{ font-weight:700; }
     .odds-tag-v2.muted{ opacity:.75; }
 
-    /* Bar winner state */
     .odds-bar-v2.is-tie .odds-left-v2,
     .odds-bar-v2.is-tie .odds-right-v2 { opacity:.9; }
     .odds-bar-v2.winner-left  .odds-right-v2 { opacity:.6; }
     .odds-bar-v2.winner-right .odds-left-v2  { opacity:.6; }
 
+    /* Responsive: shrink label width on small screens so center stays true */
+    @media (max-width: 520px) {
+      .odds-list-v2 { --label-w: 70px; }
+    }
+    @media (max-width: 420px) {
+      .odds-list-v2 { --label-w: 56px; }
+    }
     /* Toggle button */
     .toggle-row{ display:flex; align-items:center; gap:10px; margin:8px 0 12px; }
     .btn-toggle{
@@ -285,6 +309,7 @@
                 <div class="odds-stat-tag-v2 left">{{ row.mid_t1 }}</div>
                 <div class="odds-stat-tag-v2 right">{{ row.mid_t2 }}</div>
               </div>
+              <div class="odds-spacer" aria-hidden="true"></div>
             </div>
           {% endfor %}
         </div>
