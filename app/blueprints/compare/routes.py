@@ -178,9 +178,33 @@ def compare_page():
             team2_current_stats=cur2,
             data_team_players_1=t1.to_dict('records'),
             data_team_players_2=t2.to_dict('records'),
-            debug=True  # or set COMPARE_DEBUG=1 in docker-compose to keep logs on
+            debug=True
         )
 
+        # ===== NEW: total games (remaining / total) per team =====
+        # We try to parse 'games_str' if it exists and looks like "x/y".
+        # If not, we fall back to summing the numeric 'games' column and use that as both.
+        def _sum_games(df):
+            rem = 0
+            tot = 0
+            if 'games_str' in df.columns:
+                for s in df['games_str'].fillna(''):
+                    if isinstance(s, str) and '/' in s:
+                        left, right = s.split('/', 1)
+                        try:
+                            rem += int(left)
+                            tot += int(right)
+                        except Exception:
+                            continue
+            # fallback: only have 'games' numeric → treat as remaining, and use same as total
+            if (rem == 0 and tot == 0) and ('games' in df.columns):
+                val = int(df['games'].fillna(0).sum())
+                rem = val
+                tot = val
+            return rem, tot
+
+        team1_games_remaining, team1_games_total = _sum_games(t1)
+        team2_games_remaining, team2_games_total = _sum_games(t2)
 
         return render_template(
             "compare_page_cat.html",
@@ -194,11 +218,14 @@ def compare_page():
             combined_jsons=combined_dicts,
             scoring_type=scoring_type, week_data=week_data,
             stat_window=stat_window,
-            expected_pct_map=expected_pct_map,  # keep if you want to inspect in UI
-            snapshot_rows=snapshot_rows,        # NEW (if you render snapshot server-side)
-            odds_rows=odds_rows                
+            expected_pct_map=expected_pct_map,
+            snapshot_rows=snapshot_rows,
+            odds_rows=odds_rows,
+            # NEW totals for bottom-of-table row
+            team1_games_remaining=team1_games_remaining,
+            team1_games_total=team1_games_total,
+            team2_games_remaining=team2_games_remaining,
+            team2_games_total=team2_games_total,
         )
-
-
 
     return redirect(url_for('main.entry_page', error_message=f"Unsupported scoring type: {scoring_type}"))

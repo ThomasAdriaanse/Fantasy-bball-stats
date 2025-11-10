@@ -9,6 +9,13 @@
     .player-out a, .player-dtd a { color: inherit; text-decoration: none; }
     .player-out a:hover, .player-dtd a:hover { text-decoration: underline; }
 
+    /* ===== Center streaming button ===== */
+    .stream-form{
+      margin: 12px 0;
+      display: flex;
+      justify-content: center;
+    }
+
     /* ===== Category snapshot (labels above, pills below) ===== */
     .cat-snapshot.card { padding: 16px 18px; }
     .cat-grid{
@@ -54,7 +61,7 @@
       background: rgba(255,0,0,var(--a2,0));   /* Team 2 red  */
     }
 
-    /* ===== Tables (unchanged) ===== */
+    /* ===== Tables ===== */
     .data-table.table-compact{ table-layout: fixed; width: 100%; }
     .data-table.table-compact th,
     .data-table.table-compact td{
@@ -62,6 +69,17 @@
     }
     .win-title{
       margin: 10px 0 6px; text-align: center; font-size: 14px; opacity: .9;
+    }
+
+    /* Totals row styling */
+    .totals-row td{
+      border-top: 1px solid rgba(255,255,255,0.18);
+      font-weight: 600;
+      padding-top: 6px;
+    }
+    .totals-row td.label-cell{
+      text-align: right;
+      opacity: .9;
     }
 
     /* ===== Charts ===== */
@@ -174,8 +192,8 @@
       </div>
     </div>
 
-    <!-- Streaming recommendations -->
-    <form method="post" action="{{ url_for('streaming.streaming_page') }}" style="margin:12px 0;">
+    <!-- Streaming recommendations (CENTERED) -->
+    <form method="post" action="{{ url_for('streaming.streaming_page') }}" class="stream-form">
       <input type="hidden" name="myTeam"        value="{{ (data_team_stats_1|default([{'team_name':'Team 1'}], true))[0]['team_name'] }}">
       <input type="hidden" name="opponentsTeam" value="{{ (data_team_stats_2|default([{'team_name':'Team 2'}], true))[0]['team_name'] }}">
 
@@ -250,6 +268,13 @@
                 <td>{{ row.get('games_str', row['games']) }}</td>
               </tr>
               {% endfor %}
+
+              {% if team1_games_remaining is not none and team1_games_total is not none %}
+              <tr class="totals-row">
+                <td class="label-cell" colspan="13">Total games</td>
+                <td>{{ team1_games_remaining }}/{{ team1_games_total }}</td>
+              </tr>
+              {% endif %}
             </tbody>
           </table>
         </div>
@@ -286,6 +311,13 @@
                 <td>{{ row.get('games_str', row['games']) }}</td>
               </tr>
               {% endfor %}
+
+              {% if team2_games_remaining is not none and team2_games_total is not none %}
+              <tr class="totals-row">
+                <td class="label-cell" colspan="13">Total games</td>
+                <td>{{ team2_games_remaining }}/{{ team2_games_total }}</td>
+              </tr>
+              {% endif %}
             </tbody>
           </table>
         </div>
