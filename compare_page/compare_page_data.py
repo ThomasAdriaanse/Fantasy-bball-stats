@@ -97,12 +97,29 @@ def get_team_player_data(
     team = league.teams[team_num]
     team_data = {c: [] for c in columns}
 
-    # strict vs friendly
+    # ensure these keys exist for output even if not listed in `columns`
+    if 'games' not in team_data:
+        team_data['games'] = []
+    if 'games_str' not in team_data:
+        team_data['games_str'] = []
+
+    # strict vs friendly for stat window
     if stat_window is not None:
         window = (stat_window or "").strip().lower().replace("-", "_")
-        candidate_keys = [f"{year}_{window}"] if window in _VALID_WINDOWS else []
+        candidate_keys = [f"{year}_{window}" if window in _VALID_WINDOWS else ""]
+        candidate_keys = [k for k in candidate_keys if k]
     else:
         candidate_keys = [f"{year}_projected", f"{year}_total", f"{year}_last_30", f"{year}_last_15", f"{year}_last_7"]
+
+    # establish week window once
+    if week_data and week_data.get('matchup_data'):
+        start_date = datetime.strptime(week_data['matchup_data']['start_date'], '%Y-%m-%d').date()
+        end_date   = datetime.strptime(week_data['matchup_data']['end_date'],   '%Y-%m-%d').date()
+    else:
+        today_minus_8 = (datetime.today() - timedelta(hours=8)).date()
+        start_date, end_date = range_of_current_week(today_minus_8)
+
+    today_minus_8 = (datetime.today() - timedelta(hours=8)).date()
 
     for player in getattr(team, "roster", []):
         stats_all = getattr(player, "stats", {}) or {}
@@ -113,6 +130,16 @@ def get_team_player_data(
                 player_avg_stats = _extract_avg(stats_all.get(k))
                 if player_avg_stats:
                     break
+
+        # ==== schedule-derived games (remaining / total) for this player ====
+        schedule = getattr(player, "schedule", {}) or {}
+        list_schedule = list(schedule.values())
+        list_schedule.sort(key=lambda x: x['date'])
+
+        games_in_week = [g for g in list_schedule if start_date <= _date_only(g['date']) <= end_date]
+        games_total = len(games_in_week)
+        games_remaining = sum(1 for g in games_in_week if _date_only(g['date']) >= today_minus_8)
+        games_str = f"{games_remaining}/{games_total}"
 
         if player_avg_stats:
             # safe keys / aliases
@@ -165,6 +192,10 @@ def get_team_player_data(
             )
             team_data['fpts'].append(fpts)
 
+            # games fields
+            team_data['games'].append(games_remaining)
+            team_data['games_str'].append(games_str)
+
         else:
             # Strict mode or no usable data -> N/A row
             team_data['player_name'].append(player.name)
@@ -172,21 +203,9 @@ def get_team_player_data(
                 team_data[k].append('N/A')
             team_data['inj'].append(getattr(player, "injuryStatus", None))
 
-        # === Games this (selected) week ===
-        schedule = getattr(player, "schedule", {}) or {}
-        list_schedule = list(schedule.values())
-        list_schedule.sort(key=lambda x: x['date'])
-
-        if week_data and week_data.get('matchup_data'):
-            start_date = datetime.strptime(week_data['matchup_data']['start_date'], '%Y-%m-%d').date()
-            end_date   = datetime.strptime(week_data['matchup_data']['end_date'],   '%Y-%m-%d').date()
-            games_in_week = [g for g in list_schedule if start_date <= _date_only(g['date']) <= end_date]
-        else:
-            today_minus_8 = (datetime.today() - timedelta(hours=8)).date()
-            start_of_week, end_of_week = range_of_current_week(today_minus_8)
-            games_in_week = [g for g in list_schedule if start_of_week <= _date_only(g['date']) <= end_of_week]
-
-        team_data['games'].append(len(games_in_week))
+            # still record games for UI consistency
+            team_data['games'].append(games_remaining)
+            team_data['games_str'].append(games_str)
 
     return pd.DataFrame(team_data)
 

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Streaming · Fantasy BBall{% endblock %}
+
+{% block content %}
+<div class="card space-y">
+  <h1>Streaming</h1>
+  <div class="muted">Week {{ week_num }} · {{ my_team }} vs {{ opp_team }}</div>
+
+  <div>
+    <strong>Target categories:</strong>
+    <span>{{ swing_cats | join(", ") }}</span>
+  </div>
+
+  <table class="data-table" style="margin-top:10px;">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Add</th>
+        <th>Drop</th>
+        <th>Targets</th>
+        <th>Δ per game</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for rec in plan %}
+      <tr>
+        <td>{{ rec.date }}</td>
+        <td>{{ rec.add_player }} <span class="muted">({{ rec.add_team }} · {{ rec.add_pos }})</span></td>
+        <td>{{ rec.drop_player }}</td>
+        <td>{{ rec.targets | join(", ") }}</td>
+        <td>
+          {% for k, v in rec.delta_preview.items() %}
+            <span style="display:inline-block;margin-right:10px">{{ k }}: {{ "%+.2f"|format(v) }}</span>
+          {% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+      {% if plan|length == 0 %}
+      <tr><td colspan="5" class="muted">No simple streaming moves found for the remaining days.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+{% endblock content %}
