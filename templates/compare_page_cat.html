@@ -184,6 +184,11 @@
       <input type="hidden" name="stat_window"               value='{{ stat_window }}'>
       <input type="hidden" name="scoring_type"              value='{{ scoring_type }}'>
 
+      <input type="hidden" name="league_id" value="{{ league_id }}">
+      <input type="hidden" name="year"      value="{{ year }}">
+      <input type="hidden" name="espn_s2"   value="{{ espn_s2|default('', true) }}">
+      <input type="hidden" name="swid"      value="{{ swid|default('', true) }}">
+
       <input type="hidden" name="team1_rows_json"           value='{{ data_team_players_1|tojson }}'>
       <input type="hidden" name="team2_rows_json"           value='{{ data_team_players_2|tojson }}'>
       <input type="hidden" name="team1_win_pct_json"        value='{{ team1_win_pct_data|tojson }}'>

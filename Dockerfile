@@ -16,9 +16,9 @@ COPY . .
 # Make port 5000 available to the world outside this container
 EXPOSE 5000
 
-
 # Define environment variable for production
-ENV FLASK_ENV=production
+#ENV FLASK_ENV=production
+ENV FLASK_ENV=development
 
 # Command to run your app
 CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "wsgi:app"]

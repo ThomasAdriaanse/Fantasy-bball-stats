@@ -1,174 +1,227 @@
+# app/blueprints/streaming/routes.py
 from __future__ import annotations
-from flask import Blueprint, render_template, request, redirect, url_for, session
-from datetime import datetime, timedelta, date
-from typing import Dict, Any, List, Tuple
-import json
 
+import json
+from flask import Blueprint, render_template, session, redirect, url_for, request
 from espn_api.basketball import League
 from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, ESPNInvalidLeague
 
+from app.services.percent_of_win_calculations import (
+    CATS_ORDER,
+    raw_to_percent_of_win,
+)
+
 bp = Blueprint("streaming", __name__)
 
-def _date_only(dt) -> date:
-    return (dt - timedelta(hours=5)).date()
 
-def _week_dates(week_data: Dict[str, Any]) -> List[date]:
-    import pandas as pd
-    sd = datetime.strptime(week_data["matchup_data"]["start_date"], "%Y-%m-%d").date()
-    ed = datetime.strptime(week_data["matchup_data"]["end_date"],   "%Y-%m-%d").date()
-    return pd.date_range(start=sd, end=ed + timedelta(days=1)).date.tolist()
+def _parse_json_field(form, name):
+    raw = form.get(name, "")
+    if not raw:
+        return None, f"{name}=<empty>"
+    try:
+        val = json.loads(raw)
+        if isinstance(val, list):
+            return val, f"{name}=list(len={len(val)})"
+        if isinstance(val, dict):
+            return val, f"{name}=dict(keys={list(val.keys())[:8]})"
+        return val, f"{name}={type(val).__name__}"
+    except Exception:
+        return None, f"{name}=<invalid json> (len={len(raw)})"
 
-def _row_to_avg_map(row: Dict[str, Any]) -> Dict[str, float]:
-    def f(x):
-        try:
-            return 0.0 if x in (None, "N/A") else float(x)
-        except:
-            return 0.0
-    return {
-        "3PM": f(row.get("threeptm")),
-        "REB": f(row.get("reb")),
-        "AST": f(row.get("ast")),
-        "STL": f(row.get("stl")),
-        "BLK": f(row.get("blk")),
-        "PTS": f(row.get("pts")),
-        "TO":  f(row.get("turno")),
-    }
-
-def _fa_avg_map(p) -> Dict[str, float]:
-    stats_all = getattr(p, "stats", {}) or {}
-    keys = list(stats_all.keys())
-    prio = [k for k in keys if k.endswith("_projected")] + \
-           [k for k in keys if k.endswith("_last_30")] + \
-           [k for k in keys if k.endswith("_total")]
-    avg = {}
-    for k in prio:
-        blk = stats_all.get(k) or {}
-        if isinstance(blk, dict) and isinstance(blk.get("avg"), dict) and blk["avg"]:
-            avg = blk["avg"]; break
-    def pick(*names):
-        for n in names:
-            if n in avg and avg[n] is not None:
-                try: return float(avg[n])
-                except: return 0.0
-        return 0.0
-    return {
-        "3PM": pick("3PM","TPM"), "REB": pick("REB","RPG"), "AST": pick("AST","APG"),
-        "STL": pick("STL","SPG"), "BLK": pick("BLK","BPG"), "PTS": pick("PTS","PPG"),
-        "TO":  pick("TO","TOPG"),
-    }
 
 @bp.post("/")
 def streaming_page():
-    # Must be reached from compare page (POST)
-    details = session.get("league_details") or {}
-    if not details or not details.get("league_id") or not details.get("year"):
-        return redirect(url_for('main.entry_page', error_message="Enter league info first."))
+    print("HIT /streaming (POST)")
+    print("  session.league_details =", session.get("league_details"))
+    print("  form.keys() =", list(request.form.keys()))
+    print("  args =", request.args.to_dict())
 
-    # --- unpack payload from compare page (strings -> json) ---
-    my_team_name        = request.form.get("myTeam")
-    opponents_team_name = request.form.get("opponentsTeam")
-    week_data           = json.loads(request.form.get("week_data_json") or "{}")
-    stat_window         = (request.form.get("stat_window") or "projected")
-    scoring_type        = (request.form.get("scoring_type") or "H2H_CATEGORY")
+    league_details = session.get("league_details") or {}
 
-    team1_rows          = json.loads(request.form.get("team1_rows_json") or "[]")
-    team2_rows          = json.loads(request.form.get("team2_rows_json") or "[]")
-    win1_rows           = json.loads(request.form.get("team1_win_pct_json") or "[]")
-    win2_rows           = json.loads(request.form.get("team2_win_pct_json") or "[]")
-    cur1                = json.loads(request.form.get("team1_current_stats_json") or "{}")
-    cur2                = json.loads(request.form.get("team2_current_stats_json") or "{}")
-
-    if not week_data or "matchup_data" not in week_data:
-        return redirect(url_for('compare.select_teams_page'))
-
-    # --- derive swing categories ONLY from win1 (already computed) ---
-    swing_cats: List[str] = []
-    if win1_rows:
-        row = dict(win1_rows[0])  # {'pts': %, 'reb': %, 'threeptm': %, 'turno': %, 'fg%': %, 'ft%': %}
-        key_map = {"threeptm": "3PM", "fg%": "FG%", "ft%": "FT%", "turno": "TO"}
-        for k, v in row.items():
-            try:
-                p = float(v)
-            except:
-                continue
-            disp = key_map.get(k.lower(), k.upper())
-            if disp in ("3PM","REB","AST","STL","BLK","PTS","TO") and 40.0 <= p <= 60.0:
-                swing_cats.append(disp)
-    if not swing_cats:
-        swing_cats = ["STL","BLK","3PM"]  # tiny fallback
-
-    # --- roster maps from team1_rows (no schedule info) ---
-    roster_avg = {r["player_name"]: _row_to_avg_map(r) for r in team1_rows}
-
-    # --- week dates from payload ---
-    week_dates = _week_dates(week_data)
-    today_cut = (datetime.today() - timedelta(hours=8)).date()
-
-    # --- build league JUST to read free agents (waiver pool + their schedules) ---
+    # --- build League (public vs private) ---
     try:
-        if details.get("espn_s2") and details.get("swid"):
-            league = League(league_id=details["league_id"], year=details["year"],
-                            espn_s2=details["espn_s2"], swid=details["swid"])
+        league_id = int(league_details["league_id"])
+        year = int(league_details["year"])
+        if league_details.get("espn_s2") and league_details.get("swid"):
+            league = League(
+                league_id=league_id,
+                year=year,
+                espn_s2=league_details["espn_s2"],
+                swid=league_details["swid"],
+            )
         else:
-            league = League(league_id=details["league_id"], year=details["year"])
+            league = League(league_id=league_id, year=year)
     except (ESPNUnknownError, ESPNInvalidLeague):
-        return redirect(url_for('main.entry_page', error_message="Invalid league entered."))
+        return redirect(url_for("main.entry_page", error_message="Invalid league entered."))
     except ESPNAccessDenied:
-        return redirect(url_for('main.entry_page', error_message="Private league. Provide ESPN S2 + SWID."))
+        return redirect(
+            url_for("main.entry_page", error_message="That is a private league which needs ESPN S2 and SWID.")
+        )
     except Exception as e:
-        return redirect(url_for('main.entry_page', error_message=str(e)))
+        return redirect(url_for("main.entry_page", error_message=str(e)))
 
-    fa_pool = league.free_agents(size=250)
+    # --- posted form fields (optional) ---
+    my_team = request.form.get("myTeam", "My Team")
+    opp_team = request.form.get("opponentsTeam", "Opponent")
+    stat_window = request.form.get("stat_window", "")
+    scoring_type = request.form.get("scoring_type", "")
 
-    # --- minimal per-day plan: choose best FA playing that date; drop lowest-contrib player (no roster schedule) ---
-    plan: List[Dict[str, Any]] = []
-    for d in week_dates:
-        if d < today_cut:
-            continue
+    week_data, _ = _parse_json_field(request.form, "week_data_json")
+    team1_win_pct, _ = _parse_json_field(request.form, "team1_win_pct_json")
+    team2_win_pct, _ = _parse_json_field(request.form, "team2_win_pct_json")
 
-        # FA playing this date scored by swing cats sum
-        best_add = None; best_add_score = -1.0
-        for fa in fa_pool:
-            sched = [_date_only(g["date"]) for g in (getattr(fa, "schedule", {}) or {}).values()]
-            if d not in sched:
+    # derive a week number if present (for template display)
+    week_num = None
+    if isinstance(week_data, dict):
+        week_num = week_data.get("selected_week")
+        if week_num is None and isinstance(week_data.get("matchup"), dict):
+            week_num = week_data["matchup"].get("selected_week")
+
+    # ================================
+    # Weights from win% odds (1 at 50/50 → 0 at 0/100)
+    # ================================
+    PAYLOAD_TO_DISPLAY = {
+        "fg%": "FG%",
+        "ft%": "FT%",
+        "threeptm": "3PM",
+        "reb": "REB",
+        "ast": "AST",
+        "stl": "STL",
+        "blk": "BLK",
+        "pts": "PTS",
+        "turno": "TO",
+    }
+    DISPLAY_TO_PAYLOAD = {v: k for k, v in PAYLOAD_TO_DISPLAY.items()}
+
+    # Expect [ { ... } ]
+    t1 = team1_win_pct[0] if (
+        isinstance(team1_win_pct, list)
+        and len(team1_win_pct) == 1
+        and isinstance(team1_win_pct[0], dict)
+    ) else None
+    t2 = team2_win_pct[0] if (
+        isinstance(team2_win_pct, list)
+        and len(team2_win_pct) == 1
+        and isinstance(team2_win_pct[0], dict)
+    ) else None
+
+    if t1 is None and t2 is None:
+        weights_by_cat = {c: 0.0 for c in CATS_ORDER}
+    else:
+        weights_by_cat = {}
+        for cat in CATS_ORDER:
+            pk = DISPLAY_TO_PAYLOAD.get(cat)
+            if not pk:
                 continue
-            fa_avg = _fa_avg_map(fa)
-            score = sum(fa_avg.get(c, 0.0) for c in swing_cats)
-            if score > best_add_score:
-                best_add_score, best_add = score, fa
+            p = None
+            if t1 is not None and isinstance(t1.get(pk), (int, float)):
+                p = float(t1[pk]) / 100.0
+            elif t2 is not None and isinstance(t2.get(pk), (int, float)):
+                p = 1.0 - (float(t2[pk]) / 100.0)
+            if p is None:
+                continue
+            p = max(0.0, min(1.0, p))
+            # weight: 1 at 50/50, 0 at 0 or 1
+            weights_by_cat[cat] = max(0.0, 1.0 - 2.0 * abs(p - 0.5))
 
-        if not best_add:
-            continue
+    # ================================
+    # Free agents → raw stats + percent-of-win
+    # ================================
+    def _avg(stats_avg: dict, k: str) -> float:
+        try:
+            return float((stats_avg or {}).get(k, 0.0))
+        except (TypeError, ValueError):
+            return 0.0
 
-        # Drop = smallest swing sum among current roster rows
-        best_drop_name = None; best_drop_score = 10**9
-        for name, avg in roster_avg.items():
-            score = sum(avg.get(c, 0.0) for c in swing_cats)
-            if score < best_drop_score:
-                best_drop_score, best_drop_name = score, name
+    year_key = f"{year}_total"
 
-        if not best_drop_name:
-            continue
+    # Injury filter: exclude OUT / INJ (and similar short codes)
+    def _is_injured(p) -> bool:
+        status = getattr(p, "injuryStatus", "") or getattr(p, "injury_status", "")
+        status = str(status).strip().upper()
+        return status in {"OUT", "INJ", "O", "IL", "IR"}
 
-        add_avg  = _fa_avg_map(best_add)
-        drop_avg = roster_avg.get(best_drop_name, {"3PM":0,"REB":0,"AST":0,"STL":0,"BLK":0,"PTS":0,"TO":0})
-        delta_preview = {c: round(add_avg.get(c,0.0) - drop_avg.get(c,0.0), 2) for c in swing_cats}
+    free_agents_raw = league.free_agents(size=200)
+    free_agents = [fa for fa in free_agents_raw if not _is_injured(fa)]
 
-        plan.append({
-            "date": d.strftime("%Y-%m-%d"),
-            "add_player": getattr(best_add, "name", "Unknown"),
-            "add_team": getattr(best_add, "proTeam", ""),
-            "add_pos": getattr(best_add, "position", ""),
-            "drop_player": best_drop_name,
-            "targets": swing_cats,
-            "delta_preview": delta_preview
+    candidates = []
+    for p in free_agents:
+        stats_block = getattr(p, "stats", {}) or {}
+        stat_year = stats_block.get(year_key) or {}
+        avg = stat_year.get("avg") or {}
+
+        # RAW per-game values (what we show when user toggles to "raw")
+        avg_raw = {
+            "FG%": _avg(avg, "FG%"),
+            "FT%": _avg(avg, "FT%"),
+            "3PM": _avg(avg, "3PM"),
+            "REB": _avg(avg, "REB"),
+            "AST": _avg(avg, "AST"),
+            "STL": _avg(avg, "STL"),
+            "BLK": _avg(avg, "BLK"),
+            "PTS": _avg(avg, "PTS"),
+            "TO":  _avg(avg, "TO"),
+            "FGA": _avg(avg, "FGA"),
+            "FTA": _avg(avg, "FTA"),
+        }
+
+        # Percent-of-win per game (centralized in service)
+        pow_stats = raw_to_percent_of_win(avg_raw)
+
+        # Scores: unweighted vs weighted (by matchup odds)
+        score_unweighted = sum(pow_stats.get(c, 0.0) for c in CATS_ORDER)
+        score_weighted = sum(pow_stats.get(c, 0.0) * weights_by_cat.get(c, 0.0) for c in CATS_ORDER)
+
+        candidates.append({
+            "player": getattr(p, "name", str(p)),
+            "team": (
+                getattr(p, "proTeam", None)
+                or getattr(p, "team", None)
+                or getattr(p, "team_name", None)
+                or ""
+            ),
+            "pos": getattr(p, "position", None) or getattr(p, "pos", None) or "",
+            "games_str": "",  # you can fill with games-left/week later if you want
+            "avg_pow": {c: pow_stats.get(c, 0.0) for c in CATS_ORDER},
+            "avg_raw": {
+                "FG%": avg_raw["FG%"],
+                "FT%": avg_raw["FT%"],
+                "3PM": avg_raw["3PM"],
+                "REB": avg_raw["REB"],
+                "AST": avg_raw["AST"],
+                "STL": avg_raw["STL"],
+                "BLK": avg_raw["BLK"],
+                "PTS": avg_raw["PTS"],
+                "TO":  avg_raw["TO"],
+            },
+            "score_weighted": score_weighted,
+            "score_unweighted": score_unweighted,
         })
+
+    # Sort by weighted score, take top 10
+    top10 = sorted(candidates, key=lambda x: x.get("score_weighted", 0.0), reverse=True)[:10]
+
+    # Optional text describing weights (even if not displayed, harmless in context)
+    parts = [f"{c}: {weights_by_cat.get(c, 0.0):.2f}" for c in CATS_ORDER]
+    modifiers_text = (
+        "Toggle between % of weekly win (1.00 = 1%) and raw per-game. "
+        "You can also apply weights (higher when a category is closer to 50/50). "
+        + ", ".join(parts)
+    )
+
+    # Placeholder streaming plan (you can compute this later)
+    stream_plan = []
+    remaining_moves = 0
 
     return render_template(
         "streaming.html",
-        my_team=my_team_name,
-        opp_team=opponents_team_name,
-        week_num=week_data.get("selected_week"),
-        swing_cats=swing_cats,
-        plan=plan
+        my_team=my_team,
+        opp_team=opp_team,
+        week_num=week_num,
+        top10=top10,
+        stream_plan=stream_plan,
+        remaining_moves=remaining_moves,
+        modifiers_text=modifiers_text,  # fine if template ignores it
+        weights_by_cat=weights_by_cat,
+        cats_order=CATS_ORDER,
     )

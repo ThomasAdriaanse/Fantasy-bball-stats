@@ -6,31 +6,6 @@ from typing import Dict, Any, Tuple, List
 import pandas as pd
 
 # =========================
-#   Public: table schema
-# =========================
-def get_team_player_data_schema() -> str:
-    return """
-        player_id SERIAL PRIMARY KEY, 
-        player_name VARCHAR(255), 
-        min FLOAT, 
-        fgm FLOAT, 
-        fga FLOAT, 
-        ftm FLOAT, 
-        fta FLOAT, 
-        threeptm FLOAT, 
-        reb FLOAT, 
-        ast FLOAT, 
-        stl FLOAT, 
-        blk FLOAT, 
-        turno FLOAT, 
-        pts FLOAT,
-        fpts FLOAT,
-        inj TEXT,
-        games INT
-    """
-
-
-# =========================
 #   Internal helpers
 # =========================
 _VALID_WINDOWS = {"projected", "total", "last_30", "last_15", "last_7"}

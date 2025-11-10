@@ -1,44 +1,366 @@
 {% extends "base.html" %}
 {% block title %}Streaming · Fantasy BBall{% endblock %}
 
+{% block head_extra %}
+<style>
+  /* Page heading */
+  .page-title {
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    margin:0 auto;
+    text-align:center;
+  }
+  .subhead {
+    margin-top:6px;
+    text-align:center;
+    color:var(--muted);
+  }
+
+  /* Info button (white and visible) */
+  .info-btn {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px;
+    border-radius:50%;
+    border:1px solid rgba(255,255,255,0.6);
+    background:rgba(255,255,255,0.08);
+    cursor:pointer;
+    font-weight:700;
+    font-size:15px;
+    color:#fff;
+    transition:background .2s ease, border-color .2s ease;
+  }
+  .info-btn:hover {
+    background:rgba(255,255,255,0.15);
+    border-color:rgba(255,255,255,0.9);
+  }
+
+  /* Control bar */
+  .control-bar {
+    display:flex; align-items:center; justify-content:space-between;
+    gap:12px; margin-top:18px; flex-wrap:wrap;
+    padding:10px 0;
+    border-top:1px solid var(--border);
+    border-bottom:1px solid var(--border);
+  }
+  .controls-left, .controls-right {
+    display:flex; align-items:center; gap:12px;
+  }
+
+  /* Segmented control */
+  .segmented {
+    display:inline-flex;
+    border:1px solid var(--border-strong);
+    border-radius:8px;
+    overflow:hidden;
+    background:var(--card);
+  }
+  .segmented button {
+    padding:6px 10px;
+    border:0;
+    background:transparent;
+    color:var(--text);
+    cursor:pointer;
+    font-size:0.9rem;
+  }
+  .segmented button + button {
+    border-left:1px solid var(--border-strong);
+  }
+  .segmented button.active {
+    background:rgba(255,255,255,.06);
+    font-weight:600;
+  }
+
+  /* Weights toggle switch */
+  .switch {
+    display:inline-flex; align-items:center; gap:8px;
+    cursor:pointer; user-select:none;
+  }
+  .switch input { display:none; }
+  .switch .track {
+    width:38px; height:22px;
+    background:rgba(255,255,255,.18);
+    border-radius:999px;
+    position:relative;
+    transition:background .2s ease;
+  }
+  .switch .thumb {
+    width:18px; height:18px;
+    background:#fff;
+    border-radius:50%;
+    position:absolute;
+    top:2px; left:2px;
+    transition:left .2s ease;
+  }
+  .switch input:checked + .track { background:rgba(46,204,113,.5); }
+  .switch input:checked + .track .thumb { left:18px; }
+
+  .muted-small { color: var(--muted); font-size: 0.9em; }
+  .num { text-align:right; }
+
+  /* Table styling (integrates with base.css) */
+  thead .weights-row th {
+    font-weight:600;
+    background:rgba(255,255,255,.03);
+  }
+  thead .weights-label {
+    text-align:left;
+    font-variant:small-caps;
+    letter-spacing:.02em;
+    color:var(--muted);
+  }
+
+  /* Info modal */
+  .info-modal {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.45);
+    z-index:999;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+  }
+  .info-card {
+    background:var(--card);
+    color:var(--text);
+    max-width:720px;
+    border-radius:var(--radius);
+    padding:18px 20px;
+    box-shadow:var(--shadow);
+    line-height:1.45;
+    border:1px solid var(--border);
+  }
+  .info-card h3 { margin:0 0 8px 0; }
+  .info-actions { display:flex; justify-content:flex-end; margin-top:10px; }
+  .btn.small { padding:6px 10px; font-size:.9em; }
+</style>
+{% endblock head_extra %}
+
 {% block content %}
 <div class="card space-y">
-  <h1>Streaming</h1>
-  <div class="muted">Week {{ week_num }} · {{ my_team }} vs {{ opp_team }}</div>
 
-  <div>
-    <strong>Target categories:</strong>
-    <span>{{ swing_cats | join(", ") }}</span>
+  <!-- Centered title + info -->
+  <h1 class="page-title">
+    Matchup streaming recommendations
+    <button id="infoBtn" class="info-btn" aria-label="What is this page?">?</button>
+  </h1>
+  <div class="subhead">Week {{ week_num }} · {{ my_team }} vs {{ opp_team }}</div>
+
+  <!-- Control bar -->
+  <div class="control-bar">
+    <div class="controls-left">
+      <div class="segmented" role="tablist" aria-label="Display mode">
+        <button id="viewPow" class="active" data-mode="pow" role="tab" aria-selected="true">% of win</button>
+        <button id="viewRaw" data-mode="raw" role="tab" aria-selected="false">Raw per-game</button>
+      </div>
+    </div>
+
+    <div class="controls-right">
+      <label class="switch" title="Apply category weights">
+        <input id="weightsSwitch" type="checkbox" checked>
+        <span class="track"><span class="thumb"></span></span>
+        <span class="muted-small">Apply weights</span>
+      </label>
+      <span id="viewLabel" class="muted-small">View: % of weekly win (1.00 = 1%) • Weights: ON</span>
+    </div>
   </div>
 
-  <table class="data-table" style="margin-top:10px;">
+  <!-- Top 10 Table -->
+  <h2 style="margin-top:14px">Top 10 Streamers (this week)</h2>
+  <table class="data-table" id="streamersTable"
+         data-weights='{{ weights_by_cat|tojson }}'
+         data-cats='{{ cats_order|tojson }}'>
+
     <thead>
       <tr>
-        <th>Date</th>
-        <th>Add</th>
-        <th>Drop</th>
-        <th>Targets</th>
-        <th>Δ per game</th>
+        <th>Player</th>
+        <th>Team · Pos</th>
+        <th>Games (Left/Wk)</th>
+        <th class="num">FG%</th>
+        <th class="num">FT%</th>
+        <th class="num">3PM</th>
+        <th class="num">REB</th>
+        <th class="num">AST</th>
+        <th class="num">STL</th>
+        <th class="num">BLK</th>
+        <th class="num">PTS</th>
+        <th class="num">TO</th>
+        <th class="num">Score</th>
+      </tr>
+
+      <!-- Weights header -->
+      <tr class="weights-row">
+        <th class="weights-label" colspan="3">Weights</th>
+        {% for c in cats_order %}
+          <th class="num">
+            <span class="weight" data-cat="{{ c }}">{{ "%.2f"|format(weights_by_cat.get(c,0.0)) }}</span>
+          </th>
+        {% endfor %}
+        <th class="num">—</th>
       </tr>
     </thead>
+
     <tbody>
-      {% for rec in plan %}
-      <tr>
-        <td>{{ rec.date }}</td>
-        <td>{{ rec.add_player }} <span class="muted">({{ rec.add_team }} · {{ rec.add_pos }})</span></td>
-        <td>{{ rec.drop_player }}</td>
-        <td>{{ rec.targets | join(", ") }}</td>
-        <td>
-          {% for k, v in rec.delta_preview.items() %}
-            <span style="display:inline-block;margin-right:10px">{{ k }}: {{ "%+.2f"|format(v) }}</span>
-          {% endfor %}
-        </td>
+      {% for r in top10 %}
+      <tr class="player-row"
+          data-score-weighted="{{ '%.2f'|format(r.score_weighted) }}"
+          data-score-unweighted="{{ '%.2f'|format(r.score_unweighted) }}">
+        <td>{{ r.player }}</td>
+        <td class="muted">{{ r.team }} · {{ r.pos }}</td>
+        <td>{{ r.games_str }}</td>
+
+        {% set pow = r.avg_pow %}
+        {% set raw = r.avg_raw %}
+        {% for c in cats_order %}
+          <td class="num">
+            <span class="val"
+                  data-cat="{{ c }}"
+                  data-pow="{{ '%.2f'|format(pow[c]) }}"
+                  data-raw="{% if c in ['FG%','FT%'] %}{{ '%.3f'|format(raw[c]) }}{% else %}{{ '%.2f'|format(raw[c]) }}{% endif %}">
+              {{ '%.2f'|format(pow[c]) }}
+            </span>
+          </td>
+        {% endfor %}
+
+        <td class="num"><strong class="score">{{ '%.2f'|format(r.score_weighted) }}</strong></td>
       </tr>
       {% endfor %}
-      {% if plan|length == 0 %}
-      <tr><td colspan="5" class="muted">No simple streaming moves found for the remaining days.</td></tr>
+
+      {% if top10|length == 0 %}
+      <tr><td colspan="13" class="muted">No free agents play again this week, or none met the filter.</td></tr>
       {% endif %}
     </tbody>
   </table>
+
+  <!-- Streaming plan -->
+  <h2 style="margin-top:18px">Streaming Plan</h2>
+  <div class="muted">Acquisitions remaining: {{ remaining_moves }}</div>
+  <table class="data-table" style="margin-top:8px">
+    <thead>
+      <tr>
+        <th style="width:110px">Day</th>
+        <th>Add</th>
+        <th>Drop</th>
+        <th class="num">Δ Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in stream_plan %}
+        <tr>
+          <td>{{ s.date_str }}</td>
+          <td><strong>{{ s.add }}</strong></td>
+          <td class="muted">{{ s.drop }}</td>
+          <td class="num">{{ "%.3f"|format(s.gain) }}</td>
+        </tr>
+      {% endfor %}
+      {% if stream_plan|length == 0 %}
+        <tr><td colspan="4" class="muted">No suggested moves (either 0 remaining acquisitions or no viable same-day streamers).</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  <!-- Info modal -->
+  <div id="infoModal" class="info-modal" aria-hidden="true">
+    <div class="info-card" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+      <h3 id="infoTitle">What this page does</h3>
+      <p>
+        Ranks free agents by per-game impact on your weekly matchup as
+        <strong>% of an average weekly win</strong> per category (1.00 = 1%).
+        Use the toggles above to switch between % of win and raw per-game stats,
+        and apply or remove weights that emphasize categories closest to 50/50.
+      </p>
+      <div class="info-actions">
+        <button id="infoClose" class="btn small">Got it</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 {% endblock content %}
+
+{% block body_js %}
+<script>
+  (function(){
+    const table = document.getElementById('streamersTable');
+    const weights = JSON.parse(table.getAttribute('data-weights') || '{}');
+    const cats = JSON.parse(table.getAttribute('data-cats') || '[]');
+    const viewPowBtn = document.getElementById('viewPow');
+    const viewRawBtn = document.getElementById('viewRaw');
+    const weightsSwitch = document.getElementById('weightsSwitch');
+    const viewLabel = document.getElementById('viewLabel');
+    const infoBtn = document.getElementById('infoBtn');
+    const infoModal = document.getElementById('infoModal');
+    const infoClose = document.getElementById('infoClose');
+
+    function colorWeightsHeader(weightsMap) {
+      const row = table.querySelector('thead .weights-row');
+      if (!row) return;
+      cats.forEach(cat => {
+        const span = row.querySelector(`.weight[data-cat="${cat}"]`);
+        if (!span) return;
+        const cell = span.closest('th');
+        if (!cell) return;
+        const w = Math.max(0, Math.min(1, parseFloat(weightsMap[cat] ?? 0)));
+        const alpha = 0.28 * w;
+        const color = `hsla(120, 60%, 45%, ${alpha})`;
+        cell.style.backgroundColor = color;
+      });
+    }
+
+    function setActiveView(mode) {
+      if (mode === 'pow') {
+        viewPowBtn.classList.add('active');
+        viewRawBtn.classList.remove('active');
+      } else {
+        viewRawBtn.classList.add('active');
+        viewPowBtn.classList.remove('active');
+      }
+    }
+
+    function render(mode, weightsOn) {
+      document.querySelectorAll('#streamersTable tbody tr.player-row').forEach(tr => {
+        cats.forEach(cat => {
+          const span = tr.querySelector(`span.val[data-cat="${cat}"]`);
+          if (!span) return;
+          if (mode === 'raw') {
+            span.textContent = span.getAttribute('data-raw') || '';
+          } else {
+            const base = parseFloat(span.getAttribute('data-pow') || '0');
+            const w = parseFloat(weights[cat] ?? 0);
+            const val = weightsOn ? (base * w) : base;
+            span.textContent = (Math.round(val * 100) / 100).toFixed(2);
+          }
+        });
+        const scoreEl = tr.querySelector('.score');
+        const sw = tr.getAttribute('data-score-weighted') || '0';
+        const su = tr.getAttribute('data-score-unweighted') || '0';
+        scoreEl.textContent = weightsOn ? sw : su;
+      });
+
+      setActiveView(mode);
+      const viewTxt = (mode === 'pow') ? '% of weekly win (1.00 = 1%)' : 'raw per-game values';
+      const wTxt = weightsOn ? 'ON' : 'OFF';
+      viewLabel.textContent = `View: ${viewTxt} • Weights: ${wTxt}`;
+    }
+
+    // Controls
+    viewPowBtn.addEventListener('click', () => render('pow', !!weightsSwitch.checked));
+    viewRawBtn.addEventListener('click', () => render('raw', !!weightsSwitch.checked));
+    weightsSwitch.addEventListener('change', () => {
+      const activeMode = viewPowBtn.classList.contains('active') ? 'pow' : 'raw';
+      render(activeMode, !!weightsSwitch.checked);
+    });
+
+    // Info modal
+    function openInfo(){ infoModal.style.display = 'flex'; infoModal.setAttribute('aria-hidden', 'false'); }
+    function closeInfo(){ infoModal.style.display = 'none'; infoModal.setAttribute('aria-hidden', 'true'); }
+    infoBtn.addEventListener('click', openInfo);
+    infoClose.addEventListener('click', closeInfo);
+    infoModal.addEventListener('click', (e) => { if (e.target === infoModal) closeInfo(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInfo(); });
+
+    colorWeightsHeader(weights);
+    render('pow', true);
+  })();
+</script>
+{% endblock body_js %}

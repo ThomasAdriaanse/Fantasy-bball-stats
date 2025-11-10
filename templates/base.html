@@ -23,7 +23,6 @@
     <!-- NEW: Punting Overview -->
     <a href="{{ url_for('overview.punting_overview') }}" class="{% if ep in ['overview.punting_overview'] %}active{% endif %}">Punting Overview</a>
     <a href="{{ url_for('trades.trade_analyzer') }}">Trade Value</a>
-    <a href="{{ url_for('streaming.streaming_page') }}" class="{% if ep in ['streaming.streaming_page'] %}active{% endif %}">Streaming</a>
 
     {% block topnav_extra %}{% endblock topnav_extra %}
   </nav>

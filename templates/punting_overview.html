@@ -25,13 +25,14 @@
   </div>
 
   <div class="legend">
-    <span class="swatch blue"></span> Above average
-    <span class="swatch mid"></span> Average
-    <span class="swatch red"></span> Below average
+    <span class="swatch blue"></span> Strong in category (closer to 1st)
+    <span class="swatch mid"></span> Around league average
+    <span class="swatch red"></span> Weak in category (closer to last)
     <span class="chip punt">Punt</span> Likely punted category
   </div>
   <div class="hint">
-    Bar length and colour shows category strength per team within the league by team average Z-score; 
+    Bar length and colour show each team's strength in a category relative to the league,
+    based on raw team stats (blue ≈ best, red ≈ worst).
   </div>
 
   <!-- By Team (cards grid) -->
@@ -124,62 +125,27 @@ select, .pill{
 
 {% block body_js %}
 <script>
-  // ---------- Data + helpers ----------
+  // ---------- Data ----------
   const DATA = {{ data_json|safe }};
-  const categories = DATA.categories;
-  const teams = DATA.teams;
+  const categories = DATA.categories || [];
+  const teams = DATA.teams || [];
 
-  // If server didn’t send rank/strength, compute them here.
-  // strength: 0..1 using min-max on "goodness" value per category (invert TO).
-  // rank: 1..N, better first (invert TO for comparison too).
-  function computeDerived(){
-    const N = teams.length;
-    teams.forEach(t => { t.rank = t.rank || {}; t.strength = t.strength || {}; });
-
-    categories.forEach(cat => {
-      // gather values
-      const vals = teams.map(t => t.cats?.[cat] ?? 0);
-      // invert for TO “goodness”
-      const goodVals = (cat === 'TO') ? vals.map(v => -v) : vals.slice();
-
-      const min = Math.min(...goodVals);
-      const max = Math.max(...goodVals);
-      const range = (max - min) || 1;
-
-      // compute strength + rank
-      const order = goodVals
-        .map((v,i) => ({i,v}))
-        .sort((a,b) => b.v - a.v)  // better (higher goodness) first
-        .map((o,idx) => ({i:o.i, rank:idx+1}));
-
-      order.forEach(o => teams[o.i].rank[cat] = o.rank);
-      teams.forEach((t, i) => {
-        const s = (goodVals[i] - min) / range;
-        t.strength[cat] = s;
-      });
-
-      // also ensure z exists
-      teams.forEach(t => { if (!t.z) t.z = {}; if (typeof t.z[cat] !== 'number') t.z[cat] = 0; });
-    });
-  }
-  computeDerived();
-
-  function fmt(cat, v){
-    if (cat === 'FG%' || cat === 'FT%') return (v*100).toFixed(1) + '%';
-    return (Math.round(v*100)/100).toString();
-  }
-
-  function colorFromZ(z){
-    const zClamped = Math.max(-2.0, Math.min(2.0, z));
-    const t = (zClamped + 2) / 4; // 0..1
+  // Color based on strength_scaled: 0 = worst (red), 1 = best (blue), 0.5 ~ grey
+  function colorFromStrength(strength){
+    const t = Math.max(0, Math.min(1, strength || 0));
     const red  = [255, 72, 72];
     const gray = [160,170,185];
     const blue = [70,130,180];
     const mid = 0.5;
-    const lerp = (a,b,t) => a + (b-a)*t;
-    const mix = (c1,c2,t) => [lerp(c1[0],c2[0],t), lerp(c1[1],c2[1],t), lerp(c1[2],c2[2],t)];
+    const lerp = (a,b,x) => a + (b-a)*x;
+    const mix = (c1,c2,x) => [lerp(c1[0],c2[0],x), lerp(c1[1],c2[1],x), lerp(c1[2],c2[2],x)];
     const rgb = (t < mid) ? mix(red, gray, t/mid) : mix(gray, blue, (t-mid)/(1-mid));
     return `rgb(${rgb.map(x=>Math.round(x)).join(',')})`;
+  }
+
+  function fmt(cat, v){
+    if (cat === 'FG%' || cat === 'FT%') return (v*100).toFixed(1) + '%';
+    return (Math.round(v*100)/100).toString();
   }
 
   // ---------- By Team (cards) ----------
@@ -191,7 +157,7 @@ select, .pill{
       const card = document.createElement('div');
       card.className = 'card';
 
-      // header
+      // Header
       const head = document.createElement('div');
       head.className = 'team-head';
 
@@ -201,7 +167,7 @@ select, .pill{
 
       const punts = document.createElement('div');
       punts.className = 'punts';
-      if (team.punts && team.punts.length){
+      if (Array.isArray(team.punts) && team.punts.length){
         team.punts.forEach(c => {
           const chip = document.createElement('span');
           chip.className = 'chip punt';
@@ -219,11 +185,11 @@ select, .pill{
       head.appendChild(punts);
       card.appendChild(head);
 
-      // bars per category
+      // Bars per category
       categories.forEach(cat => {
         const row = document.createElement('div');
         row.className = 'bar-row';
-        const isPunt = team.punts && team.punts.includes(cat);
+        const isPunt = Array.isArray(team.punts) && team.punts.includes(cat);
         if (isPunt) row.classList.add('is-punt');
 
         const label = document.createElement('div');
@@ -236,20 +202,22 @@ select, .pill{
         const fill = document.createElement('div');
         fill.className = 'bar-fill';
 
-        // width = strength (0..1), color from z
-        const strength = (team.strength && team.strength[cat] != null) ? team.strength[cat] : 0;
-        const z = (team.z && team.z[cat] != null) ? team.z[cat] : 0;
+        const strength = team.strength_scaled && team.strength_scaled[cat] != null
+          ? team.strength_scaled[cat]
+          : 0;
+
+        const raw = (team.cats && team.cats[cat] != null) ? team.cats[cat] : 0;
+        const rank = team.rank && team.rank[cat] != null ? team.rank[cat] : '–';
+        const diff = team.diff_from_avg && team.diff_from_avg[cat] != null ? team.diff_from_avg[cat] : 0;
+
         fill.style.width = (strength * 100).toFixed(1) + '%';
-        fill.style.background = colorFromZ(z);
+        fill.style.background = colorFromStrength(strength);
 
         const value = document.createElement('div');
         value.className = 'bar-value';
-        const raw = (team.cats && team.cats[cat] != null) ? team.cats[cat] : 0;
         value.textContent = fmt(cat, raw);
 
-        // tooltip with rank + z
-        const rank = team.rank && team.rank[cat] != null ? team.rank[cat] : '–';
-        row.title = `${cat}: ${fmt(cat, raw)} • Rank ${rank} • z ${z}`;
+        row.title = `${cat}: ${fmt(cat, raw)} • Rank ${rank} • vs league avg ${diff >= 0 ? '+' : ''}${diff.toFixed(2)}`;
 
         track.appendChild(fill);
         row.appendChild(label);
@@ -269,17 +237,16 @@ select, .pill{
     catRoot.innerHTML = '';
 
     categories.forEach(cat => {
-      // sort teams by rank (best first)
       const rows = teams
-        .map((t,i) => ({
+        .map((t, i) => ({
           team_name: t.team_name,
-          value: t.cats?.[cat] ?? 0,
-          z: (t.z && typeof t.z[cat] === 'number') ? t.z[cat] : 0,
-          rank: (t.rank && t.rank[cat]) || i+1,
-          strength: (t.strength && t.strength[cat] != null) ? t.strength[cat] : 0,
-          punt: Array.isArray(t.punts) && t.punts.includes(cat)
+          value: t.cats && t.cats[cat] != null ? t.cats[cat] : 0,
+          diff: t.diff_from_avg && t.diff_from_avg[cat] != null ? t.diff_from_avg[cat] : 0,
+          rank: t.rank && t.rank[cat] != null ? t.rank[cat] : i + 1,
+          strength: t.strength_scaled && t.strength_scaled[cat] != null ? t.strength_scaled[cat] : 0,
+          punt: Array.isArray(t.punts) && t.punts.includes(cat),
         }))
-        .sort((a,b) => a.rank - b.rank);
+        .sort((a, b) => a.rank - b.rank);
 
       const section = document.createElement('div');
       section.className = 'cat-section';
@@ -293,6 +260,7 @@ select, .pill{
 
       const sub = document.createElement('div');
       sub.className = 'hint';
+      sub.textContent = 'Teams are sorted by raw strength in this category (1 = best).';
 
       header.appendChild(title);
       header.appendChild(sub);
@@ -307,7 +275,7 @@ select, .pill{
           <th style="width:56px;">Rank</th>
           <th>Team</th>
           <th style="width:160px;">Value</th>
-          <th style="width:160px;">z</th>
+          <th style="width:160px;">vs Avg</th>
           <th style="width:200px;">Strength</th>
           <th style="width:80px;">&nbsp;</th>
         </tr>`;
@@ -327,14 +295,13 @@ select, .pill{
         const tdVal = document.createElement('td');
         tdVal.textContent = fmt(cat, r.value);
 
-        const tdZ = document.createElement('td');
+        const tdDiff = document.createElement('td');
         const zchip = document.createElement('span');
         zchip.className = 'zchip';
         zchip.style.borderColor = 'transparent';
-        zchip.style.color = '#fff';
-        zchip.style.background = colorFromZ(r.z);
-        zchip.textContent = (Math.round(r.z * 100) / 100).toFixed(2);
-        tdZ.appendChild(zchip);
+        zchip.style.background = colorFromStrength(r.strength);
+        zchip.textContent = (Math.round(r.diff * 100) / 100).toFixed(2);
+        tdDiff.appendChild(zchip);
 
         const tdBar = document.createElement('td');
         const bar = document.createElement('div');
@@ -342,7 +309,7 @@ select, .pill{
         const fill = document.createElement('div');
         fill.className = 'cat-miniFill';
         fill.style.width = (r.strength * 100).toFixed(1) + '%';
-        fill.style.background = colorFromZ(r.z);
+        fill.style.background = colorFromStrength(r.strength);
         bar.appendChild(fill);
         tdBar.appendChild(bar);
 
@@ -359,7 +326,7 @@ select, .pill{
         tr.appendChild(tdRank);
         tr.appendChild(tdTeam);
         tr.appendChild(tdVal);
-        tr.appendChild(tdZ);
+        tr.appendChild(tdDiff);
         tr.appendChild(tdBar);
         tr.appendChild(tdPunt);
 
@@ -372,10 +339,10 @@ select, .pill{
     });
   }
 
-  // initial render
+  // Initial render
   renderByTeam();
 
-  // ---------- Toggle wiring ----------
+  // ---------- Toggles ----------
   const viewTeam = document.getElementById('viewTeam');
   const viewCategory = document.getElementById('viewCategory');
   const btnByTeam = document.getElementById('btnByTeam');

@@ -11,7 +11,6 @@ import compare_page.compare_page_data as cpd
 import compare_page.team_stats_data as tsd
 import compare_page.team_cat_averages as tca
 
-from ...services.league_session import _parse_from_req, _store
 from ...services.espn_service import matchup_dates
 
 bp = Blueprint("compare", __name__)
@@ -102,7 +101,7 @@ def compare_page():
     scoring_type        = request.form.get('scoring_type')
     week_num            = int(request.form.get('week_num'))
 
-    _store({'league_id': league_id, 'year': year, 'espn_s2': espn_s2, 'swid': swid})
+    session['league_details'] = {'league_id': league_id, 'year': int(year), 'espn_s2': espn_s2, 'swid': swid}
 
     try:
         league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid) if espn_s2 and swid else League(league_id=league_id, year=year)
@@ -126,6 +125,9 @@ def compare_page():
     team2_index = next((i for i,t in enumerate(league.teams) if t.team_name == opponents_team_name), -1)
     if team1_index == -1: return redirect(url_for('main.entry_page', error_message="Team 1 not found."))
     if team2_index == -1: return redirect(url_for('main.entry_page', error_message="Team 2 not found."))
+
+    session['team1_index'] = team1_index
+    session['team2_index'] = team2_index
 
     cols = ['player_name','min','fgm','fga','fg%','ftm','fta','ft%','threeptm','reb','ast','stl','blk','turno','pts','inj','fpts','games']
 
@@ -194,7 +196,7 @@ def compare_page():
             stat_window=stat_window,
             expected_pct_map=expected_pct_map,  # keep if you want to inspect in UI
             snapshot_rows=snapshot_rows,        # NEW (if you render snapshot server-side)
-            odds_rows=odds_rows                 # NEW ← the important one
+            odds_rows=odds_rows                
         )
 
 
