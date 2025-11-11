@@ -240,6 +240,7 @@
                 <th>BLK</th>
                 <th>TO</th>
                 <th>PTS</th>
+                <th>Total</th>
                 <th>Games</th>
               </tr>
             </thead>
@@ -332,13 +333,16 @@
                   {{ row.pts }}
                 </td>
 
+                {# Total (per-player) #}
+                <td class="stat-total"></td>
+
                 <td>{{ row.get('games_str', row['games']) }}</td>
               </tr>
               {% endfor %}
             </tbody>
             <tfoot>
               <tr>
-                <td colspan="11" style="text-align:right; font-weight:600;">Total games (remaining / total)</td>
+                <td colspan="12" style="text-align:right; font-weight:600;">Total games (remaining / total)</td>
                 <td>{{ team1_games_remaining }}/{{ team1_games_total }}</td>
               </tr>
             </tfoot>
@@ -361,6 +365,7 @@
                 <th>BLK</th>
                 <th>TO</th>
                 <th>PTS</th>
+                <th>Total</th>
                 <th>Games</th>
               </tr>
             </thead>
@@ -453,13 +458,16 @@
                   {{ row.pts }}
                 </td>
 
+                {# Total (per-player) #}
+                <td class="stat-total"></td>
+
                 <td>{{ row.get('games_str', row['games']) }}</td>
               </tr>
               {% endfor %}
             </tbody>
             <tfoot>
               <tr>
-                <td colspan="11" style="text-align:right; font-weight:600;">Total games (remaining / total)</td>
+                <td colspan="12" style="text-align:right; font-weight:600;">Total games (remaining / total)</td>
                 <td>{{ team2_games_remaining }}/{{ team2_games_total }}</td>
               </tr>
             </tfoot>
@@ -714,10 +722,25 @@
       const buttons = document.querySelectorAll('.view-mode-btn');
       const cells   = document.querySelectorAll('.stat-cell');
 
-      // Match trade-page colouring: z in [-1.6, 1.7] → red→green HSL
-      function colorFromZ(z){
-        const zNum = parseFloat(z);
-        if (!isFinite(zNum)) return 'transparent';
+      const CAT_KEYS = new Set(['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']);
+
+      function toNumberOrNaN(v) {
+        if (v === null || v === undefined) return NaN;
+        const s = String(v).trim();
+        if (s === '' || s.toLowerCase() === 'nan' || s.toLowerCase() === 'none' || s.toLowerCase() === 'null') {
+          return NaN;
+        }
+        const n = parseFloat(s);
+        return Number.isFinite(n) ? n : NaN;
+      }
+
+      // Colour based on z-score in ALL modes
+      function colorFromZ(z) {
+        const zNum = toNumberOrNaN(z);
+        if (Number.isNaN(zNum)) {
+          // neutral grey when no usable z
+          return 'rgba(128,128,128,0.35)';
+        }
 
         const zmin = -1.6;
         const zmax =  1.7;
@@ -725,26 +748,76 @@
         const t = Math.max(0, Math.min(1, tRaw)); // clamp 0..1
 
         const hue = 120 * t; // 0 = red, 120 = green
-        // same style as _z_to_hsl_bg: hsl({hue} 70% 35% / 0.90)
         return `hsl(${Math.round(hue)} 70% 35% / 0.90)`;
       }
 
       function fmtValue(cat, raw, z, pow){
         if (mode === MODE_RAW){
-          const v = Number(raw || 0);
+          const v = toNumberOrNaN(raw);
+          if (Number.isNaN(v)) return 'NaN';
+
           if (cat === 'FG%' || cat === 'FT%'){
             // raw stored as decimal 0.4923 → show 49.2%
             return (v * 100).toFixed(1) + '%';
           }
           return v.toFixed(2);
+
         } else if (mode === MODE_Z){
-          const v = Number(z || 0);
+          const v = toNumberOrNaN(z);
+          if (Number.isNaN(v)) return 'NaN';
           return v.toFixed(2);
+
         } else { // MODE_POW
-          const v = Number(pow || 0);
+          const v = toNumberOrNaN(pow);
+          if (Number.isNaN(v)) return 'NaN';
           // raw_to_percent_of_win returns "1.0" = 1% of a weekly win
           return v.toFixed(2);
         }
+      }
+
+      function updateTotalsPerRow() {
+        // For each table, walk each player row and compute their total
+        document.querySelectorAll('.table-wrapper table.data-table').forEach(table => {
+          const tbody = table.tBodies[0];
+          if (!tbody) return;
+
+          Array.from(tbody.rows).forEach(row => {
+            // Skip footer / summary-like rows if any sneak in
+            const totalCell = row.querySelector('td.stat-total');
+            if (!totalCell) return;
+
+            if (mode === MODE_RAW) {
+              // No total in raw mode
+              totalCell.textContent = '';
+              return;
+            }
+
+            let sum = 0;
+            let hasAny = false;
+
+            row.querySelectorAll('.stat-cell').forEach(cell => {
+              const cat = cell.dataset.cat;
+              if (!cat || !CAT_KEYS.has(cat)) return;
+
+              let v;
+              if (mode === MODE_Z) {
+                v = toNumberOrNaN(cell.dataset.z);
+              } else { // MODE_POW
+                v = toNumberOrNaN(cell.dataset.pow);
+              }
+
+              if (Number.isNaN(v)) return;
+              sum += v;
+              hasAny = true;
+            });
+
+            if (!hasAny) {
+              totalCell.textContent = 'NaN';
+            } else {
+              totalCell.textContent = sum.toFixed(2);
+            }
+          });
+        });
       }
 
       function applyMode(){
@@ -758,9 +831,14 @@
           const z   = cell.dataset.z;
           const pow = cell.dataset.pow;
 
+          // Text depends on current mode
           cell.textContent = fmtValue(cat, raw, z, pow);
+
+          // Colour always depends on z-score, regardless of mode
           cell.style.backgroundColor = colorFromZ(z);
         });
+
+        updateTotalsPerRow();
       }
 
       buttons.forEach(btn => {

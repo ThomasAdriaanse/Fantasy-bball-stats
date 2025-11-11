@@ -9,40 +9,14 @@ This is based on your old per-game NBA baselines:
 - FG% and FT% treated as "impact" of makes vs. league-average percentage,
   scaled by attempts (FGM/FGA, FTM/FTA), then z-scored.
 
-Input:
-    avg_raw: per-game stats like:
-      {
-        "PTS": 18.5,
-        "FG3M": 2.4,
-        "REB": 7.1,
-        "AST": 3.5,
-        "STL": 1.1,
-        "BLK": 0.8,
-        "TOV": 2.1,
-        "FGM": 7.0,
-        "FGA": 14.5,
-        "FTM": 3.5,
-        "FTA": 4.2,
-      }
-
-Output:
-    dict of z-scores:
-      {
-        "Z_PTS": ...,
-        "Z_FG3M": ...,
-        "Z_REB": ...,
-        "Z_AST": ...,
-        "Z_STL": ...,
-        "Z_BLK": ...,
-        "Z_TOV": ...,       # already inverted so lower TOV => higher z
-        "Z_FG_PCT": ...,
-        "Z_FT_PCT": ...,
-        "AVG_Z": ...        # average of the above per-category z’s
-      }
+If any of the relevant inputs for a category are NaN (or "NaN" as a string,
+or missing/empty), the z-score for that category will be NaN, and AVG_Z will
+be NaN if any component z is NaN.
 """
 
 from __future__ import annotations
 from typing import Dict
+import math
 
 # -----------------------
 # Baselines (from old file)
@@ -92,10 +66,37 @@ FT_IMPACT_STD: float = 0.303514900
 
 
 def _safe_float(v) -> float:
+    """
+    Convert to float, but:
+
+    - If the value is already NaN, keep it as NaN.
+    - If the string 'NaN' / 'nan' / 'null' / 'none' or '' is passed, return NaN.
+    - If the value is None, return NaN.
+    - Otherwise, try float(v); if that fails, return NaN.
+
+    This is intentionally strict so that "missing-ish" values don't silently
+    turn into 0.0 and fake a real z-score.
+    """
+    # Explicit None -> NaN
+    if v is None:
+        return float("nan")
+
+    # Already a float
+    if isinstance(v, float):
+        return v if not math.isnan(v) else float("nan")
+
+    # Int or other numeric
+    if isinstance(v, int):
+        return float(v)
+
+    # Strings and other types
     try:
+        s = str(v).strip().lower()
+        if s == "" or s in ("nan", "none", "null"):
+            return float("nan")
         return float(v)
     except (TypeError, ValueError):
-        return 0.0
+        return float("nan")
 
 
 def _z_scalar(value: float, mean: float, std: float, invert: bool = False) -> float:
@@ -103,12 +104,20 @@ def _z_scalar(value: float, mean: float, std: float, invert: bool = False) -> fl
     Simple scalar z-score:
       z = (value - mean) / std
     If invert=True, returns -z (useful for TOV where lower is better).
+
+    If value is NaN, returns NaN.
     """
     val = _safe_float(value)
+
+    if math.isnan(val):
+        return float("nan")
+
     m = float(mean)
     s = float(std) if std not in (None, 0) else 0.0
     if s == 0.0:
+        # If std is 0, the category has no spread; treat as neutral (0 z)
         return 0.0
+
     z = (val - m) / s
     return -z if invert else z
 
@@ -147,8 +156,12 @@ def raw_to_z_scores(avg_raw: Dict[str, float]) -> Dict[str, float]:
           "Z_FT_PCT": float,
           "AVG_Z": float,
         }
+
+    If any input needed for a category is NaN / "NaN" / missing / empty,
+    that category's z will be NaN, and AVG_Z will be NaN if any component
+    z is NaN.
     """
-    # Pull values safely
+    # Pull values safely (with NaN propagation)
     val = {k: _safe_float(avg_raw.get(k)) for k in [
         "PTS", "FG3M", "REB", "AST", "STL", "BLK", "TOV",
         "FGM", "FGA", "FTM", "FTA",
@@ -167,15 +180,28 @@ def raw_to_z_scores(avg_raw: Dict[str, float]) -> Dict[str, float]:
     out["Z_TOV"]  = _z_scalar(val["TOV"],  LEAGUE_MEANS["TOV"],  LEAGUE_STDS["TOV"], invert=True)
 
     # FG% impact: (FGM - league_fg_pct * FGA)
-    fg_impact = val["FGM"] - (LG_FG_PCT * val["FGA"])
-    out["Z_FG_PCT"] = _z_scalar(fg_impact, FG_IMPACT_MEAN, FG_IMPACT_STD)
+    if math.isnan(val["FGM"]) or math.isnan(val["FGA"]):
+        out["Z_FG_PCT"] = float("nan")
+    else:
+        fg_impact = val["FGM"] - (LG_FG_PCT * val["FGA"])
+        out["Z_FG_PCT"] = _z_scalar(fg_impact, FG_IMPACT_MEAN, FG_IMPACT_STD)
 
     # FT% impact: (FTM - league_ft_pct * FTA)
-    ft_impact = val["FTM"] - (LG_FT_PCT * val["FTA"])
-    out["Z_FT_PCT"] = _z_scalar(ft_impact, FT_IMPACT_MEAN, FT_IMPACT_STD)
+    if math.isnan(val["FTM"]) or math.isnan(val["FTA"]):
+        out["Z_FT_PCT"] = float("nan")
+    else:
+        ft_impact = val["FTM"] - (LG_FT_PCT * val["FTA"])
+        out["Z_FT_PCT"] = _z_scalar(ft_impact, FT_IMPACT_MEAN, FT_IMPACT_STD)
 
     # Average z across all components we just computed
     z_vals = [out[k] for k in out.keys() if k.startswith("Z_")]
-    out["AVG_Z"] = sum(z_vals) / len(z_vals) if z_vals else 0.0
+
+    # If any component is NaN, AVG_Z should be NaN
+    if not z_vals:
+        out["AVG_Z"] = 0.0
+    elif any(math.isnan(z) for z in z_vals):
+        out["AVG_Z"] = float("nan")
+    else:
+        out["AVG_Z"] = sum(z_vals) / len(z_vals)
 
     return out

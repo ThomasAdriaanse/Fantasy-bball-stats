@@ -15,6 +15,7 @@ The idea:
 
 from __future__ import annotations
 from typing import Dict
+import math
 
 # Order we use throughout the app
 CATS_ORDER = ["FG%", "FT%", "3PM", "REB", "AST", "STL", "BLK", "PTS", "TO"]
@@ -44,7 +45,17 @@ WEEKLY_ATTEMPTS: Dict[str, float] = {
 
 
 def _safe_float(v) -> float:
+    """
+    Convert to float, but:
+    - if the value is already NaN, keep it as NaN
+    - if the string 'NaN' (any case) is passed, return NaN
+    - otherwise fall back to 0.0 on error
+    """
     try:
+        if isinstance(v, float) and math.isnan(v):
+            return v
+        if isinstance(v, str) and v.strip().lower() == "nan":
+            return float("nan")
         return float(v)
     except (TypeError, ValueError):
         return 0.0
@@ -68,6 +79,9 @@ def raw_to_percent_of_win(avg_raw: Dict[str, float]) -> Dict[str, float]:
         dict mapping category -> percent of weekly win, e.g.
           { "PTS": 1.25, "REB": 0.85, ... }
         where 1.00 means “~1% of a typical weekly win” in that category.
+
+    If a given input value is NaN (or the string "NaN"), the corresponding
+    output for that category will also be NaN.
     """
     result: Dict[str, float] = {}
 
@@ -78,7 +92,9 @@ def raw_to_percent_of_win(avg_raw: Dict[str, float]) -> Dict[str, float]:
     fta = _safe_float(avg_raw.get("FTA"))
 
     # FG% impact: difference from league FG%, scaled by FGA share
-    if fga > 0 and WEEKLY_ATTEMPTS["FGA"] > 0:
+    if math.isnan(fg_pct) or math.isnan(fga):
+        result["FG%"] = float("nan")
+    elif fga > 0 and WEEKLY_ATTEMPTS["FGA"] > 0:
         fg_diff = fg_pct - LEAGUE_PERCENTS["FG%"]
         fg_volume_share = fga / WEEKLY_ATTEMPTS["FGA"]
         # multiply by 100 so 0.01 => 1% of weekly win
@@ -87,7 +103,9 @@ def raw_to_percent_of_win(avg_raw: Dict[str, float]) -> Dict[str, float]:
         result["FG%"] = 0.0
 
     # FT% impact: difference from league FT%, scaled by FTA share
-    if fta > 0 and WEEKLY_ATTEMPTS["FTA"] > 0:
+    if math.isnan(ft_pct) or math.isnan(fta):
+        result["FT%"] = float("nan")
+    elif fta > 0 and WEEKLY_ATTEMPTS["FTA"] > 0:
         ft_diff = ft_pct - LEAGUE_PERCENTS["FT%"]
         ft_volume_share = fta / WEEKLY_ATTEMPTS["FTA"]
         result["FT%"] = ft_diff * ft_volume_share * 100.0
@@ -97,10 +115,16 @@ def raw_to_percent_of_win(avg_raw: Dict[str, float]) -> Dict[str, float]:
     # --- Counting categories: share of weekly total ---
     for cat in ["3PM", "REB", "AST", "STL", "BLK", "PTS", "TO"]:
         weekly = WEEKLY_TEAM_AVG.get(cat)
+        val = _safe_float(avg_raw.get(cat))
+
+        if math.isnan(val):
+            result[cat] = float("nan")
+            continue
+
         if not weekly:
             result[cat] = 0.0
             continue
-        val = _safe_float(avg_raw.get(cat))
+
         result[cat] = (val / weekly) * 100.0
 
     return result

@@ -63,7 +63,6 @@ def select_teams_page():
         current_matchup=league.currentMatchupPeriod
     )
 
-
 @bp.post("/compare_page")
 def compare_page():
     start_time = time.time()
@@ -83,10 +82,19 @@ def compare_page():
     except (ValueError, TypeError):
         flash("Invalid input. Please ensure all stats are numbers.")
         # preserve form
-        info_list = [request.form.get('league_id'), request.form.get('year'), request.form.get('espn_s2'), request.form.get('swid')]
+        info_list = [
+            request.form.get('league_id'),
+            request.form.get('year'),
+            request.form.get('espn_s2'),
+            request.form.get('swid'),
+        ]
         info_string = ','.join(filter(None, info_list))
         session['form_data'] = request.form.to_dict()
-        return redirect(url_for('compare.select_teams_page', info=info_string, scoring_type=request.form.get('scoring_type')))
+        return redirect(url_for(
+            'compare.select_teams_page',
+            info=info_string,
+            scoring_type=request.form.get('scoring_type')
+        ))
 
     raw_window = (request.form.get('stat_window') or 'projected').strip().lower().replace('-', '_')
     VALID_WINDOWS = {'projected', 'total', 'last_30', 'last_15', 'last_7'}
@@ -111,18 +119,21 @@ def compare_page():
         'league_id': league_id,
         'year': int(year),
         'espn_s2': espn_s2,
-        'swid': swid
+        'swid': swid,
     }
 
     try:
-        league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid) if espn_s2 and swid \
-                 else League(league_id=league_id, year=year)
+        league = (
+            League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
+            if espn_s2 and swid
+            else League(league_id=league_id, year=year)
+        )
         matchup_data_dict = matchup_dates(league, year)
         selected_week_key = f'matchup_{week_num}'
         week_data = {
             "selected_week": week_num,
             "current_week": league.currentMatchupPeriod,
-            "matchup_data": matchup_data_dict.get(selected_week_key, {})
+            "matchup_data": matchup_data_dict.get(selected_week_key, {}),
         }
     except (ESPNUnknownError, ESPNInvalidLeague, ESPNAccessDenied) as e:
         error_message = "Error accessing ESPN league. Please check your league ID and credentials."
@@ -144,16 +155,23 @@ def compare_page():
     session['team2_index'] = team2_index
 
     cols = [
-        'player_name','min','fgm','fga','fg%','ftm','fta','ft%','threeptm',
-        'reb','ast','stl','blk','turno','pts','inj','fpts','games'
+        'player_name', 'min', 'fgm', 'fga', 'fg%', 'ftm', 'fta', 'ft%',
+        'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts', 'inj',
+        'fpts', 'games',
     ]
 
+    # ---------- POINTS SCORING ----------
     if scoring_type == "H2H_POINTS":
         t1 = cpd.get_team_player_data(league, team1_index, cols, year, scoring_rules, week_data, stat_window=stat_window)
         t2 = cpd.get_team_player_data(league, team2_index, cols, year, scoring_rules, week_data, stat_window=stat_window)
 
-        team_cols = ['team_avg_fpts','team_expected_points','team_chance_of_winning','team_name','team_current_points']
-        d1, d2 = tsd.get_team_stats(league, team1_index, t1, team2_index, t2, team_cols, scoring_rules, year, week_data)
+        team_cols = ['team_avg_fpts', 'team_expected_points', 'team_chance_of_winning',
+                     'team_name', 'team_current_points']
+        d1, d2 = tsd.get_team_stats(
+            league, team1_index, t1,
+            team2_index, t2,
+            team_cols, scoring_rules, year, week_data
+        )
 
         combined_df = cpd.get_compare_graph(league, team1_index, t1, team2_index, t2, year, week_data)
         combined_json = combined_df.to_json(orient='records')
@@ -167,9 +185,10 @@ def compare_page():
             combined_json=combined_json,
             scoring_type="H2H_POINTS",
             week_data=week_data,
-            stat_window=stat_window
+            stat_window=stat_window,
         )
 
+    # ---------- CATEGORY SCORING ----------
     elif scoring_type in ["H2H_CATEGORY", "H2H_MOST_CATEGORIES"]:
         t1 = cpd.get_team_player_data(league, team1_index, cols, year, scoring_rules, week_data, stat_window=stat_window)
         t2 = cpd.get_team_player_data(league, team2_index, cols, year, scoring_rules, week_data, stat_window=stat_window)
@@ -197,57 +216,70 @@ def compare_page():
             team2_current_stats=cur2,
             data_team_players_1=t1.to_dict('records'),
             data_team_players_2=t2.to_dict('records'),
-            debug=True
+            debug=True,
         )
 
         # ---------- NEW: per-player z-scores + percent-of-win ----------
-        def _safe_float(v):
+        import math
+
+        def _to_float_or_nan(v):
+            """
+            Convert to float, but keep NaN-like values as NaN
+            instead of silently turning them into 0.0.
+            """
+            if v is None:
+                return float("nan")
             try:
+                s = str(v).strip().lower()
+                if s == "" or s in ("nan", "none", "null"):
+                    return float("nan")
                 return float(v)
             except (TypeError, ValueError):
-                return 0.0
+                return float("nan")
 
         def _attach_metrics(df):
             """
-            Attach:
+            Attach to each row dict:
               - per-player z-scores for each cat (FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS)
               - per-player percent-of-win for each cat
               - clean FG% / FT% decimals for display
             Returns: list of row dicts.
             """
             rows = df.to_dict('records')
+
             for r in rows:
-                fgm  = _safe_float(r.get("fgm"))
-                fga  = _safe_float(r.get("fga"))
-                ftm  = _safe_float(r.get("ftm"))
-                fta  = _safe_float(r.get("fta"))
-                pts  = _safe_float(r.get("pts"))
-                fg3m = _safe_float(r.get("threeptm"))
-                reb  = _safe_float(r.get("reb"))
-                ast  = _safe_float(r.get("ast"))
-                stl  = _safe_float(r.get("stl"))
-                blk  = _safe_float(r.get("blk"))
-                tov  = _safe_float(r.get("turno"))
+                # Raw numeric fields as floats or NaN
+                fgm  = _to_float_or_nan(r.get("fgm"))
+                fga  = _to_float_or_nan(r.get("fga"))
+                ftm  = _to_float_or_nan(r.get("ftm"))
+                fta  = _to_float_or_nan(r.get("fta"))
+                pts  = _to_float_or_nan(r.get("pts"))
+                fg3m = _to_float_or_nan(r.get("threeptm"))
+                reb  = _to_float_or_nan(r.get("reb"))
+                ast  = _to_float_or_nan(r.get("ast"))
+                stl  = _to_float_or_nan(r.get("stl"))
+                blk  = _to_float_or_nan(r.get("blk"))
+                tov  = _to_float_or_nan(r.get("turno"))
 
                 # ----- FG% / FT% as proper decimals (0.48, 0.82, etc.) -----
-                fg_pct_raw = _safe_float(r.get("fg%"))
-                ft_pct_raw = _safe_float(r.get("ft%"))
+                fg_pct_raw = _to_float_or_nan(r.get("fg%"))
+                ft_pct_raw = _to_float_or_nan(r.get("ft%"))
 
                 # If ESPN/your pipeline gives 48.5 instead of 0.485, normalize
-                if fg_pct_raw > 1.5:
+                if not math.isnan(fg_pct_raw) and fg_pct_raw > 1.5:
                     fg_pct = fg_pct_raw / 100.0
                 else:
                     fg_pct = fg_pct_raw
 
-                if ft_pct_raw > 1.5:
+                if not math.isnan(ft_pct_raw) and ft_pct_raw > 1.5:
                     ft_pct = ft_pct_raw / 100.0
                 else:
                     ft_pct = ft_pct_raw
 
-                # Fallback: derive from makes/attempts if missing/zero
-                if fg_pct == 0.0 and fga > 0:
+                # Fallback: derive from makes/attempts if percentage missing
+                if math.isnan(fg_pct) and not math.isnan(fgm) and not math.isnan(fga) and fga > 0:
                     fg_pct = fgm / max(fga, 1e-9)
-                if ft_pct == 0.0 and fta > 0:
+                if math.isnan(ft_pct) and not math.isnan(ftm) and not math.isnan(fta) and fta > 0:
                     ft_pct = ftm / max(fta, 1e-9)
 
                 # ---- Z-scores (9-cat) ----
@@ -266,15 +298,16 @@ def compare_page():
                 }
                 z = raw_to_z_scores(avg_raw_for_z) or {}
 
-                r["z_pts"]      = float(z.get("Z_PTS",    0.0))
-                r["z_threeptm"] = float(z.get("Z_FG3M",   0.0))
-                r["z_reb"]      = float(z.get("Z_REB",    0.0))
-                r["z_ast"]      = float(z.get("Z_AST",    0.0))
-                r["z_stl"]      = float(z.get("Z_STL",    0.0))
-                r["z_blk"]      = float(z.get("Z_BLK",    0.0))
-                r["z_turno"]    = float(z.get("Z_TOV",    0.0))
-                r["z_fg_pct"]   = float(z.get("Z_FG_PCT", 0.0))
-                r["z_ft_pct"]   = float(z.get("Z_FT_PCT", 0.0))
+                # Keep NaN as NaN; default to NaN if missing
+                r["z_pts"]      = z.get("Z_PTS",    float("nan"))
+                r["z_threeptm"] = z.get("Z_FG3M",   float("nan"))
+                r["z_reb"]      = z.get("Z_REB",    float("nan"))
+                r["z_ast"]      = z.get("Z_AST",    float("nan"))
+                r["z_stl"]      = z.get("Z_STL",    float("nan"))
+                r["z_blk"]      = z.get("Z_BLK",    float("nan"))
+                r["z_turno"]    = z.get("Z_TOV",    float("nan"))
+                r["z_fg_pct"]   = z.get("Z_FG_PCT", float("nan"))
+                r["z_ft_pct"]   = z.get("Z_FT_PCT", float("nan"))
 
                 # ---- Percent of win (per game) ----
                 avg_raw_for_pow = {
@@ -292,17 +325,17 @@ def compare_page():
                 }
                 pow_stats = raw_to_percent_of_win(avg_raw_for_pow) or {}
 
-                r["pow_fg"]  = float(pow_stats.get("FG%",  0.0))
-                r["pow_ft"]  = float(pow_stats.get("FT%",  0.0))
-                r["pow_3pm"] = float(pow_stats.get("3PM",  0.0))
-                r["pow_reb"] = float(pow_stats.get("REB",  0.0))
-                r["pow_ast"] = float(pow_stats.get("AST",  0.0))
-                r["pow_stl"] = float(pow_stats.get("STL",  0.0))
-                r["pow_blk"] = float(pow_stats.get("BLK",  0.0))
-                r["pow_pts"] = float(pow_stats.get("PTS",  0.0))
-                r["pow_to"]  = float(pow_stats.get("TO",   0.0))
+                r["pow_fg"]  = pow_stats.get("FG%",  float("nan"))
+                r["pow_ft"]  = pow_stats.get("FT%",  float("nan"))
+                r["pow_3pm"] = pow_stats.get("3PM",  float("nan"))
+                r["pow_reb"] = pow_stats.get("REB",  float("nan"))
+                r["pow_ast"] = pow_stats.get("AST",  float("nan"))
+                r["pow_stl"] = pow_stats.get("STL",  float("nan"))
+                r["pow_blk"] = pow_stats.get("BLK",  float("nan"))
+                r["pow_pts"] = pow_stats.get("PTS",  float("nan"))
+                r["pow_to"]  = pow_stats.get("TO",   float("nan"))
 
-                # clean FG% / FT% decimals for display
+                # clean FG% / FT% decimals for display (these may be NaN)
                 r["fg_pct"] = fg_pct
                 r["ft_pct"] = ft_pct
 
@@ -341,9 +374,11 @@ def compare_page():
             data_team_stats_2=d2.to_dict('records'),
             team1_win_pct_data=win1.to_dict('records'),
             team2_win_pct_data=win2.to_dict('records'),
-            team1_current_stats=cur1, team2_current_stats=cur2,
+            team1_current_stats=cur1,
+            team2_current_stats=cur2,
             combined_jsons=combined_dicts,
-            scoring_type=scoring_type, week_data=week_data,
+            scoring_type=scoring_type,
+            week_data=week_data,
             stat_window=stat_window,
             expected_pct_map=expected_pct_map,
             snapshot_rows=snapshot_rows,
