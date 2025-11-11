@@ -4,16 +4,19 @@ from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, 
 from datetime import timedelta
 import time
 import json
+
 from ...services.compare_presenter import build_snapshot_rows, build_odds_rows
+from ...services.espn_service import matchup_dates
+from ...services.z_score_calculations import raw_to_z_scores
+from ...services.percent_of_win_calculations import raw_to_percent_of_win
 
 # use your existing compare modules in project root
 import compare_page.compare_page_data as cpd
 import compare_page.team_stats_data as tsd
 import compare_page.team_cat_averages as tca
 
-from ...services.espn_service import matchup_dates
-
 bp = Blueprint("compare", __name__)
+
 
 @bp.get("/select_teams_page")
 def select_teams_page():
@@ -60,6 +63,7 @@ def select_teams_page():
         current_matchup=league.currentMatchupPeriod
     )
 
+
 @bp.post("/compare_page")
 def compare_page():
     start_time = time.time()
@@ -88,9 +92,11 @@ def compare_page():
     VALID_WINDOWS = {'projected', 'total', 'last_30', 'last_15', 'last_7'}
     stat_window = raw_window if raw_window in VALID_WINDOWS else 'projected'
 
-    scoring_rules = {'fgm': fgm, 'fga': fga, 'ftm': ftm, 'fta': fta,
-                     'threeptm': threeptm, 'reb': reb, 'ast': ast, 'stl': stl,
-                     'blk': blk, 'turno': turno, 'pts': pts}
+    scoring_rules = {
+        'fgm': fgm, 'fga': fga, 'ftm': ftm, 'fta': fta,
+        'threeptm': threeptm, 'reb': reb, 'ast': ast, 'stl': stl,
+        'blk': blk, 'turno': turno, 'pts': pts
+    }
 
     my_team_name        = request.form.get('myTeam')
     opponents_team_name = request.form.get('opponentsTeam')
@@ -101,10 +107,16 @@ def compare_page():
     scoring_type        = request.form.get('scoring_type')
     week_num            = int(request.form.get('week_num'))
 
-    session['league_details'] = {'league_id': league_id, 'year': int(year), 'espn_s2': espn_s2, 'swid': swid}
+    session['league_details'] = {
+        'league_id': league_id,
+        'year': int(year),
+        'espn_s2': espn_s2,
+        'swid': swid
+    }
 
     try:
-        league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid) if espn_s2 and swid else League(league_id=league_id, year=year)
+        league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid) if espn_s2 and swid \
+                 else League(league_id=league_id, year=year)
         matchup_data_dict = matchup_dates(league, year)
         selected_week_key = f'matchup_{week_num}'
         week_data = {
@@ -121,15 +133,20 @@ def compare_page():
         return redirect(url_for('main.entry_page', error_message=str(e)))
 
     # locate teams
-    team1_index = next((i for i,t in enumerate(league.teams) if t.team_name == my_team_name), -1)
-    team2_index = next((i for i,t in enumerate(league.teams) if t.team_name == opponents_team_name), -1)
-    if team1_index == -1: return redirect(url_for('main.entry_page', error_message="Team 1 not found."))
-    if team2_index == -1: return redirect(url_for('main.entry_page', error_message="Team 2 not found."))
+    team1_index = next((i for i, t in enumerate(league.teams) if t.team_name == my_team_name), -1)
+    team2_index = next((i for i, t in enumerate(league.teams) if t.team_name == opponents_team_name), -1)
+    if team1_index == -1:
+        return redirect(url_for('main.entry_page', error_message="Team 1 not found."))
+    if team2_index == -1:
+        return redirect(url_for('main.entry_page', error_message="Team 2 not found."))
 
     session['team1_index'] = team1_index
     session['team2_index'] = team2_index
 
-    cols = ['player_name','min','fgm','fga','fg%','ftm','fta','ft%','threeptm','reb','ast','stl','blk','turno','pts','inj','fpts','games']
+    cols = [
+        'player_name','min','fgm','fga','fg%','ftm','fta','ft%','threeptm',
+        'reb','ast','stl','blk','turno','pts','inj','fpts','games'
+    ]
 
     if scoring_type == "H2H_POINTS":
         t1 = cpd.get_team_player_data(league, team1_index, cols, year, scoring_rules, week_data, stat_window=stat_window)
@@ -141,15 +158,17 @@ def compare_page():
         combined_df = cpd.get_compare_graph(league, team1_index, t1, team2_index, t2, year, week_data)
         combined_json = combined_df.to_json(orient='records')
 
-        return render_template('compare_page.html',
-                               data_team_players_1=t1.to_dict('records'),
-                               data_team_players_2=t2.to_dict('records'),
-                               data_team_stats_1=d1.to_dict('records'),
-                               data_team_stats_2=d2.to_dict('records'),
-                               combined_json=combined_json,
-                               scoring_type="H2H_POINTS",
-                               week_data=week_data,
-                               stat_window=stat_window)
+        return render_template(
+            'compare_page.html',
+            data_team_players_1=t1.to_dict('records'),
+            data_team_players_2=t2.to_dict('records'),
+            data_team_stats_1=d1.to_dict('records'),
+            data_team_stats_2=d2.to_dict('records'),
+            combined_json=combined_json,
+            scoring_type="H2H_POINTS",
+            week_data=week_data,
+            stat_window=stat_window
+        )
 
     elif scoring_type in ["H2H_CATEGORY", "H2H_MOST_CATEGORIES"]:
         t1 = cpd.get_team_player_data(league, team1_index, cols, year, scoring_rules, week_data, stat_window=stat_window)
@@ -181,9 +200,118 @@ def compare_page():
             debug=True
         )
 
-        # ===== NEW: total games (remaining / total) per team =====
-        # We try to parse 'games_str' if it exists and looks like "x/y".
-        # If not, we fall back to summing the numeric 'games' column and use that as both.
+        # ---------- NEW: per-player z-scores + percent-of-win ----------
+        def _safe_float(v):
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return 0.0
+
+        def _attach_metrics(df):
+            """
+            Attach:
+              - per-player z-scores for each cat (FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS)
+              - per-player percent-of-win for each cat
+              - clean FG% / FT% decimals for display
+            Returns: list of row dicts.
+            """
+            rows = df.to_dict('records')
+            for r in rows:
+                fgm  = _safe_float(r.get("fgm"))
+                fga  = _safe_float(r.get("fga"))
+                ftm  = _safe_float(r.get("ftm"))
+                fta  = _safe_float(r.get("fta"))
+                pts  = _safe_float(r.get("pts"))
+                fg3m = _safe_float(r.get("threeptm"))
+                reb  = _safe_float(r.get("reb"))
+                ast  = _safe_float(r.get("ast"))
+                stl  = _safe_float(r.get("stl"))
+                blk  = _safe_float(r.get("blk"))
+                tov  = _safe_float(r.get("turno"))
+
+                # ----- FG% / FT% as proper decimals (0.48, 0.82, etc.) -----
+                fg_pct_raw = _safe_float(r.get("fg%"))
+                ft_pct_raw = _safe_float(r.get("ft%"))
+
+                # If ESPN/your pipeline gives 48.5 instead of 0.485, normalize
+                if fg_pct_raw > 1.5:
+                    fg_pct = fg_pct_raw / 100.0
+                else:
+                    fg_pct = fg_pct_raw
+
+                if ft_pct_raw > 1.5:
+                    ft_pct = ft_pct_raw / 100.0
+                else:
+                    ft_pct = ft_pct_raw
+
+                # Fallback: derive from makes/attempts if missing/zero
+                if fg_pct == 0.0 and fga > 0:
+                    fg_pct = fgm / max(fga, 1e-9)
+                if ft_pct == 0.0 and fta > 0:
+                    ft_pct = ftm / max(fta, 1e-9)
+
+                # ---- Z-scores (9-cat) ----
+                avg_raw_for_z = {
+                    "PTS":  pts,
+                    "FG3M": fg3m,
+                    "REB":  reb,
+                    "AST":  ast,
+                    "STL":  stl,
+                    "BLK":  blk,
+                    "TOV":  tov,
+                    "FGM":  fgm,
+                    "FGA":  fga,
+                    "FTM":  ftm,
+                    "FTA":  fta,
+                }
+                z = raw_to_z_scores(avg_raw_for_z) or {}
+
+                r["z_pts"]      = float(z.get("Z_PTS",    0.0))
+                r["z_threeptm"] = float(z.get("Z_FG3M",   0.0))
+                r["z_reb"]      = float(z.get("Z_REB",    0.0))
+                r["z_ast"]      = float(z.get("Z_AST",    0.0))
+                r["z_stl"]      = float(z.get("Z_STL",    0.0))
+                r["z_blk"]      = float(z.get("Z_BLK",    0.0))
+                r["z_turno"]    = float(z.get("Z_TOV",    0.0))
+                r["z_fg_pct"]   = float(z.get("Z_FG_PCT", 0.0))
+                r["z_ft_pct"]   = float(z.get("Z_FT_PCT", 0.0))
+
+                # ---- Percent of win (per game) ----
+                avg_raw_for_pow = {
+                    "FG%": fg_pct,
+                    "FT%": ft_pct,
+                    "3PM": fg3m,
+                    "REB": reb,
+                    "AST": ast,
+                    "STL": stl,
+                    "BLK": blk,
+                    "PTS": pts,
+                    "TO":  tov,
+                    "FGA": fga,
+                    "FTA": fta,
+                }
+                pow_stats = raw_to_percent_of_win(avg_raw_for_pow) or {}
+
+                r["pow_fg"]  = float(pow_stats.get("FG%",  0.0))
+                r["pow_ft"]  = float(pow_stats.get("FT%",  0.0))
+                r["pow_3pm"] = float(pow_stats.get("3PM",  0.0))
+                r["pow_reb"] = float(pow_stats.get("REB",  0.0))
+                r["pow_ast"] = float(pow_stats.get("AST",  0.0))
+                r["pow_stl"] = float(pow_stats.get("STL",  0.0))
+                r["pow_blk"] = float(pow_stats.get("BLK",  0.0))
+                r["pow_pts"] = float(pow_stats.get("PTS",  0.0))
+                r["pow_to"]  = float(pow_stats.get("TO",   0.0))
+
+                # clean FG% / FT% decimals for display
+                r["fg_pct"] = fg_pct
+                r["ft_pct"] = ft_pct
+
+            return rows
+
+        data_team_players_1 = _attach_metrics(t1)
+        data_team_players_2 = _attach_metrics(t2)
+
+        # ===== total games (remaining / total) per team =====
         def _sum_games(df):
             rem = 0
             tot = 0
@@ -196,7 +324,6 @@ def compare_page():
                             tot += int(right)
                         except Exception:
                             continue
-            # fallback: only have 'games' numeric → treat as remaining, and use same as total
             if (rem == 0 and tot == 0) and ('games' in df.columns):
                 val = int(df['games'].fillna(0).sum())
                 rem = val
@@ -208,8 +335,8 @@ def compare_page():
 
         return render_template(
             "compare_page_cat.html",
-            data_team_players_1=t1.to_dict('records'),
-            data_team_players_2=t2.to_dict('records'),
+            data_team_players_1=data_team_players_1,
+            data_team_players_2=data_team_players_2,
             data_team_stats_1=d1.to_dict('records'),
             data_team_stats_2=d2.to_dict('records'),
             team1_win_pct_data=win1.to_dict('records'),
@@ -221,11 +348,14 @@ def compare_page():
             expected_pct_map=expected_pct_map,
             snapshot_rows=snapshot_rows,
             odds_rows=odds_rows,
-            # NEW totals for bottom-of-table row
             team1_games_remaining=team1_games_remaining,
             team1_games_total=team1_games_total,
             team2_games_remaining=team2_games_remaining,
             team2_games_total=team2_games_total,
+            league_id=league_id,
+            year=year,
+            espn_s2=espn_s2,
+            swid=swid,
         )
 
     return redirect(url_for('main.entry_page', error_message=f"Unsupported scoring type: {scoring_type}"))
