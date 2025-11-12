@@ -116,6 +116,7 @@ jobs:
               -e S3_BUCKET=fantasy-stats-dev \
               -e S3_PREFIX=dev/players/ \
               -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }} \
+              -e SECRET_KEY=${{ secrets.SESSION_KEY }} \
               "$IMG"
 
             sudo systemctl restart nginx
