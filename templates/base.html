@@ -19,7 +19,7 @@
 
     <a href="{{ url_for('main.entry_page') }}" class="{% if ep in ['main.entry_page'] %}active{% endif %}">Home</a>
     <a href="{{ url_for('players.player_stats') }}" class="{% if ep in ['players.player_stats'] %}active{% endif %}">Player Stats</a>
-    <a href="{{ url_for('compare.select_teams_page') }}" class="{% if ep in ['compare.select_teams_page','compare.compare_page'] %}active{% endif %}">Select Teams</a>
+    <a href="{{ url_for('compare.select_teams_page') }}" class="{% if ep in ['compare.select_teams_page','compare.compare_page'] %}active{% endif %}">Compare Teams</a>
     <!-- NEW: Punting Overview -->
     <a href="{{ url_for('overview.punting_overview') }}" class="{% if ep in ['overview.punting_overview'] %}active{% endif %}">Punting Overview</a>
     <a href="{{ url_for('trades.trade_analyzer') }}">Trade Value</a>
