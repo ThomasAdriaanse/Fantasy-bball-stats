@@ -215,8 +215,7 @@ def compare_page():
             team1_current_stats=cur1,
             team2_current_stats=cur2,
             data_team_players_1=t1.to_dict('records'),
-            data_team_players_2=t2.to_dict('records'),
-            debug=False,
+            data_team_players_2=t2.to_dict('records')
         )
 
         # ---------- per-player z-scores ONLY (no % of win) ----------

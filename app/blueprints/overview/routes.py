@@ -48,7 +48,7 @@ def punting_overview():
         swid=league_details['swid']
     )
 
-    stat_window = (request.args.get('stat_window') or 'projected').strip().lower().replace('-', '_')
+    stat_window = (request.args.get('stat_window') or 'total').strip().lower().replace('-', '_')
 
     data = tca._team_category_averages(league, year, stat_window=stat_window)
 
