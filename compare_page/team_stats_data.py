@@ -11,20 +11,6 @@ import math
 import compare_page.compare_page_data as cpd
 
 
-def get_team_stats_data_schema() -> str:
-    """
-    Returns a SQL-ish schema string for team stats tables.
-    """
-    table_schema = """
-        team_avg_fpts FLOAT,
-        team_expected_points FLOAT,
-        team_chance_of_winning FLOAT,
-        team_name TEXT,
-        team_current_points FLOAT
-    """
-    return table_schema
-
-
 def _safe_boxscores(league, matchup_period: int, **kwargs) -> list:
     """
     Fetch box scores once and return a list; safely handle ESPN quirks for future weeks.

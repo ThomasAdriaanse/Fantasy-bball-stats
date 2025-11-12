@@ -1,3 +1,4 @@
+# app/blueprints/trades/routes.py
 from __future__ import annotations
 from typing import Dict, Any, List
 from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
@@ -7,8 +8,8 @@ import pandas as pd
 from espn_api.basketball import League
 from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, ESPNInvalidLeague
 
-# reuse your compare helper to fetch per-team player rows by window
 import compare_page.compare_page_data as cpd
+from app.services.z_score_calculations import raw_to_z_scores
 
 bp = Blueprint("trades", __name__)
 
@@ -26,7 +27,6 @@ def _z_to_hsl_bg(z: float, zmin: float = -1.6, zmax: float = 1.7) -> str:
     t = (float(z) - zmin) / (zmax - zmin)  # 0..1
     t = max(0.0, min(1.0, t))
     hue = 120.0 * t
-    # slightly darker so white text is readable
     return f"hsl({hue:.0f} 70% 35% / 0.90)"
 
 # ----------------------- session/league helpers -----------------------
@@ -39,8 +39,11 @@ def _get_league_from_session():
     if not league_id or not year:
         return None, None, None
     try:
-        lg = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid) if espn_s2 and swid \
-             else League(league_id=league_id, year=year)
+        lg = (
+            League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
+            if espn_s2 and swid
+            else League(league_id=league_id, year=year)
+        )
         return lg, league_id, year
     except (ESPNUnknownError, ESPNInvalidLeague, ESPNAccessDenied):
         return None, None, None
@@ -51,7 +54,10 @@ def _get_league_from_session():
 def _collect_league_players(league, year: int, stat_window: str) -> pd.DataFrame:
     """
     Pull every team’s player rows for the given ESPN window and return a
-    DataFrame with columns: player_name + the 9 cats (FG%/FT% derived from makes/attempts).
+    DataFrame with:
+      - player_name
+      - raw 9-cat stats (FG%, FT%, 3PM, REB, AST, STK, BLK, TO, PTS)
+      - z_<cat> per category using raw_to_z_scores (NBA-wide baselines).
     """
     frames: List[pd.DataFrame] = []
     for team_idx, _ in enumerate(league.teams):
@@ -63,7 +69,7 @@ def _collect_league_players(league, year: int, stat_window: str) -> pd.DataFrame
                 "reb","ast","stl","blk","turno","pts","inj","fpts","games"
             ],
             year=year,
-            league_scoring_rules={  # neutralize fantasy scoring; we want raw 9-cat
+            league_scoring_rules={  # neutralize fantasy scoring; just want raw stats
                 "fgm":0,"fga":0,"ftm":0,"fta":0,"threeptm":0,
                 "reb":0,"ast":0,"stl":0,"blk":0,"turno":0,"pts":0
             },
@@ -74,51 +80,101 @@ def _collect_league_players(league, year: int, stat_window: str) -> pd.DataFrame
             frames.append(df)
 
     if not frames:
-        return pd.DataFrame(columns=["player_name"] + CATEGORIES)
+        cols = ["player_name"] + CATEGORIES + [f"z_{c}" for c in CATEGORIES]
+        return pd.DataFrame(columns=cols)
 
     df_all = pd.concat(frames, ignore_index=True)
 
-    # numeric coercion
+    # numeric coercion for the base stats we use
     for c in ["fgm","fga","ftm","fta","threeptm","reb","ast","stl","blk","turno","pts"]:
-        df_all[c] = pd.to_numeric(df_all[c], errors="coerce")
+        df_all[c] = pd.to_numeric(df_all[c], errors="coerce").fillna(0.0)
 
-    # derive more stable percentages from makes/attempts
-    df_all["FG%"] = (df_all["fgm"] / df_all["fga"]).replace([np.inf, -np.inf], np.nan)
-    df_all["FT%"] = (df_all["ftm"] / df_all["fta"]).replace([np.inf, -np.inf], np.nan)
-
-    out = pd.DataFrame({
+    # Raw per-game frame in the shape raw_to_z_scores expects
+    df_raw = pd.DataFrame({
         "player_name": df_all["player_name"],
-        "FG%": df_all["FG%"].fillna(0.0),
-        "FT%": df_all["FT%"].fillna(0.0),
-        "3PM": df_all["threeptm"].fillna(0.0),
-        "REB": df_all["reb"].fillna(0.0),
-        "AST": df_all["ast"].fillna(0.0),
-        "STL": df_all["stl"].fillna(0.0),
-        "BLK": df_all["blk"].fillna(0.0),
-        "TO":  df_all["turno"].fillna(0.0),
-        "PTS": df_all["pts"].fillna(0.0),
+        "FGM": df_all["fgm"],
+        "FGA": df_all["fga"],
+        "FTM": df_all["ftm"],
+        "FTA": df_all["fta"],
+        "FG3M": df_all["threeptm"],
+        "REB": df_all["reb"],
+        "AST": df_all["ast"],
+        "STL": df_all["stl"],
+        "BLK": df_all["blk"],
+        "TOV": df_all["turno"],
+        "PTS": df_all["pts"],
     })
 
     # De-duplicate by player; keep row with highest PTS as a reasonable proxy
-    out = out.sort_values(["player_name","PTS"], ascending=[True, False]) \
-             .drop_duplicates("player_name", keep="first") \
-             .reset_index(drop=True)
+    df_raw = (
+        df_raw
+        .sort_values(["player_name", "PTS"], ascending=[True, False])
+        .drop_duplicates("player_name", keep="first")
+        .reset_index(drop=True)
+    )
 
-    return out
+    rows: List[Dict[str, Any]] = []
 
-def _zscore_league(df_cat: pd.DataFrame) -> pd.DataFrame:
-    """
-    Compute leaguewide z for each category (TO inverted).
-    Returns df with columns: player_name, 9 cats, and z_<cat> for each.
-    """
-    zdf = df_cat.copy()
-    for cat in CATEGORIES:
-        s = zdf[cat].astype(float)
-        arr = -s.values if cat == "TO" else s.values  # invert TO so lower turnovers => higher value
-        mu  = float(np.nanmean(arr))
-        sd  = float(np.nanstd(arr)) or 1.0
-        zdf[f"z_{cat}"] = (arr - mu) / sd
-    return zdf
+    # Map z-score keys -> 9-cat names
+    cat_to_zkey = {
+        "FG%": "Z_FG_PCT",
+        "FT%": "Z_FT_PCT",
+        "3PM": "Z_FG3M",
+        "REB": "Z_REB",
+        "AST": "Z_AST",
+        "STL": "Z_STL",
+        "BLK": "Z_BLK",
+        "TO":  "Z_TOV",
+        "PTS": "Z_PTS",
+    }
+
+    for _, r in df_raw.iterrows():
+        # Raw 9-cat values
+        fgm = float(r["FGM"])
+        fga = float(r["FGA"])
+        ftm = float(r["FTM"])
+        fta = float(r["FTA"])
+
+        fg_pct = (fgm / fga) if fga > 0 else 0.0
+        ft_pct = (ftm / fta) if fta > 0 else 0.0
+
+        raw_for_z = {
+            "PTS":  float(r["PTS"]),
+            "FG3M": float(r["FG3M"]),
+            "REB":  float(r["REB"]),
+            "AST":  float(r["AST"]),
+            "STL":  float(r["STL"]),
+            "BLK":  float(r["BLK"]),
+            "TOV":  float(r["TOV"]),
+            "FGM":  fgm,
+            "FGA":  fga,
+            "FTM":  ftm,
+            "FTA":  fta,
+        }
+
+        zmap = raw_to_z_scores(raw_for_z)
+
+        row: Dict[str, Any] = {
+            "player_name": r["player_name"],
+            "FG%": fg_pct,
+            "FT%": ft_pct,
+            "3PM": float(r["FG3M"]),
+            "REB": float(r["REB"]),
+            "AST": float(r["AST"]),
+            "STL": float(r["STL"]),
+            "BLK": float(r["BLK"]),
+            "TO":  float(r["TOV"]),
+            "PTS": float(r["PTS"]),
+        }
+
+        # Attach per-category z_<cat> columns
+        for cat, key in cat_to_zkey.items():
+            row[f"z_{cat}"] = float(zmap.get(key, 0.0))
+
+        rows.append(row)
+
+    return pd.DataFrame(rows)
+
 
 def _sum_side_z(zdf: pd.DataFrame, names: List[str]) -> Dict[str, float]:
     """
@@ -134,6 +190,7 @@ def _sum_side_z(zdf: pd.DataFrame, names: List[str]) -> Dict[str, float]:
     totals = {cat: round(float(np.nansum(pick[f"z_{cat}"].values)), 3) for cat in CATEGORIES}
     totals["_overall"] = round(sum(totals[c] for c in CATEGORIES), 3)
     return totals
+
 
 def _build_player_rows(z_league: pd.DataFrame, names: List[str]) -> List[Dict[str, Any]]:
     """
@@ -165,9 +222,9 @@ def trade_analyzer():
     if stat_window not in WINDOW_CHOICES:
         stat_window = "projected"
 
-    # Build league pool for this window and compute z
+    # Build league pool for this window, including z_<cat> columns
     league_df = _collect_league_players(league, year, stat_window)
-    z_league  = _zscore_league(league_df) if not league_df.empty else pd.DataFrame(
+    z_league  = league_df if not league_df.empty else pd.DataFrame(
         columns=["player_name"] + CATEGORIES + [f"z_{c}" for c in CATEGORIES]
     )
 
@@ -176,7 +233,10 @@ def trade_analyzer():
     side_b = [request.values.get(k, "") for k in ("b1","b2","b3","b4")]
 
     # dropdown options
-    player_names = sorted(league_df["player_name"].dropna().unique().tolist()) if not league_df.empty else []
+    player_names = (
+        sorted(league_df["player_name"].dropna().unique().tolist())
+        if not league_df.empty else []
+    )
 
     results = None
     if request.method == "POST":
@@ -206,7 +266,6 @@ def trade_analyzer():
             "delta_overall": delta_overall,
             "delta_overall_bg": delta_overall_bg,
             "diff": diff,
-            # verdict removed by request; keep diff for potential future use
         }
 
     return render_template(
@@ -222,7 +281,6 @@ def trade_analyzer():
         results=results
     )
 
-# Optional JSON API if you later want dynamic updates
 @bp.post("/trade/api")
 def trade_api():
     league, _, year = _get_league_from_session()
@@ -235,7 +293,7 @@ def trade_api():
         window = "projected"
 
     league_df = _collect_league_players(league, year, window)
-    z_league  = _zscore_league(league_df) if not league_df.empty else pd.DataFrame(
+    z_league  = league_df if not league_df.empty else pd.DataFrame(
         columns=["player_name"] + CATEGORIES + [f"z_{c}" for c in CATEGORIES]
     )
 
@@ -246,7 +304,6 @@ def trade_api():
     b_tot = _sum_side_z(z_league, side_b)
     diff  = round(a_tot["_overall"] - b_tot["_overall"], 3)
 
-    # ΔZ cells & overall (with colors)
     delta_cells = []
     for c in CATEGORIES:
         z = round(float(a_tot.get(c, 0.0) - b_tot.get(c, 0.0)), 2)

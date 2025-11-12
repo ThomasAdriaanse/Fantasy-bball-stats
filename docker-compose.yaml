@@ -5,6 +5,7 @@ services:
       - "5000:5000"
     env_file: .env
     environment:
+      APP_ENV: production          # << choose Production config
       # make sure the SDK reads ~/.aws/config for region/profile
       AWS_SDK_LOAD_CONFIG: "1"
       # expose the values from .env to the container

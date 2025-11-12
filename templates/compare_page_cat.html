@@ -54,7 +54,7 @@
       background: rgba(255,0,0,var(--a2,0));   /* Team 2 red  */
     }
 
-    /* ===== Tables (unchanged) ===== */
+    /* ===== Tables ===== */
     .data-table.table-compact{ table-layout: fixed; width: 100%; }
     .data-table.table-compact th,
     .data-table.table-compact td{
@@ -83,8 +83,8 @@
       background: repeating-linear-gradient(to right, red 0 3px, transparent 3px 6px);
     }
 
-     /* ===== Odds block ===== */
-  .odds-card { padding: 16px 18px; }
+    /* ===== Odds block ===== */
+    .odds-card { padding: 16px 18px; }
 
     /* Use a symmetric 3-column grid: [label][bar][spacer] */
     .odds-list-v2 { display:grid; gap:10px; --label-w: 90px; }
@@ -102,13 +102,9 @@
       grid-column: 2 / 3;
       position: relative;
     }
-    /* Right spacer cell to balance the left label */
     .odds-spacer {
       grid-column: 3 / 4;
-      /* purely structural */
     }
-
-    /* Midline + stat tags (unchanged look) */
     .odds-mid-v2 { position:absolute; top:0; bottom:0; width:1px; left:50%;
       background: rgba(255,255,255,0.18); pointer-events:none; }
     .odds-stat-tag-v2{
@@ -124,7 +120,6 @@
     .odds-stat-tag-v2.left  { transform: translate(-110%,-50%); text-align:right; }
     .odds-stat-tag-v2.right { transform: translate(10%,-50%);   text-align:left; }
 
-    /* Bar rails + percentage tags (unchanged) */
     .odds-left-v2 { height:100%; background:rgba(70,130,180,.8); }
     .odds-right-v2{ height:100%; background:rgba(255,0,0,.8); float:right; }
     .odds-tag-v2{ position:absolute; top:50%; transform:translateY(-50%); font-size:12px; padding:2px 6px; background:rgba(0,0,0,.25); border-radius:4px; color:#fff; }
@@ -138,15 +133,15 @@
     .odds-bar-v2.winner-left  .odds-right-v2 { opacity:.6; }
     .odds-bar-v2.winner-right .odds-left-v2  { opacity:.6; }
 
-    /* Responsive: shrink label width on small screens so center stays true */
     @media (max-width: 520px) {
       .odds-list-v2 { --label-w: 70px; }
     }
     @media (max-width: 420px) {
       .odds-list-v2 { --label-w: 56px; }
     }
-    /* Toggle button */
-    .toggle-row{ display:flex; align-items:center; gap:10px; margin:8px 0 12px; }
+
+    /* Toggle buttons (reused) */
+    .toggle-row{ display:flex; align-items:center; gap:10px; margin:8px 0 12px; flex-wrap:wrap; }
     .btn-toggle{
       appearance:none; border:1px solid rgba(255,255,255,0.12);
       background:#0b0e14; color:#e8eefc; padding:6px 10px; border-radius:8px;
@@ -174,27 +169,35 @@
       </div>
     </div>
 
-    <!-- Streaming recommendations -->
+    <!-- Streaming recommendations (centered) -->
     <form method="post" action="{{ url_for('streaming.streaming_page') }}" style="margin:12px 0;">
-      <input type="hidden" name="myTeam"        value="{{ (data_team_stats_1|default([{'team_name':'Team 1'}], true))[0]['team_name'] }}">
-      <input type="hidden" name="opponentsTeam" value="{{ (data_team_stats_2|default([{'team_name':'Team 2'}], true))[0]['team_name'] }}">
+      <div style="display:flex; justify-content:center;">
+        <div>
+          <input type="hidden" name="myTeam"        value="{{ (data_team_stats_1|default([{'team_name':'Team 1'}], true))[0]['team_name'] }}">
+          <input type="hidden" name="opponentsTeam" value="{{ (data_team_stats_2|default([{'team_name':'Team 2'}], true))[0]['team_name'] }}">
 
-      <!-- Pass the exact data the compare page already has -->
-      <input type="hidden" name="week_data_json"            value='{{ week_data|tojson }}'>
-      <input type="hidden" name="stat_window"               value='{{ stat_window }}'>
-      <input type="hidden" name="scoring_type"              value='{{ scoring_type }}'>
+          <input type="hidden" name="week_data_json"            value='{{ week_data|tojson }}'>
+          <input type="hidden" name="stat_window"               value='{{ stat_window }}'>
+          <input type="hidden" name="scoring_type"              value='{{ scoring_type }}'>
 
-      <input type="hidden" name="team1_rows_json"           value='{{ data_team_players_1|tojson }}'>
-      <input type="hidden" name="team2_rows_json"           value='{{ data_team_players_2|tojson }}'>
-      <input type="hidden" name="team1_win_pct_json"        value='{{ team1_win_pct_data|tojson }}'>
-      <input type="hidden" name="team2_win_pct_json"        value='{{ team2_win_pct_data|tojson }}'>
-      <input type="hidden" name="team1_current_stats_json"  value='{{ team1_current_stats|tojson }}'>
-      <input type="hidden" name="team2_current_stats_json"  value='{{ team2_current_stats|tojson }}'>
+          <input type="hidden" name="league_id" value="{{ league_id }}">
+          <input type="hidden" name="year"      value="{{ year }}">
+          <input type="hidden" name="espn_s2"   value="{{ espn_s2|default('', true) }}">
+          <input type="hidden" name="swid"      value="{{ swid|default('', true) }}">
 
-      <button type="submit" class="btn">Streaming recommendations for this matchup</button>
+          <input type="hidden" name="team1_rows_json"           value='{{ data_team_players_1|tojson }}'>
+          <input type="hidden" name="team2_rows_json"           value='{{ data_team_players_2|tojson }}'>
+          <input type="hidden" name="team1_win_pct_json"        value='{{ team1_win_pct_data|tojson }}'>
+          <input type="hidden" name="team2_win_pct_json"        value='{{ team2_win_pct_data|tojson }}'>
+          <input type="hidden" name="team1_current_stats_json"  value='{{ team1_current_stats|tojson }}'>
+          <input type="hidden" name="team2_current_stats_json"  value='{{ team2_current_stats|tojson }}'>
+
+          <button type="submit" class="btn">Streaming recommendations for this matchup</button>
+        </div>
+      </div>
     </form>
 
-    <!-- ===== CURRENT CATEGORY SNAPSHOT (server-computed) ===== -->
+    <!-- ===== CURRENT CATEGORY SNAPSHOT ===== -->
     <div class="card cat-snapshot">
       <div class="cat-grid">
         {% for row in snapshot_rows %}
@@ -212,16 +215,32 @@
 
     <!-- Players + summary tables -->
     <div class="card">
+      <!-- View toggle for tables -->
+      <div class="toggle-row">
+        <span style="font-size:14px; opacity:.85;">Table view:</span>
+        <button type="button" class="btn-toggle view-mode-btn active" data-mode="raw">Raw stats</button>
+        <button type="button" class="btn-toggle view-mode-btn" data-mode="z">Z-scores</button>
+      </div>
+
       <div class="table-container">
         <div class="table-wrapper">
           <!-- Team 1 table -->
-          <table class="data-table">
+          <table class="data-table table-compact">
             <thead>
               <tr>
                 <th>Player Name</th>
-                <th>MIN</th><th>FGM</th><th>FGA</th><th>FTM</th><th>FTA</th>
-                <th>3PTM</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th>
-                <th>TO</th><th>PTS</th><th>Games</th>
+                <th>MIN</th>
+                <th>FG%</th>
+                <th>FT%</th>
+                <th>3PTM</th>
+                <th>REB</th>
+                <th>AST</th>
+                <th>STL</th>
+                <th>BLK</th>
+                <th>TO</th>
+                <th>PTS</th>
+                <th>Total</th>
+                <th>Games</th>
               </tr>
             </thead>
             <tbody>
@@ -231,33 +250,113 @@
                   <a href="{{ url_for('players.player_stats') }}?player_name={{ row['player_name'] }}">{{ row['player_name'] }}</a>
                 </td>
                 <td>{{ row['min'] }}</td>
-                <td>{{ row['fgm'] }}</td>
-                <td>{{ row['fga'] }}</td>
-                <td>{{ row['ftm'] }}</td>
-                <td>{{ row['fta'] }}</td>
-                <td>{{ row['threeptm'] }}</td>
-                <td>{{ row['reb'] }}</td>
-                <td>{{ row['ast'] }}</td>
-                <td>{{ row['stl'] }}</td>
-                <td>{{ row['blk'] }}</td>
-                <td>{{ row['turno'] }}</td>
-                <td>{{ row['pts'] }}</td>
+
+                {# FG% #}
+                <td class="stat-cell"
+                    data-cat="FG%"
+                    data-raw="{{ row.fg_pct }}"
+                    data-z="{{ row.z_fg_pct }}">
+                  {{ (row.fg_pct or 0.0)|float|round(3) }}
+                </td>
+
+                {# FT% #}
+                <td class="stat-cell"
+                    data-cat="FT%"
+                    data-raw="{{ row.ft_pct }}"
+                    data-z="{{ row.z_ft_pct }}">
+                  {{ (row.ft_pct or 0.0)|float|round(3) }}
+                </td>
+
+                {# 3PTM #}
+                <td class="stat-cell"
+                    data-cat="3PM"
+                    data-raw="{{ row.threeptm }}"
+                    data-z="{{ row.z_threeptm }}">
+                  {{ row.threeptm }}
+                </td>
+
+                {# REB #}
+                <td class="stat-cell"
+                    data-cat="REB"
+                    data-raw="{{ row.reb }}"
+                    data-z="{{ row.z_reb }}">
+                  {{ row.reb }}
+                </td>
+
+                {# AST #}
+                <td class="stat-cell"
+                    data-cat="AST"
+                    data-raw="{{ row.ast }}"
+                    data-z="{{ row.z_ast }}">
+                  {{ row.ast }}
+                </td>
+
+                {# STL #}
+                <td class="stat-cell"
+                    data-cat="STL"
+                    data-raw="{{ row.stl }}"
+                    data-z="{{ row.z_stl }}">
+                  {{ row.stl }}
+                </td>
+
+                {# BLK #}
+                <td class="stat-cell"
+                    data-cat="BLK"
+                    data-raw="{{ row.blk }}"
+                    data-z="{{ row.z_blk }}">
+                  {{ row.blk }}
+                </td>
+
+                {# TO #}
+                <td class="stat-cell"
+                    data-cat="TO"
+                    data-raw="{{ row.turno }}"
+                    data-z="{{ row.z_turno }}">
+                  {{ row.turno }}
+                </td>
+
+                {# PTS #}
+                <td class="stat-cell"
+                    data-cat="PTS"
+                    data-raw="{{ row.pts }}"
+                    data-z="{{ row.z_pts }}">
+                  {{ row.pts }}
+                </td>
+
+                {# Total (per-player) #}
+                <td class="stat-total"></td>
+
                 <td>{{ row.get('games_str', row['games']) }}</td>
               </tr>
               {% endfor %}
             </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="12" style="text-align:right; font-weight:600;">Total games (remaining / total)</td>
+                <td>{{ team1_games_remaining }}/{{ team1_games_total }}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
 
         <div class="table-wrapper">
           <!-- Team 2 table -->
-          <table class="data-table">
+          <table class="data-table table-compact">
             <thead>
               <tr>
                 <th>Player Name</th>
-                <th>MIN</th><th>FGM</th><th>FGA</th><th>FTM</th><th>FTA</th>
-                <th>3PTM</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th>
-                <th>TO</th><th>PTS</th><th>Games</th>
+                <th>MIN</th>
+                <th>FG%</th>
+                <th>FT%</th>
+                <th>3PTM</th>
+                <th>REB</th>
+                <th>AST</th>
+                <th>STL</th>
+                <th>BLK</th>
+                <th>TO</th>
+                <th>PTS</th>
+                <th>Total</th>
+                <th>Games</th>
               </tr>
             </thead>
             <tbody>
@@ -267,21 +366,92 @@
                   <a href="{{ url_for('players.player_stats') }}?player_name={{ row['player_name'] }}">{{ row['player_name'] }}</a>
                 </td>
                 <td>{{ row['min'] }}</td>
-                <td>{{ row['fgm'] }}</td>
-                <td>{{ row['fga'] }}</td>
-                <td>{{ row['ftm'] }}</td>
-                <td>{{ row['fta'] }}</td>
-                <td>{{ row['threeptm'] }}</td>
-                <td>{{ row['reb'] }}</td>
-                <td>{{ row['ast'] }}</td>
-                <td>{{ row['stl'] }}</td>
-                <td>{{ row['blk'] }}</td>
-                <td>{{ row['turno'] }}</td>
-                <td>{{ row['pts'] }}</td>
+
+                {# FG% #}
+                <td class="stat-cell"
+                    data-cat="FG%"
+                    data-raw="{{ row.fg_pct }}"
+                    data-z="{{ row.z_fg_pct }}">
+                  {{ (row.fg_pct or 0.0)|float|round(3) }}
+                </td>
+
+                {# FT% #}
+                <td class="stat-cell"
+                    data-cat="FT%"
+                    data-raw="{{ row.ft_pct }}"
+                    data-z="{{ row.z_ft_pct }}">
+                  {{ (row.ft_pct or 0.0)|float|round(3) }}
+                </td>
+
+                {# 3PTM #}
+                <td class="stat-cell"
+                    data-cat="3PM"
+                    data-raw="{{ row.threeptm }}"
+                    data-z="{{ row.z_threeptm }}">
+                  {{ row.threeptm }}
+                </td>
+
+                {# REB #}
+                <td class="stat-cell"
+                    data-cat="REB"
+                    data-raw="{{ row.reb }}"
+                    data-z="{{ row.z_reb }}">
+                  {{ row.reb }}
+                </td>
+
+                {# AST #}
+                <td class="stat-cell"
+                    data-cat="AST"
+                    data-raw="{{ row.ast }}"
+                    data-z="{{ row.z_ast }}">
+                  {{ row.ast }}
+                </td>
+
+                {# STL #}
+                <td class="stat-cell"
+                    data-cat="STL"
+                    data-raw="{{ row.stl }}"
+                    data-z="{{ row.z_stl }}">
+                  {{ row.stl }}
+                </td>
+
+                {# BLK #}
+                <td class="stat-cell"
+                    data-cat="BLK"
+                    data-raw="{{ row.blk }}"
+                    data-z="{{ row.z_blk }}">
+                  {{ row.blk }}
+                </td>
+
+                {# TO #}
+                <td class="stat-cell"
+                    data-cat="TO"
+                    data-raw="{{ row.turno }}"
+                    data-z="{{ row.z_turno }}">
+                  {{ row.turno }}
+                </td>
+
+                {# PTS #}
+                <td class="stat-cell"
+                    data-cat="PTS"
+                    data-raw="{{ row.pts }}"
+                    data-z="{{ row.z_pts }}">
+                  {{ row.pts }}
+                </td>
+
+                {# Total (per-player) #}
+                <td class="stat-total"></td>
+
                 <td>{{ row.get('games_str', row['games']) }}</td>
               </tr>
               {% endfor %}
             </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="12" style="text-align:right; font-weight:600;">Total games (remaining / total)</td>
+                <td>{{ team2_games_remaining }}/{{ team2_games_total }}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -329,7 +499,6 @@
         <div class="graph-wrapper chart-card">
           <div class="graph-title chart-title">{{ cat }}</div>
           <div id="chart-{{ (cat|replace('%','pct')|replace('3PM','3pm')|lower) }}" class="chart-svg"></div>
-          <!-- per-chart legend appended by D3 -->
         </div>
         {% endfor %}
       </div>
@@ -503,29 +672,149 @@
 
         if (!bar || !left || !right || !tagL || !tagR || !statL || !statR) return;
 
-        // widths + title
         left.style.width  = `${p1}%`;
         right.style.width = `${p2}%`;
         bar.title = `${p1.toFixed(1)}% vs ${p2.toFixed(1)}%`;
 
-        // labels
         tagL.textContent = `${Math.round(p1)}%`;
         tagR.textContent = `${Math.round(p2)}%`;
         statL.textContent = m1;
         statR.textContent = m2;
 
-        // class (winner/tie)
         bar.classList.remove('is-tie','winner-left','winner-right');
         if (Math.abs(p1 - p2) < 0.5) bar.classList.add('is-tie');
         else if (p1 > p2) bar.classList.add('winner-left');
         else bar.classList.add('winner-right');
 
-        // bolding vs muted
         tagL.classList.toggle('strong', p1 > p2);
         tagL.classList.toggle('muted',  p1 < p2);
         tagR.classList.toggle('strong', p2 > p1);
         tagR.classList.toggle('muted',  p2 < p1);
       });
+    })();
+
+    // ===== Table view toggle: raw / z =====
+    (function tableViewToggle(){
+      const MODE_RAW = 'raw';
+      const MODE_Z   = 'z';
+
+      let mode = MODE_RAW;
+      const buttons = document.querySelectorAll('.view-mode-btn');
+      const cells   = document.querySelectorAll('.stat-cell');
+
+      const CAT_KEYS = new Set(['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']);
+
+      function toNumberOrNaN(v) {
+        if (v === null || v === undefined) return NaN;
+        const s = String(v).trim();
+        if (s === '' || s.toLowerCase() === 'nan' || s.toLowerCase() === 'none' || s.toLowerCase() === 'null') {
+          return NaN;
+        }
+        const n = parseFloat(s);
+        return Number.isFinite(n) ? n : NaN;
+      }
+
+      // Colour based on z-score in ALL modes
+      function colorFromZ(z) {
+        const zNum = toNumberOrNaN(z);
+        if (Number.isNaN(zNum)) {
+          // neutral grey when no usable z
+          return 'rgba(128,128,128,0.35)';
+        }
+
+        const zmin = -1.6;
+        const zmax =  1.7;
+        const tRaw = (zNum - zmin) / (zmax - zmin);
+        const t = Math.max(0, Math.min(1, tRaw)); // clamp 0..1
+
+        const hue = 120 * t; // 0 = red, 120 = green
+        return `hsl(${Math.round(hue)} 70% 35% / 0.90)`;
+      }
+
+      function fmtValue(cat, raw, z){
+        if (mode === MODE_RAW){
+          const v = toNumberOrNaN(raw);
+          if (Number.isNaN(v)) return 'NaN';
+
+          if (cat === 'FG%' || cat === 'FT%'){
+            // raw stored as decimal 0.4923 → show 49.2%
+            return (v * 100).toFixed(1) + '%';
+          }
+          return v.toFixed(2);
+
+        } else { // MODE_Z
+          const v = toNumberOrNaN(z);
+          if (Number.isNaN(v)) return 'NaN';
+          return v.toFixed(2);
+        }
+      }
+
+      function updateTotalsPerRow() {
+        // For each table, walk each player row and compute their total (only in Z mode)
+        document.querySelectorAll('.table-wrapper table.data-table').forEach(table => {
+          const tbody = table.tBodies[0];
+          if (!tbody) return;
+
+          Array.from(tbody.rows).forEach(row => {
+            const totalCell = row.querySelector('td.stat-total');
+            if (!totalCell) return;
+
+            if (mode === MODE_RAW) {
+              // No total in raw mode
+              totalCell.textContent = '';
+              return;
+            }
+
+            let sum = 0;
+            let hasAny = false;
+
+            row.querySelectorAll('.stat-cell').forEach(cell => {
+              const cat = cell.dataset.cat;
+              if (!cat || !CAT_KEYS.has(cat)) return;
+
+              const v = toNumberOrNaN(cell.dataset.z);
+              if (Number.isNaN(v)) return;
+              sum += v;
+              hasAny = true;
+            });
+
+            if (!hasAny) {
+              totalCell.textContent = 'NaN';
+            } else {
+              totalCell.textContent = sum.toFixed(2);
+            }
+          });
+        });
+      }
+
+      function applyMode(){
+        buttons.forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+
+        cells.forEach(cell => {
+          const cat = cell.dataset.cat;
+          const raw = cell.dataset.raw;
+          const z   = cell.dataset.z;
+
+          // Text depends on current mode
+          cell.textContent = fmtValue(cat, raw, z);
+
+          // Colour always depends on z-score, regardless of mode
+          cell.style.backgroundColor = colorFromZ(z);
+        });
+
+        updateTotalsPerRow();
+      }
+
+      buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          mode = btn.dataset.mode || MODE_RAW;
+          applyMode();
+        });
+      });
+
+      applyMode(); // initial
     })();
   </script>
 {% endblock body_js %}

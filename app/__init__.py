@@ -1,18 +1,25 @@
+# app/__init__.py
 from flask import Flask
-from .config import Config
 from dotenv import load_dotenv
+import os
+
+# import the specific config classes you actually use
+from .config import Production, Development  # <-- add this import
 
 def create_app():
-    # Load .env in all environments (safe if vars already set)
     load_dotenv()
 
-    # Tell Flask to use the top-level folders you already have
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
-    app.config.from_object(Config)
+
+    env = os.getenv("APP_ENV", "development").lower()
+    if env == "production":
+        app.config.from_object(Production)
+    else:
+        app.config.from_object(Development)
 
     # ---- Register blueprints ----
     from .blueprints.main.routes import bp as main_bp
-    app.register_blueprint(main_bp)  # no prefix (home, nav)
+    app.register_blueprint(main_bp)
 
     from .blueprints.players.routes import bp as players_bp
     app.register_blueprint(players_bp, url_prefix="/players")
@@ -22,13 +29,12 @@ def create_app():
 
     from .blueprints.overview.routes import bp as overview_bp
     app.register_blueprint(overview_bp, url_prefix="/overview")
-    
+
     from .blueprints.trades.routes import bp as trades_bp
     app.register_blueprint(trades_bp, url_prefix="/trades")
 
     from .blueprints.streaming.routes import bp as streaming_bp
     app.register_blueprint(streaming_bp, url_prefix="/streaming")
 
-
-
+    print(f"[boot] APP_ENV={env} DEBUG={app.debug} TESTING={app.testing}")
     return app

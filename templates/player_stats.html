@@ -16,13 +16,16 @@
         <div class="controls-grid">
           <div>
             <label for="player_name">Select Player</label>
-            <select id="player_name" name="player_name">
-              {% for player in players %}
-              <option value="{{ player['full_name'] }}" {% if player['full_name'] == selected_player %}selected{% endif %}>
-                {{ player['full_name'] }}
-              </option>
-              {% endfor %}
-            </select>
+            <div class="player-typeahead-wrap">
+              <input
+                id="player_name"
+                name="player_name"
+                type="text"
+                value="{{ selected_player }}"
+                autocomplete="off"
+              />
+              <div id="player-dropdown" class="player-dropdown" style="display:none;"></div>
+            </div>
           </div>
 
           <div>
@@ -69,14 +72,18 @@
   const apiUrl = "{{ url_for('players.api_player_stats') }}";
 
   d3.json(`${apiUrl}?${params.toString()}`, { cache: "no-store" })
-      .then(function (data) {
+    .then(function (data) {
       if (!data || data.length === 0) {
         d3.select("#chart").append("p").text("No data available for this selection.");
         return;
       }
 
-      const getVal = d => (d.Centered_Avg_Value !== undefined ? +d.Centered_Avg_Value : +d.Centered_Avg_Stat);
-      const statLabel = (data[0] && (data[0].STAT || "{{ selected_stat }}")) || "{{ selected_stat }}";
+      const getVal = d =>
+        (d.Centered_Avg_Value !== undefined ? +d.Centered_Avg_Value : +d.Centered_Avg_Stat);
+
+      const statLabel =
+        (data[0] && (data[0].STAT || "{{ selected_stat }}")) || "{{ selected_stat }}";
+
       d3.select("#legend-stat").text(statLabel);
 
       const margin = { top: 90, right: 50, bottom: 80, left: 90 },
@@ -95,69 +102,188 @@
 
       const vals = data.map(getVal).filter(v => Number.isFinite(v));
       let minV = d3.min(vals), maxV = d3.max(vals);
-      if (minV === maxV) { const pad = (Math.abs(maxV) || 1) * 0.1; minV -= pad; maxV += pad; }
+      if (minV === maxV) {
+        const pad = (Math.abs(maxV) || 1) * 0.1;
+        minV -= pad;
+        maxV += pad;
+      }
 
       const labelUpper = statLabel.toUpperCase();
-      const isZ = labelUpper.startsWith('Z_') || labelUpper === 'AVG_Z';
-      const isPctStat = !isZ && (/^(FG_PCT|FT_PCT|FG3_PCT)$/.test(labelUpper) || (maxV <= 1.2 && minV >= -0.1));
+      const isZ = labelUpper.startsWith("Z_") || labelUpper === "AVG_Z";
+      const isPctStat =
+        !isZ && (/^(FG_PCT|FT_PCT|FG3_PCT)$/.test(labelUpper) || (maxV <= 1.2 && minV >= -0.1));
 
       let yDomain;
       if (isPctStat) {
-        const pad = 0.03; yDomain = [Math.max(0, minV - pad), Math.min(1, maxV + pad)];
+        const pad = 0.03;
+        yDomain = [Math.max(0, minV - pad), Math.min(1, maxV + pad)];
       } else {
-        const spread = Math.max(1e-6, maxV - minV); const pad = spread * 0.1;
-        yDomain = [minV - pad, maxV + pad]; if (minV >= 0) yDomain[0] = 0;
+        const spread = Math.max(1e-6, maxV - minV);
+        const pad = spread * 0.1;
+        yDomain = [minV - pad, maxV + pad];
+        if (minV >= 0) yDomain[0] = 0;
       }
 
-      const y = d3.scaleLinear().domain(yDomain).nice().range([height, 0]);
+      const y = d3.scaleLinear()
+        .domain(yDomain)
+        .nice()
+        .range([height, 0]);
 
+      // X axis
       const xAxisG = svg.append("g")
         .attr("class", "axis axis--x")
         .attr("transform", "translate(0," + height + ")")
         .call(d3.axisBottom(x).ticks(12));
+
       xAxisG.selectAll("text").style("font-size", "24px");
       xAxisG.append("text")
-        .attr("x", width / 2).attr("y", 56).attr("fill", "currentColor")
-        .style("font-size", "20px").attr("text-anchor", "middle")
+        .attr("x", width / 2)
+        .attr("y", 56)
+        .attr("fill", "currentColor")
+        .style("font-size", "20px")
+        .attr("text-anchor", "middle")
         .text("Game Number");
 
-      const yAxisG = svg.append("g").attr("class", "axis axis--y").call(d3.axisLeft(y).ticks(12));
+      // Y axis (numeric ticks only)
+      const yAxisG = svg.append("g").attr("class", "axis axis--y");
+      const yAxis = d3.axisLeft(y).ticks(12);
+
+      yAxisG.call(yAxis);
       yAxisG.selectAll("text").style("font-size", "24px");
       yAxisG.append("text")
         .attr("transform", "rotate(-90)")
-        .attr("x", -height / 2).attr("y", -68).attr("fill", "currentColor")
-        .style("font-size", "20px").attr("text-anchor", "middle")
+        .attr("x", -height / 2)
+        .attr("y", -68)
+        .attr("fill", "currentColor")
+        .style("font-size", "20px")
+        .attr("text-anchor", "middle")
         .text(`Average ${statLabel}`);
 
-      const line = d3.line().x(d => x(+d.Game_Number)).y(d => y(getVal(d)));
+      // Threshold dashes + labels (AVG_Z only; skip if off-chart)
+      if (labelUpper === "AVG_Z") {
+        const thresholds = [
+          { value:  0.40,  label: "Top 10"  },
+          { value:  0.10,  label: "Top 50"  },
+          { value: -0.13,  label: "Top 100" },
+          { value: -0.31,  label: "Top 150" }
+        ];
 
-      svg.append("path").datum(data)
-        .attr("fill", "none").attr("stroke", "steelblue").attr("stroke-width", 2.2)
-        .attr("vector-effect", "non-scaling-stroke").attr("d", line);
+        const threshGroup = svg.append("g").attr("class", "z-threshold-markers");
 
-      const seasonKey = ("SEASON" in data[0]) ? "SEASON" : (("SEASON_ID" in data[0]) ? "SEASON_ID" : null);
+        thresholds.forEach(th => {
+          const yVal = y(th.value);
+
+          // If the mapped position is outside the drawable area, skip it
+          if (yVal < 0 || yVal > height) {
+            return;
+          }
+
+          // Left-side dash (just inside plot area)
+          threshGroup.append("line")
+            .attr("x1", 0)
+            .attr("x2", 10)
+            .attr("y1", yVal)
+            .attr("y2", yVal)
+            .attr("stroke", "#ff4d4d")
+            .attr("stroke-width", 1.8)
+            .attr("vector-effect", "non-scaling-stroke");
+
+          // Left-side label
+          threshGroup.append("text")
+            .attr("x", 14)
+            .attr("y", yVal + 4)
+            .style("font-size", "16px")
+            .style("fill", "#ff4d4d")
+            .attr("text-anchor", "start")
+            .text(th.label);
+
+          // Right-side dash (just inside right edge so no clipping)
+          const rightDashStart = width - 10;
+          const rightDashEnd   = width;
+
+          threshGroup.append("line")
+            .attr("x1", rightDashStart)
+            .attr("x2", rightDashEnd)
+            .attr("y1", yVal)
+            .attr("y2", yVal)
+            .attr("stroke", "#ff4d4d")
+            .attr("stroke-width", 1.8)
+            .attr("vector-effect", "non-scaling-stroke");
+
+          // Right-side label (inside the chart area, aligned to the right)
+          threshGroup.append("text")
+            .attr("x", rightDashStart - 6)
+            .attr("y", yVal + 4)
+            .style("font-size", "16px")
+            .style("fill", "#ff4d4d")
+            .attr("text-anchor", "end")
+            .text(th.label);
+        });
+      }
+
+      const line = d3.line()
+        .x(d => x(+d.Game_Number))
+        .y(d => y(getVal(d)));
+
+      svg.append("path")
+        .datum(data)
+        .attr("fill", "none")
+        .attr("stroke", "steelblue")
+        .attr("stroke-width", 2.2)
+        .attr("vector-effect", "non-scaling-stroke")
+        .attr("d", line);
+
+      // Season boundaries
+      const seasonKey = ("SEASON" in data[0])
+        ? "SEASON"
+        : (("SEASON_ID" in data[0]) ? "SEASON_ID" : null);
+
       if (seasonKey) {
-        let prevSeason = String(data[0][seasonKey]); const boundaries = [];
+        let prevSeason = String(data[0][seasonKey]);
+        const boundaries = [];
         for (let i = 1; i < data.length; i++) {
           const s = String(data[i][seasonKey]);
           if (s !== prevSeason) {
             const label =
-              ("SEASON" in data[i]) ? String(data[i].SEASON) :
-              (String(data[i].SEASON_ID).slice(-4) + "-" + String((+String(data[i].SEASON_ID).slice(-4) + 1) % 100).padStart(2, "0"));
-            boundaries.push({ g: +data[i].Game_Number, label }); prevSeason = s;
+              ("SEASON" in data[i])
+                ? String(data[i].SEASON)
+                : (String(data[i].SEASON_ID).slice(-4) + "-" +
+                   String((+String(data[i].SEASON_ID).slice(-4) + 1) % 100).padStart(2, "0"));
+            boundaries.push({ g: +data[i].Game_Number, label });
+            prevSeason = s;
           }
         }
+
         const seasonG = svg.append("g").attr("class", "season-lines");
-        seasonG.selectAll("line").data(boundaries).enter().append("line")
-          .attr("x1", d => x(d.g)).attr("x2", d => x(d.g)).attr("y1", 0).attr("y2", height)
-          .attr("stroke", "#1bb01b").attr("stroke-width", 1.6).attr("vector-effect", "non-scaling-stroke").attr("opacity", 0.9);
-        seasonG.selectAll("text").data(boundaries).enter().append("text")
-          .attr("x", d => x(d.g)).attr("y", -16).attr("text-anchor", "middle")
-          .style("font-size", "16px").text(d => d.label);
+        seasonG.selectAll("line")
+          .data(boundaries)
+          .enter()
+          .append("line")
+          .attr("x1", d => x(d.g))
+          .attr("x2", d => x(d.g))
+          .attr("y1", 0)
+          .attr("y2", height)
+          .attr("stroke", "#1bb01b")
+          .attr("stroke-width", 1.6)
+          .attr("vector-effect", "non-scaling-stroke")
+          .attr("opacity", 0.9);
+
+        seasonG.selectAll("text")
+          .data(boundaries)
+          .enter()
+          .append("text")
+          .attr("x", d => x(d.g))
+          .attr("y", -16)
+          .attr("text-anchor", "middle")
+          .style("font-size", "16px")
+          .text(d => d.label);
       }
 
-      const teamTicks = []; let lastTeam = null;
-      data.forEach((d) => {
+      // Team change ticks
+      const teamTicks = [];
+      let lastTeam = null;
+
+      data.forEach(d => {
         const currentTeam = (d.MATCHUP || "").split(" ")[0];
         if (lastTeam && currentTeam && lastTeam !== currentTeam) {
           teamTicks.push({ g: +d.Game_Number, y: getVal(d) });
@@ -165,15 +291,171 @@
         if (currentTeam) lastTeam = currentTeam;
       });
 
-      svg.append("g").attr("class", "team-ticks")
-        .selectAll("line").data(teamTicks).enter().append("line")
-        .attr("x1", d => x(d.g)).attr("x2", d => x(d.g))
-        .attr("y1", d => y(d.y) - 8).attr("y2", d => y(d.y) + 8)
-        .attr("stroke", "red").attr("stroke-width", 1.6)
+      svg.append("g")
+        .attr("class", "team-ticks")
+        .selectAll("line")
+        .data(teamTicks)
+        .enter()
+        .append("line")
+        .attr("x1", d => x(d.g))
+        .attr("x2", d => x(d.g))
+        .attr("y1", d => y(d.y) - 8)
+        .attr("y2", d => y(d.y) + 8)
+        .attr("stroke", "red")
+        .attr("stroke-width", 1.6)
         .attr("vector-effect", "non-scaling-stroke");
     })
     .catch(function () {
       d3.select("#chart").append("p").text("Failed to load data.");
     });
+  // ===========================
+  // Player typeahead selector
+  // ===========================
+  (function () {
+    const input = document.getElementById("player_name");
+    const dropdown = document.getElementById("player-dropdown");
+    if (!input || !dropdown) return;
+
+    const players = {{ players | tojson }};
+    let activeIndex = -1;
+
+    function submitForm() {
+      const form = input.form;
+      if (!form) return;
+      if (form.requestSubmit) {
+        form.requestSubmit();
+      } else {
+        form.submit();
+      }
+    }
+
+    function clearActive(options) {
+      options.forEach(opt => opt.classList.remove("active"));
+    }
+
+    function setActive(index) {
+      const options = dropdown.querySelectorAll(".player-option");
+
+      if (!options.length) {
+        activeIndex = -1;
+        return;
+      }
+
+      // clamp index to valid range
+      if (index < 0) index = 0;
+      if (index >= options.length) index = options.length - 1;
+
+      clearActive(options);
+      options[index].classList.add("active");
+      activeIndex = index;
+
+      // keep active option in view
+      const el = options[index];
+      const parent = dropdown;
+      const elTop = el.offsetTop;
+      const elBottom = elTop + el.offsetHeight;
+      const viewTop = parent.scrollTop;
+      const viewBottom = viewTop + parent.clientHeight;
+
+      if (elTop < viewTop) {
+        parent.scrollTop = elTop;
+      } else if (elBottom > viewBottom) {
+        parent.scrollTop = elBottom - parent.clientHeight;
+      }
+    }
+
+    function renderOptions(query) {
+      const q = query.trim().toLowerCase();
+      dropdown.innerHTML = "";
+      activeIndex = -1;
+
+      if (!q) {
+        dropdown.style.display = "none";
+        return;
+      }
+
+      const matches = players
+        .filter(p => (p.full_name || "").toLowerCase().includes(q))
+        .slice(0, 40);
+
+      if (!matches.length) {
+        dropdown.style.display = "none";
+        return;
+      }
+
+      matches.forEach(p => {
+        const opt = document.createElement("div");
+        opt.className = "player-option";
+        opt.textContent = p.full_name;
+        opt.addEventListener("mousedown", function (e) {
+          e.preventDefault(); // keep focus on input
+          input.value = p.full_name;
+          dropdown.style.display = "none";
+          submitForm();       // update immediately on click
+        });
+        dropdown.appendChild(opt);
+      });
+
+      dropdown.style.display = "block";
+      // first option highlighted by default
+      setActive(0);
+    }
+
+    input.addEventListener("input", function () {
+      renderOptions(input.value);
+    });
+
+    input.addEventListener("focus", function () {
+      if (input.value) renderOptions(input.value);
+    });
+
+    input.addEventListener("keydown", function (e) {
+      const options = dropdown.querySelectorAll(".player-option");
+      const hasOptions = options.length > 0;
+
+      if (e.key === "ArrowDown" && hasOptions) {
+        e.preventDefault();
+        if (activeIndex === -1) {
+          setActive(0);
+        } else {
+          setActive(activeIndex + 1);
+        }
+      } else if (e.key === "ArrowUp" && hasOptions) {
+        e.preventDefault();
+        if (activeIndex === -1) {
+          setActive(0);
+        } else {
+          setActive(activeIndex - 1);
+        }
+      } else if (e.key === "Enter") {
+        if (!hasOptions) {
+          // no dropdown options; let Enter behave normally
+          return;
+        }
+        if (activeIndex === -1) {
+          // nothing is highlighted → do nothing special
+          return;
+        }
+        e.preventDefault();
+
+        const chosen = options[activeIndex];
+        if (!chosen) return;
+
+        input.value = chosen.textContent;
+        dropdown.style.display = "none";
+        submitForm();         // update immediately on Enter
+      } else if (e.key === "Escape") {
+        dropdown.style.display = "none";
+        activeIndex = -1;
+      }
+    });
+
+    document.addEventListener("click", function (e) {
+      if (e.target !== input && !dropdown.contains(e.target)) {
+        dropdown.style.display = "none";
+        activeIndex = -1;
+      }
+    });
+  })();
 </script>
 {% endblock body_js %}

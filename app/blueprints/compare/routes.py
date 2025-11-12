@@ -4,17 +4,19 @@ from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, 
 from datetime import timedelta
 import time
 import json
+
 from ...services.compare_presenter import build_snapshot_rows, build_odds_rows
+from ...services.espn_service import matchup_dates
+from ...services.z_score_calculations import raw_to_z_scores
+from ...services.percent_of_win_calculations import raw_to_percent_of_win
 
 # use your existing compare modules in project root
 import compare_page.compare_page_data as cpd
 import compare_page.team_stats_data as tsd
 import compare_page.team_cat_averages as tca
 
-from ...services.league_session import _parse_from_req, _store
-from ...services.espn_service import matchup_dates
-
 bp = Blueprint("compare", __name__)
+
 
 @bp.get("/select_teams_page")
 def select_teams_page():
@@ -80,18 +82,29 @@ def compare_page():
     except (ValueError, TypeError):
         flash("Invalid input. Please ensure all stats are numbers.")
         # preserve form
-        info_list = [request.form.get('league_id'), request.form.get('year'), request.form.get('espn_s2'), request.form.get('swid')]
+        info_list = [
+            request.form.get('league_id'),
+            request.form.get('year'),
+            request.form.get('espn_s2'),
+            request.form.get('swid'),
+        ]
         info_string = ','.join(filter(None, info_list))
         session['form_data'] = request.form.to_dict()
-        return redirect(url_for('compare.select_teams_page', info=info_string, scoring_type=request.form.get('scoring_type')))
+        return redirect(url_for(
+            'compare.select_teams_page',
+            info=info_string,
+            scoring_type=request.form.get('scoring_type')
+        ))
 
     raw_window = (request.form.get('stat_window') or 'projected').strip().lower().replace('-', '_')
     VALID_WINDOWS = {'projected', 'total', 'last_30', 'last_15', 'last_7'}
     stat_window = raw_window if raw_window in VALID_WINDOWS else 'projected'
 
-    scoring_rules = {'fgm': fgm, 'fga': fga, 'ftm': ftm, 'fta': fta,
-                     'threeptm': threeptm, 'reb': reb, 'ast': ast, 'stl': stl,
-                     'blk': blk, 'turno': turno, 'pts': pts}
+    scoring_rules = {
+        'fgm': fgm, 'fga': fga, 'ftm': ftm, 'fta': fta,
+        'threeptm': threeptm, 'reb': reb, 'ast': ast, 'stl': stl,
+        'blk': blk, 'turno': turno, 'pts': pts
+    }
 
     my_team_name        = request.form.get('myTeam')
     opponents_team_name = request.form.get('opponentsTeam')
@@ -102,16 +115,25 @@ def compare_page():
     scoring_type        = request.form.get('scoring_type')
     week_num            = int(request.form.get('week_num'))
 
-    _store({'league_id': league_id, 'year': year, 'espn_s2': espn_s2, 'swid': swid})
+    session['league_details'] = {
+        'league_id': league_id,
+        'year': int(year),
+        'espn_s2': espn_s2,
+        'swid': swid,
+    }
 
     try:
-        league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid) if espn_s2 and swid else League(league_id=league_id, year=year)
+        league = (
+            League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
+            if espn_s2 and swid
+            else League(league_id=league_id, year=year)
+        )
         matchup_data_dict = matchup_dates(league, year)
         selected_week_key = f'matchup_{week_num}'
         week_data = {
             "selected_week": week_num,
             "current_week": league.currentMatchupPeriod,
-            "matchup_data": matchup_data_dict.get(selected_week_key, {})
+            "matchup_data": matchup_data_dict.get(selected_week_key, {}),
         }
     except (ESPNUnknownError, ESPNInvalidLeague, ESPNAccessDenied) as e:
         error_message = "Error accessing ESPN league. Please check your league ID and credentials."
@@ -122,33 +144,51 @@ def compare_page():
         return redirect(url_for('main.entry_page', error_message=str(e)))
 
     # locate teams
-    team1_index = next((i for i,t in enumerate(league.teams) if t.team_name == my_team_name), -1)
-    team2_index = next((i for i,t in enumerate(league.teams) if t.team_name == opponents_team_name), -1)
-    if team1_index == -1: return redirect(url_for('main.entry_page', error_message="Team 1 not found."))
-    if team2_index == -1: return redirect(url_for('main.entry_page', error_message="Team 2 not found."))
+    team1_index = next((i for i, t in enumerate(league.teams) if t.team_name == my_team_name), -1)
+    team2_index = next((i for i, t in enumerate(league.teams) if t.team_name == opponents_team_name), -1)
+    if team1_index == -1:
+        return redirect(url_for('main.entry_page', error_message="Team 1 not found."))
+    if team2_index == -1:
+        return redirect(url_for('main.entry_page', error_message="Team 2 not found."))
 
-    cols = ['player_name','min','fgm','fga','fg%','ftm','fta','ft%','threeptm','reb','ast','stl','blk','turno','pts','inj','fpts','games']
+    session['team1_index'] = team1_index
+    session['team2_index'] = team2_index
 
+    cols = [
+        'player_name', 'min', 'fgm', 'fga', 'fg%', 'ftm', 'fta', 'ft%',
+        'threeptm', 'reb', 'ast', 'stl', 'blk', 'turno', 'pts', 'inj',
+        'fpts', 'games',
+    ]
+
+    # ---------- POINTS SCORING ----------
     if scoring_type == "H2H_POINTS":
         t1 = cpd.get_team_player_data(league, team1_index, cols, year, scoring_rules, week_data, stat_window=stat_window)
         t2 = cpd.get_team_player_data(league, team2_index, cols, year, scoring_rules, week_data, stat_window=stat_window)
 
-        team_cols = ['team_avg_fpts','team_expected_points','team_chance_of_winning','team_name','team_current_points']
-        d1, d2 = tsd.get_team_stats(league, team1_index, t1, team2_index, t2, team_cols, scoring_rules, year, week_data)
+        team_cols = ['team_avg_fpts', 'team_expected_points', 'team_chance_of_winning',
+                     'team_name', 'team_current_points']
+        d1, d2 = tsd.get_team_stats(
+            league, team1_index, t1,
+            team2_index, t2,
+            team_cols, scoring_rules, year, week_data
+        )
 
         combined_df = cpd.get_compare_graph(league, team1_index, t1, team2_index, t2, year, week_data)
         combined_json = combined_df.to_json(orient='records')
 
-        return render_template('compare_page.html',
-                               data_team_players_1=t1.to_dict('records'),
-                               data_team_players_2=t2.to_dict('records'),
-                               data_team_stats_1=d1.to_dict('records'),
-                               data_team_stats_2=d2.to_dict('records'),
-                               combined_json=combined_json,
-                               scoring_type="H2H_POINTS",
-                               week_data=week_data,
-                               stat_window=stat_window)
+        return render_template(
+            'compare_page.html',
+            data_team_players_1=t1.to_dict('records'),
+            data_team_players_2=t2.to_dict('records'),
+            data_team_stats_1=d1.to_dict('records'),
+            data_team_stats_2=d2.to_dict('records'),
+            combined_json=combined_json,
+            scoring_type="H2H_POINTS",
+            week_data=week_data,
+            stat_window=stat_window,
+        )
 
+    # ---------- CATEGORY SCORING ----------
     elif scoring_type in ["H2H_CATEGORY", "H2H_MOST_CATEGORIES"]:
         t1 = cpd.get_team_player_data(league, team1_index, cols, year, scoring_rules, week_data, stat_window=stat_window)
         t2 = cpd.get_team_player_data(league, team2_index, cols, year, scoring_rules, week_data, stat_window=stat_window)
@@ -175,28 +215,154 @@ def compare_page():
             team1_current_stats=cur1,
             team2_current_stats=cur2,
             data_team_players_1=t1.to_dict('records'),
-            data_team_players_2=t2.to_dict('records'),
-            debug=True  # or set COMPARE_DEBUG=1 in docker-compose to keep logs on
+            data_team_players_2=t2.to_dict('records')
         )
 
+        # ---------- per-player z-scores ONLY (no % of win) ----------
+        import math
+
+        def _to_float_or_nan(v):
+            """
+            Convert to float, but keep NaN-like values as NaN
+            instead of silently turning them into 0.0.
+            """
+            if v is None:
+                return float("nan")
+            try:
+                s = str(v).strip().lower()
+                if s == "" or s in ("nan", "none", "null"):
+                    return float("nan")
+                return float(v)
+            except (TypeError, ValueError):
+                return float("nan")
+
+        def _attach_metrics(df):
+            """
+            Attach to each row dict:
+              - per-player z-scores for each cat (FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS)
+              - clean FG% / FT% decimals for display
+            Returns: list of row dicts.
+            """
+            rows = df.to_dict('records')
+
+            for r in rows:
+                # Raw numeric fields as floats or NaN
+                fgm  = _to_float_or_nan(r.get("fgm"))
+                fga  = _to_float_or_nan(r.get("fga"))
+                ftm  = _to_float_or_nan(r.get("ftm"))
+                fta  = _to_float_or_nan(r.get("fta"))
+                pts  = _to_float_or_nan(r.get("pts"))
+                fg3m = _to_float_or_nan(r.get("threeptm"))
+                reb  = _to_float_or_nan(r.get("reb"))
+                ast  = _to_float_or_nan(r.get("ast"))
+                stl  = _to_float_or_nan(r.get("stl"))
+                blk  = _to_float_or_nan(r.get("blk"))
+                tov  = _to_float_or_nan(r.get("turno"))
+
+                # ----- FG% / FT% as proper decimals (0.48, 0.82, etc.) -----
+                fg_pct_raw = _to_float_or_nan(r.get("fg%"))
+                ft_pct_raw = _to_float_or_nan(r.get("ft%"))
+
+                # If ESPN/your pipeline gives 48.5 instead of 0.485, normalize
+                if not math.isnan(fg_pct_raw) and fg_pct_raw > 1.5:
+                    fg_pct = fg_pct_raw / 100.0
+                else:
+                    fg_pct = fg_pct_raw
+
+                if not math.isnan(ft_pct_raw) and ft_pct_raw > 1.5:
+                    ft_pct = ft_pct_raw / 100.0
+                else:
+                    ft_pct = ft_pct_raw
+
+                # Fallback: derive from makes/attempts if percentage missing
+                if math.isnan(fg_pct) and not math.isnan(fgm) and not math.isnan(fga) and fga > 0:
+                    fg_pct = fgm / max(fga, 1e-9)
+                if math.isnan(ft_pct) and not math.isnan(ftm) and not math.isnan(fta) and fta > 0:
+                    ft_pct = ftm / max(fta, 1e-9)
+
+                # ---- Z-scores (9-cat) ----
+                avg_raw_for_z = {
+                    "PTS":  pts,
+                    "FG3M": fg3m,
+                    "REB":  reb,
+                    "AST":  ast,
+                    "STL":  stl,
+                    "BLK":  blk,
+                    "TOV":  tov,
+                    "FGM":  fgm,
+                    "FGA":  fga,
+                    "FTM":  ftm,
+                    "FTA":  fta,
+                }
+                z = raw_to_z_scores(avg_raw_for_z) or {}
+
+                # Keep NaN as NaN; default to NaN if missing
+                r["z_pts"]      = z.get("Z_PTS",    float("nan"))
+                r["z_threeptm"] = z.get("Z_FG3M",   float("nan"))
+                r["z_reb"]      = z.get("Z_REB",    float("nan"))
+                r["z_ast"]      = z.get("Z_AST",    float("nan"))
+                r["z_stl"]      = z.get("Z_STL",    float("nan"))
+                r["z_blk"]      = z.get("Z_BLK",    float("nan"))
+                r["z_turno"]    = z.get("Z_TOV",    float("nan"))
+                r["z_fg_pct"]   = z.get("Z_FG_PCT", float("nan"))
+                r["z_ft_pct"]   = z.get("Z_FT_PCT", float("nan"))
+
+                # clean FG% / FT% decimals for display (these may be NaN)
+                r["fg_pct"] = fg_pct
+                r["ft_pct"] = ft_pct
+
+            return rows
+
+        data_team_players_1 = _attach_metrics(t1)
+        data_team_players_2 = _attach_metrics(t2)
+
+        # ===== total games (remaining / total) per team =====
+        def _sum_games(df):
+            rem = 0
+            tot = 0
+            if 'games_str' in df.columns:
+                for s in df['games_str'].fillna(''):
+                    if isinstance(s, str) and '/' in s:
+                        left, right = s.split('/', 1)
+                        try:
+                            rem += int(left)
+                            tot += int(right)
+                        except Exception:
+                            continue
+            if (rem == 0 and tot == 0) and ('games' in df.columns):
+                val = int(df['games'].fillna(0).sum())
+                rem = val
+                tot = val
+            return rem, tot
+
+        team1_games_remaining, team1_games_total = _sum_games(t1)
+        team2_games_remaining, team2_games_total = _sum_games(t2)
 
         return render_template(
             "compare_page_cat.html",
-            data_team_players_1=t1.to_dict('records'),
-            data_team_players_2=t2.to_dict('records'),
+            data_team_players_1=data_team_players_1,
+            data_team_players_2=data_team_players_2,
             data_team_stats_1=d1.to_dict('records'),
             data_team_stats_2=d2.to_dict('records'),
             team1_win_pct_data=win1.to_dict('records'),
             team2_win_pct_data=win2.to_dict('records'),
-            team1_current_stats=cur1, team2_current_stats=cur2,
+            team1_current_stats=cur1,
+            team2_current_stats=cur2,
             combined_jsons=combined_dicts,
-            scoring_type=scoring_type, week_data=week_data,
+            scoring_type=scoring_type,
+            week_data=week_data,
             stat_window=stat_window,
-            expected_pct_map=expected_pct_map,  # keep if you want to inspect in UI
-            snapshot_rows=snapshot_rows,        # NEW (if you render snapshot server-side)
-            odds_rows=odds_rows                 # NEW ← the important one
+            expected_pct_map=expected_pct_map,
+            snapshot_rows=snapshot_rows,
+            odds_rows=odds_rows,
+            team1_games_remaining=team1_games_remaining,
+            team1_games_total=team1_games_total,
+            team2_games_remaining=team2_games_remaining,
+            team2_games_total=team2_games_total,
+            league_id=league_id,
+            year=year,
+            espn_s2=espn_s2,
+            swid=swid,
         )
-
-
 
     return redirect(url_for('main.entry_page', error_message=f"Unsupported scoring type: {scoring_type}"))

@@ -52,3 +52,55 @@
 .legend .swatch.blue  { background: steelblue; }
 .legend .swatch.green { background: #1bb01b; height: 14px; width: 3px; }
 .legend .swatch.red   { background: red; height: 14px; width: 3px; }
+
+/* ===========================
+   Player typeahead selector
+   =========================== */
+.player-typeahead-wrap {
+  position: relative;
+}
+
+.player-typeahead-wrap input[type="text"] {
+  /* uses base.css input styles, but we can tweak if needed */
+  background: #0b0e14;
+  color: var(--text);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.player-typeahead-wrap input[type="text"]:focus {
+  outline: none;
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+.player-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  z-index: 20;
+}
+
+.player-option {
+  padding: 8px 10px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text);
+  background: var(--card);
+}
+
+.player-option:hover {
+  background: rgba(255,255,255,.06);
+}
+
+.player-option.active {
+  background: rgba(70,130,180,0.35);
+}
