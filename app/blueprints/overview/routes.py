@@ -37,10 +37,12 @@ def punting_overview():
 
 
     league_details = session.get('league_details') or {}
+    if not league_details.get('league_id') or not league_details.get('year'):
+        return redirect(url_for('main.entry_page', error_message="Enter your league first."))
+
     league_id = league_details.get('league_id')
     year      = league_details.get('year')
 
-    
     league = League(
         league_id=league_details['league_id'],
         year=league_details['year'],
