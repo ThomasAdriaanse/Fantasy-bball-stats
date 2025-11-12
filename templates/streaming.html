@@ -18,7 +18,7 @@
     color:var(--muted);
   }
 
-  /* Info button (white and visible) */
+  /* Info button */
   .info-btn {
     display:inline-flex; align-items:center; justify-content:center;
     width:26px; height:26px;
@@ -99,7 +99,7 @@
   .muted-small { color: var(--muted); font-size: 0.9em; }
   .num { text-align:right; }
 
-  /* Table styling (integrates with base.css) */
+  /* Table styling */
   thead .weights-row th {
     font-weight:600;
     background:rgba(255,255,255,.03);
@@ -150,7 +150,7 @@
   <div class="control-bar">
     <div class="controls-left">
       <div class="segmented" role="tablist" aria-label="Display mode">
-        <button id="viewPow" class="active" data-mode="pow" role="tab" aria-selected="true">% of win</button>
+        <button id="viewZ" class="active" data-mode="z" role="tab" aria-selected="true">Z-scores</button>
         <button id="viewRaw" data-mode="raw" role="tab" aria-selected="false">Raw per-game</button>
       </div>
     </div>
@@ -161,7 +161,7 @@
         <span class="track"><span class="thumb"></span></span>
         <span class="muted-small">Apply weights</span>
       </label>
-      <span id="viewLabel" class="muted-small">View: % of weekly win (1.00 = 1%) • Weights: ON</span>
+      <span id="viewLabel" class="muted-small">View: z-scores • Weights: ON</span>
     </div>
   </div>
 
@@ -185,7 +185,7 @@
         <th class="num">BLK</th>
         <th class="num">PTS</th>
         <th class="num">TO</th>
-        <th class="num">Score</th>
+        <th class="num">Score (Σ z)</th>
       </tr>
 
       <!-- Weights header -->
@@ -209,15 +209,15 @@
         <td class="muted">{{ r.team }} · {{ r.pos }}</td>
         <td>{{ r.games_str }}</td>
 
-        {% set pow = r.avg_pow %}
+        {% set z = r.avg_z %}
         {% set raw = r.avg_raw %}
         {% for c in cats_order %}
           <td class="num">
             <span class="val"
                   data-cat="{{ c }}"
-                  data-pow="{{ '%.2f'|format(pow[c]) }}"
+                  data-z="{{ '%.2f'|format(z[c]) }}"
                   data-raw="{% if c in ['FG%','FT%'] %}{{ '%.3f'|format(raw[c]) }}{% else %}{{ '%.2f'|format(raw[c]) }}{% endif %}">
-              {{ '%.2f'|format(pow[c]) }}
+              {{ '%.2f'|format(z[c]) }}
             </span>
           </td>
         {% endfor %}
@@ -264,10 +264,10 @@
     <div class="info-card" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
       <h3 id="infoTitle">What this page does</h3>
       <p>
-        Ranks free agents by per-game impact on your weekly matchup as
-        <strong>% of an average weekly win</strong> per category (1.00 = 1%).
-        Use the toggles above to switch between % of win and raw per-game stats,
-        and apply or remove weights that emphasize categories closest to 50/50.
+        Ranks free agents by per-game <strong>z-scores</strong> across the 9 standard categories,
+        then sums those z-scores to get an overall streaming score.
+        You can toggle between z-scores and raw per-game stats, and optionally apply
+        matchup-based weights that emphasize categories closest to 50/50.
       </p>
       <div class="info-actions">
         <button id="infoClose" class="btn small">Got it</button>
@@ -284,7 +284,7 @@
     const table = document.getElementById('streamersTable');
     const weights = JSON.parse(table.getAttribute('data-weights') || '{}');
     const cats = JSON.parse(table.getAttribute('data-cats') || '[]');
-    const viewPowBtn = document.getElementById('viewPow');
+    const viewZBtn = document.getElementById('viewZ');
     const viewRawBtn = document.getElementById('viewRaw');
     const weightsSwitch = document.getElementById('weightsSwitch');
     const viewLabel = document.getElementById('viewLabel');
@@ -308,12 +308,12 @@
     }
 
     function setActiveView(mode) {
-      if (mode === 'pow') {
-        viewPowBtn.classList.add('active');
+      if (mode === 'z') {
+        viewZBtn.classList.add('active');
         viewRawBtn.classList.remove('active');
       } else {
         viewRawBtn.classList.add('active');
-        viewPowBtn.classList.remove('active');
+        viewZBtn.classList.remove('active');
       }
     }
 
@@ -325,29 +325,27 @@
           if (mode === 'raw') {
             span.textContent = span.getAttribute('data-raw') || '';
           } else {
-            const base = parseFloat(span.getAttribute('data-pow') || '0');
-            const w = parseFloat(weights[cat] ?? 0);
-            const val = weightsOn ? (base * w) : base;
-            span.textContent = (Math.round(val * 100) / 100).toFixed(2);
+            span.textContent = span.getAttribute('data-z') || '';
           }
         });
+
         const scoreEl = tr.querySelector('.score');
         const sw = tr.getAttribute('data-score-weighted') || '0';
         const su = tr.getAttribute('data-score-unweighted') || '0';
-        scoreEl.textContent = weightsOn ? sw : su;
+        scoreEl.textContent = (weightsOn ? sw : su);
       });
 
       setActiveView(mode);
-      const viewTxt = (mode === 'pow') ? '% of weekly win (1.00 = 1%)' : 'raw per-game values';
+      const viewTxt = (mode === 'z') ? 'z-scores' : 'raw per-game values';
       const wTxt = weightsOn ? 'ON' : 'OFF';
       viewLabel.textContent = `View: ${viewTxt} • Weights: ${wTxt}`;
     }
 
     // Controls
-    viewPowBtn.addEventListener('click', () => render('pow', !!weightsSwitch.checked));
+    viewZBtn.addEventListener('click', () => render('z', !!weightsSwitch.checked));
     viewRawBtn.addEventListener('click', () => render('raw', !!weightsSwitch.checked));
     weightsSwitch.addEventListener('change', () => {
-      const activeMode = viewPowBtn.classList.contains('active') ? 'pow' : 'raw';
+      const activeMode = viewZBtn.classList.contains('active') ? 'z' : 'raw';
       render(activeMode, !!weightsSwitch.checked);
     });
 
@@ -360,7 +358,7 @@
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInfo(); });
 
     colorWeightsHeader(weights);
-    render('pow', true);
+    render('z', true);
   })();
 </script>
 {% endblock body_js %}

@@ -220,7 +220,6 @@
         <span style="font-size:14px; opacity:.85;">Table view:</span>
         <button type="button" class="btn-toggle view-mode-btn active" data-mode="raw">Raw stats</button>
         <button type="button" class="btn-toggle view-mode-btn" data-mode="z">Z-scores</button>
-        <button type="button" class="btn-toggle view-mode-btn" data-mode="pow">% of win</button>
       </div>
 
       <div class="table-container">
@@ -255,18 +254,16 @@
                 {# FG% #}
                 <td class="stat-cell"
                     data-cat="FG%"
-                    data-raw="{{ (row.fg_pct or 0.0) }}"
-                    data-z="{{ row.z_fg_pct }}"
-                    data-pow="{{ row.pow_fg }}">
+                    data-raw="{{ row.fg_pct }}"
+                    data-z="{{ row.z_fg_pct }}">
                   {{ (row.fg_pct or 0.0)|float|round(3) }}
                 </td>
 
                 {# FT% #}
                 <td class="stat-cell"
                     data-cat="FT%"
-                    data-raw="{{ (row.ft_pct or 0.0) }}"
-                    data-z="{{ row.z_ft_pct }}"
-                    data-pow="{{ row.pow_ft }}">
+                    data-raw="{{ row.ft_pct }}"
+                    data-z="{{ row.z_ft_pct }}">
                   {{ (row.ft_pct or 0.0)|float|round(3) }}
                 </td>
 
@@ -274,8 +271,7 @@
                 <td class="stat-cell"
                     data-cat="3PM"
                     data-raw="{{ row.threeptm }}"
-                    data-z="{{ row.z_threeptm }}"
-                    data-pow="{{ row.pow_3pm }}">
+                    data-z="{{ row.z_threeptm }}">
                   {{ row.threeptm }}
                 </td>
 
@@ -283,8 +279,7 @@
                 <td class="stat-cell"
                     data-cat="REB"
                     data-raw="{{ row.reb }}"
-                    data-z="{{ row.z_reb }}"
-                    data-pow="{{ row.pow_reb }}">
+                    data-z="{{ row.z_reb }}">
                   {{ row.reb }}
                 </td>
 
@@ -292,8 +287,7 @@
                 <td class="stat-cell"
                     data-cat="AST"
                     data-raw="{{ row.ast }}"
-                    data-z="{{ row.z_ast }}"
-                    data-pow="{{ row.pow_ast }}">
+                    data-z="{{ row.z_ast }}">
                   {{ row.ast }}
                 </td>
 
@@ -301,8 +295,7 @@
                 <td class="stat-cell"
                     data-cat="STL"
                     data-raw="{{ row.stl }}"
-                    data-z="{{ row.z_stl }}"
-                    data-pow="{{ row.pow_stl }}">
+                    data-z="{{ row.z_stl }}">
                   {{ row.stl }}
                 </td>
 
@@ -310,8 +303,7 @@
                 <td class="stat-cell"
                     data-cat="BLK"
                     data-raw="{{ row.blk }}"
-                    data-z="{{ row.z_blk }}"
-                    data-pow="{{ row.pow_blk }}">
+                    data-z="{{ row.z_blk }}">
                   {{ row.blk }}
                 </td>
 
@@ -319,8 +311,7 @@
                 <td class="stat-cell"
                     data-cat="TO"
                     data-raw="{{ row.turno }}"
-                    data-z="{{ row.z_turno }}"
-                    data-pow="{{ row.pow_to }}">
+                    data-z="{{ row.z_turno }}">
                   {{ row.turno }}
                 </td>
 
@@ -328,8 +319,7 @@
                 <td class="stat-cell"
                     data-cat="PTS"
                     data-raw="{{ row.pts }}"
-                    data-z="{{ row.z_pts }}"
-                    data-pow="{{ row.pow_pts }}">
+                    data-z="{{ row.z_pts }}">
                   {{ row.pts }}
                 </td>
 
@@ -380,18 +370,16 @@
                 {# FG% #}
                 <td class="stat-cell"
                     data-cat="FG%"
-                    data-raw="{{ (row.fg_pct or 0.0) }}"
-                    data-z="{{ row.z_fg_pct }}"
-                    data-pow="{{ row.pow_fg }}">
+                    data-raw="{{ row.fg_pct }}"
+                    data-z="{{ row.z_fg_pct }}">
                   {{ (row.fg_pct or 0.0)|float|round(3) }}
                 </td>
 
                 {# FT% #}
                 <td class="stat-cell"
                     data-cat="FT%"
-                    data-raw="{{ (row.ft_pct or 0.0) }}"
-                    data-z="{{ row.z_ft_pct }}"
-                    data-pow="{{ row.pow_ft }}">
+                    data-raw="{{ row.ft_pct }}"
+                    data-z="{{ row.z_ft_pct }}">
                   {{ (row.ft_pct or 0.0)|float|round(3) }}
                 </td>
 
@@ -399,8 +387,7 @@
                 <td class="stat-cell"
                     data-cat="3PM"
                     data-raw="{{ row.threeptm }}"
-                    data-z="{{ row.z_threeptm }}"
-                    data-pow="{{ row.pow_3pm }}">
+                    data-z="{{ row.z_threeptm }}">
                   {{ row.threeptm }}
                 </td>
 
@@ -408,8 +395,7 @@
                 <td class="stat-cell"
                     data-cat="REB"
                     data-raw="{{ row.reb }}"
-                    data-z="{{ row.z_reb }}"
-                    data-pow="{{ row.pow_reb }}">
+                    data-z="{{ row.z_reb }}">
                   {{ row.reb }}
                 </td>
 
@@ -417,8 +403,7 @@
                 <td class="stat-cell"
                     data-cat="AST"
                     data-raw="{{ row.ast }}"
-                    data-z="{{ row.z_ast }}"
-                    data-pow="{{ row.pow_ast }}">
+                    data-z="{{ row.z_ast }}">
                   {{ row.ast }}
                 </td>
 
@@ -426,8 +411,7 @@
                 <td class="stat-cell"
                     data-cat="STL"
                     data-raw="{{ row.stl }}"
-                    data-z="{{ row.z_stl }}"
-                    data-pow="{{ row.pow_stl }}">
+                    data-z="{{ row.z_stl }}">
                   {{ row.stl }}
                 </td>
 
@@ -435,8 +419,7 @@
                 <td class="stat-cell"
                     data-cat="BLK"
                     data-raw="{{ row.blk }}"
-                    data-z="{{ row.z_blk }}"
-                    data-pow="{{ row.pow_blk }}">
+                    data-z="{{ row.z_blk }}">
                   {{ row.blk }}
                 </td>
 
@@ -444,8 +427,7 @@
                 <td class="stat-cell"
                     data-cat="TO"
                     data-raw="{{ row.turno }}"
-                    data-z="{{ row.z_turno }}"
-                    data-pow="{{ row.pow_to }}">
+                    data-z="{{ row.z_turno }}">
                   {{ row.turno }}
                 </td>
 
@@ -453,8 +435,7 @@
                 <td class="stat-cell"
                     data-cat="PTS"
                     data-raw="{{ row.pts }}"
-                    data-z="{{ row.z_pts }}"
-                    data-pow="{{ row.pow_pts }}">
+                    data-z="{{ row.z_pts }}">
                   {{ row.pts }}
                 </td>
 
@@ -712,11 +693,10 @@
       });
     })();
 
-    // ===== Table view toggle: raw / z / percent-of-win =====
+    // ===== Table view toggle: raw / z =====
     (function tableViewToggle(){
       const MODE_RAW = 'raw';
       const MODE_Z   = 'z';
-      const MODE_POW = 'pow';
 
       let mode = MODE_RAW;
       const buttons = document.querySelectorAll('.view-mode-btn');
@@ -751,7 +731,7 @@
         return `hsl(${Math.round(hue)} 70% 35% / 0.90)`;
       }
 
-      function fmtValue(cat, raw, z, pow){
+      function fmtValue(cat, raw, z){
         if (mode === MODE_RAW){
           const v = toNumberOrNaN(raw);
           if (Number.isNaN(v)) return 'NaN';
@@ -762,27 +742,20 @@
           }
           return v.toFixed(2);
 
-        } else if (mode === MODE_Z){
+        } else { // MODE_Z
           const v = toNumberOrNaN(z);
           if (Number.isNaN(v)) return 'NaN';
-          return v.toFixed(2);
-
-        } else { // MODE_POW
-          const v = toNumberOrNaN(pow);
-          if (Number.isNaN(v)) return 'NaN';
-          // raw_to_percent_of_win returns "1.0" = 1% of a weekly win
           return v.toFixed(2);
         }
       }
 
       function updateTotalsPerRow() {
-        // For each table, walk each player row and compute their total
+        // For each table, walk each player row and compute their total (only in Z mode)
         document.querySelectorAll('.table-wrapper table.data-table').forEach(table => {
           const tbody = table.tBodies[0];
           if (!tbody) return;
 
           Array.from(tbody.rows).forEach(row => {
-            // Skip footer / summary-like rows if any sneak in
             const totalCell = row.querySelector('td.stat-total');
             if (!totalCell) return;
 
@@ -799,13 +772,7 @@
               const cat = cell.dataset.cat;
               if (!cat || !CAT_KEYS.has(cat)) return;
 
-              let v;
-              if (mode === MODE_Z) {
-                v = toNumberOrNaN(cell.dataset.z);
-              } else { // MODE_POW
-                v = toNumberOrNaN(cell.dataset.pow);
-              }
-
+              const v = toNumberOrNaN(cell.dataset.z);
               if (Number.isNaN(v)) return;
               sum += v;
               hasAny = true;
@@ -829,10 +796,9 @@
           const cat = cell.dataset.cat;
           const raw = cell.dataset.raw;
           const z   = cell.dataset.z;
-          const pow = cell.dataset.pow;
 
           // Text depends on current mode
-          cell.textContent = fmtValue(cat, raw, z, pow);
+          cell.textContent = fmtValue(cat, raw, z);
 
           // Colour always depends on z-score, regardless of mode
           cell.style.backgroundColor = colorFromZ(z);

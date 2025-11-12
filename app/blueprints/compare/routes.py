@@ -219,7 +219,7 @@ def compare_page():
             debug=True,
         )
 
-        # ---------- NEW: per-player z-scores + percent-of-win ----------
+        # ---------- per-player z-scores ONLY (no % of win) ----------
         import math
 
         def _to_float_or_nan(v):
@@ -241,7 +241,6 @@ def compare_page():
             """
             Attach to each row dict:
               - per-player z-scores for each cat (FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS)
-              - per-player percent-of-win for each cat
               - clean FG% / FT% decimals for display
             Returns: list of row dicts.
             """
@@ -308,32 +307,6 @@ def compare_page():
                 r["z_turno"]    = z.get("Z_TOV",    float("nan"))
                 r["z_fg_pct"]   = z.get("Z_FG_PCT", float("nan"))
                 r["z_ft_pct"]   = z.get("Z_FT_PCT", float("nan"))
-
-                # ---- Percent of win (per game) ----
-                avg_raw_for_pow = {
-                    "FG%": fg_pct,
-                    "FT%": ft_pct,
-                    "3PM": fg3m,
-                    "REB": reb,
-                    "AST": ast,
-                    "STL": stl,
-                    "BLK": blk,
-                    "PTS": pts,
-                    "TO":  tov,
-                    "FGA": fga,
-                    "FTA": fta,
-                }
-                pow_stats = raw_to_percent_of_win(avg_raw_for_pow) or {}
-
-                r["pow_fg"]  = pow_stats.get("FG%",  float("nan"))
-                r["pow_ft"]  = pow_stats.get("FT%",  float("nan"))
-                r["pow_3pm"] = pow_stats.get("3PM",  float("nan"))
-                r["pow_reb"] = pow_stats.get("REB",  float("nan"))
-                r["pow_ast"] = pow_stats.get("AST",  float("nan"))
-                r["pow_stl"] = pow_stats.get("STL",  float("nan"))
-                r["pow_blk"] = pow_stats.get("BLK",  float("nan"))
-                r["pow_pts"] = pow_stats.get("PTS",  float("nan"))
-                r["pow_to"]  = pow_stats.get("TO",   float("nan"))
 
                 # clean FG% / FT% decimals for display (these may be NaN)
                 r["fg_pct"] = fg_pct
