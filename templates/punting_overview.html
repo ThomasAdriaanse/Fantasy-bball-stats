@@ -6,7 +6,6 @@
   <div class="page-header">
     <div class="title">Punting Overview</div>
     <div class="controls">
-      <span class="pill">League: {{ league_id }}</span>
       <label for="window">Window:</label>
       <select id="window">
         <option value="projected" {{ 'selected' if stat_window=='projected' else '' }}>projected</option>
@@ -25,14 +24,10 @@
   </div>
 
   <div class="legend">
-    <span class="swatch blue"></span> Strong in category (closer to 1st)
+    <span class="swatch blue"></span> Strong in category
     <span class="swatch mid"></span> Around league average
-    <span class="swatch red"></span> Weak in category (closer to last)
+    <span class="swatch red"></span> Weak in category
     <span class="chip punt">Punt</span> Likely punted category
-  </div>
-  <div class="hint">
-    Bar length and colour show each team's strength in a category relative to the league,
-    based on raw team stats (blue ≈ best, red ≈ worst).
   </div>
 
   <!-- By Team (cards grid) -->
