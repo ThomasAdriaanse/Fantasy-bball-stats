@@ -16,7 +16,7 @@ def player_stats():
         'FPTS','PTS','REB','AST','STL','BLK','TOV',
         'FGM','FGA','FG_PCT','FG3M','FG3A','FG3_PCT',
         'FTM','FTA','FT_PCT','MIN','PLUS_MINUS',
-        'AVG_Z','Z_PTS','Z_FG3M','Z_REB','Z_AST','Z_STL','Z_BLK','Z_FG_PCT','Z_FT_PCT','Z_TOV'
+        'AVG_Z','Z_PTS','Z_FG3M','Z_REB','Z_AST','Z_STL','Z_BLK','Z_FG','Z_FT','Z_TOV'
     ]
 
     chart_data = build_chart_data(selected_player, num_games, stat=selected_stat)

@@ -9,7 +9,7 @@ from espn_api.basketball import League
 from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, ESPNInvalidLeague
 
 import compare_page.compare_page_data as cpd
-from app.services.z_score_calculations import raw_to_z_scores
+from app.services.z_score_calculations import raw_to_zscore
 
 bp = Blueprint("trades", __name__)
 
@@ -57,7 +57,7 @@ def _collect_league_players(league, year: int, stat_window: str) -> pd.DataFrame
     DataFrame with:
       - player_name
       - raw 9-cat stats (FG%, FT%, 3PM, REB, AST, STK, BLK, TO, PTS)
-      - z_<cat> per category using raw_to_z_scores (NBA-wide baselines).
+      - z_<cat> per category using raw_to_zscore (NBA-wide baselines).
     """
     frames: List[pd.DataFrame] = []
     for team_idx, _ in enumerate(league.teams):
@@ -89,7 +89,7 @@ def _collect_league_players(league, year: int, stat_window: str) -> pd.DataFrame
     for c in ["fgm","fga","ftm","fta","threeptm","reb","ast","stl","blk","turno","pts"]:
         df_all[c] = pd.to_numeric(df_all[c], errors="coerce").fillna(0.0)
 
-    # Raw per-game frame in the shape raw_to_z_scores expects
+    # Raw per-game frame in the shape raw_to_zscore expects
     df_raw = pd.DataFrame({
         "player_name": df_all["player_name"],
         "FGM": df_all["fgm"],
@@ -117,8 +117,8 @@ def _collect_league_players(league, year: int, stat_window: str) -> pd.DataFrame
 
     # Map z-score keys -> 9-cat names
     cat_to_zkey = {
-        "FG%": "Z_FG_PCT",
-        "FT%": "Z_FT_PCT",
+        "FG%": "Z_FG",
+        "FT%": "Z_FT",
         "3PM": "Z_FG3M",
         "REB": "Z_REB",
         "AST": "Z_AST",
@@ -152,7 +152,7 @@ def _collect_league_players(league, year: int, stat_window: str) -> pd.DataFrame
             "FTA":  fta,
         }
 
-        zmap = raw_to_z_scores(raw_for_z)
+        zmap = raw_to_zscore(raw_for_z)
 
         row: Dict[str, Any] = {
             "player_name": r["player_name"],

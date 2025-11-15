@@ -10,7 +10,7 @@ from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, 
 from app.services.percent_of_win_calculations import (
     CATS_ORDER,   # still re-use the category order: ["FG%", "FT%", "3PM", ...]
 )
-from app.services.z_score_calculations import raw_to_z_scores
+from app.services.z_score_calculations import raw_to_zscore
 
 bp = Blueprint("streaming", __name__)
 
@@ -182,12 +182,12 @@ def streaming_page():
             "FTM":  ftm,
             "FTA":  fta,
         }
-        z_stats = raw_to_z_scores(avg_raw_for_z) or {}
+        z_stats = raw_to_zscore(avg_raw_for_z) or {}
 
         # Map z-scores back into your 9-cat labels
         z_by_cat = {
-            "FG%": z_stats.get("Z_FG_PCT", 0.0),
-            "FT%": z_stats.get("Z_FT_PCT", 0.0),
+            "FG%": z_stats.get("Z_FG", 0.0),
+            "FT%": z_stats.get("Z_FT", 0.0),
             "3PM": z_stats.get("Z_FG3M",   0.0),
             "REB": z_stats.get("Z_REB",    0.0),
             "AST": z_stats.get("Z_AST",    0.0),
