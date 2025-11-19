@@ -68,7 +68,7 @@ def compare_page():
     start_time = time.time()
     # scoring inputs
     try:
-        fgm = int(request.form.get('fgm', 2))
+        fgm = int(request.form.get('fgm', 2)) 
         fga = int(request.form.get('fga', -1))
         ftm = int(request.form.get('ftm', 1))
         fta = int(request.form.get('fta', -1))
