@@ -9,15 +9,15 @@ import os
 # ---------- Tunables ----------
 
 _SCALE_MAP: Dict[str, float] = {
-    'PTS': 100,
-    'REB': 30,
-    'AST': 20,
-    'STL': 15,
-    'BLK': 10,
-    '3PM': 15,
-    'FG%': 0.50,
-    'FT%': 0.50,
-    'TO': 10,
+    'PTS': 10,
+    'REB': 3,
+    'AST': 2,
+    'STL': 1.5,
+    'BLK': 1,
+    '3PM': 1.5,
+    'FG%': 0.050,
+    'FT%': 0.050,
+    'TO': 1,
 }
 
 _DISPLAY_ORDER: List[str] = ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%', 'TO']

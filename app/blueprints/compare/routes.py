@@ -7,7 +7,7 @@ import json
 
 from ...services.compare_presenter import build_snapshot_rows, build_odds_rows
 from ...services.espn_service import matchup_dates
-from ...services.z_score_calculations import raw_to_z_scores
+from ...services.z_score_calculations import raw_to_zscore
 from ...services.percent_of_win_calculations import raw_to_percent_of_win
 
 # use your existing compare modules in project root
@@ -68,7 +68,7 @@ def compare_page():
     start_time = time.time()
     # scoring inputs
     try:
-        fgm = int(request.form.get('fgm', 2))
+        fgm = int(request.form.get('fgm', 2)) 
         fga = int(request.form.get('fga', -1))
         ftm = int(request.form.get('ftm', 1))
         fta = int(request.form.get('fta', -1))
@@ -294,7 +294,7 @@ def compare_page():
                     "FTM":  ftm,
                     "FTA":  fta,
                 }
-                z = raw_to_z_scores(avg_raw_for_z) or {}
+                z = raw_to_zscore(avg_raw_for_z) or {}
 
                 # Keep NaN as NaN; default to NaN if missing
                 r["z_pts"]      = z.get("Z_PTS",    float("nan"))
@@ -304,12 +304,12 @@ def compare_page():
                 r["z_stl"]      = z.get("Z_STL",    float("nan"))
                 r["z_blk"]      = z.get("Z_BLK",    float("nan"))
                 r["z_turno"]    = z.get("Z_TOV",    float("nan"))
-                r["z_fg_pct"]   = z.get("Z_FG_PCT", float("nan"))
-                r["z_ft_pct"]   = z.get("Z_FT_PCT", float("nan"))
+                r["z_fg"]   = z.get("Z_FG", float("nan"))
+                r["z_ft"]   = z.get("Z_FT", float("nan"))
 
                 # clean FG% / FT% decimals for display (these may be NaN)
-                r["fg_pct"] = fg_pct
-                r["ft_pct"] = ft_pct
+                r["fg"] = fg_pct
+                r["ft"] = ft_pct
 
             return rows
 
