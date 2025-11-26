@@ -1,213 +1,341 @@
 # app/services/compare_presenter.py
-from __future__ import annotations
-
-from datetime import datetime
+"""
+Compare presenter for fantasy basketball matchups.
+Uses histogram-based Monte Carlo simulation for win probability calculations.
+"""
 from typing import List, Dict, Any, Optional
-import math
-import os
+import pandas as pd
+import numpy as np
+from scipy import signal
+from .s3_service import load_player_dataset_from_s3
+import time
 
-# ---------- Tunables ----------
 
-_SCALE_MAP: Dict[str, float] = {
-    'PTS': 10,
-    'REB': 3,
-    'AST': 2,
-    'STL': 1.5,
-    'BLK': 1,
-    '3PM': 1.5,
-    'FG%': 0.050,
-    'FT%': 0.050,
-    'TO': 1,
+# Mapping from display categories to S3 data columns
+CATEGORY_COLUMN_MAP = {
+    'PTS': 'PTS',
+    'REB': 'REB',
+    'AST': 'AST',
+    'STL': 'STL',
+    'BLK': 'BLK',
+    '3PM': 'FG3M',
+    'TO': 'TOV',
 }
 
-_DISPLAY_ORDER: List[str] = ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%', 'TO']
-
-_KEY_MAP_ODDS: Dict[str, str] = {
-    "threeptm": "3PM",
-    "fg3m": "3PM",
-    "fg3_pm": "3PM",
-    "3ptm": "3PM",
-    "3pm": "3PM",
-    "fg%": "FG%",
-    "ft%": "FT%",
-    "turno": "TO",
-    "to": "TO",
+# Categories that use percentage calculations
+PERCENTAGE_CATEGORIES = {
+    'FG%': ('FGM', 'FGA'),
+    'FT%': ('FTM', 'FTA'),
 }
 
-# ---------- Helpers ----------
+CURRENT_SEASON = "2025-26"
 
-def _clamp(v: float, lo: float, hi: float) -> float:
-    return max(lo, min(hi, v))
 
-def _fmt_pct(x: Optional[float]) -> str:
-    if x is None:
-        return "-"
-    try:
-        return f"{100.0 * float(x):.1f}%"
-    except Exception:
-        return "-"
+def build_pmf_from_games(stat_values: np.ndarray) -> np.ndarray:
+    """
+    Build a probability mass function (PMF) from a player's game log.
+    
+    Args:
+        stat_values: Array of stat values from actual games
+    
+    Returns:
+        PMF array where pmf[k] = P(stat = k)
+    """
+    if len(stat_values) == 0:
+        return np.array([1.0])  # Delta at 0
+    
+    # Round to integers for discrete distribution
+    stat_values = np.round(stat_values).astype(int)
+    
+    # Handle negative values (shouldn't happen for counting stats, but just in case)
+    min_val = max(0, stat_values.min())
+    max_val = stat_values.max()
+    
+    # Build histogram
+    counts = np.bincount(stat_values - min_val, minlength=max_val - min_val + 1)
+    pmf = counts / counts.sum()
+    
+    return pmf
 
-def _latest_predicted(combined_jsons: Dict[str, List[Dict[str, Any]]],
-                      cat: str,
-                      team_label: str) -> Optional[float]:
-    series = combined_jsons.get(cat) or []
-    if not series:
-        return None
-    try:
-        rows = [r for r in series if r.get("team") == team_label]
-        rows.sort(key=lambda r: datetime.strptime(str(r.get("date")), "%Y-%m-%d"))
-        if not rows:
-            return None
-        return float(rows[-1].get("predicted_cat"))
-    except Exception:
-        return None
 
-def _normal_cdf(x: float) -> float:
-    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+def convolve_pmf_n_times(pmf: np.ndarray, n: int) -> np.ndarray:
+    """
+    Convolve a PMF with itself n times (for n games) using FFT for speed.
+    
+    Args:
+        pmf: Single-game PMF
+        n: Number of games
+    
+    Returns:
+        PMF for total over n games
+    """
+    if n == 0:
+        return np.array([1.0])  # Delta at 0
+    
+    if n == 1:
+        return pmf.copy()
+    
+    # Use FFT-based convolution for speed (scipy's fftconvolve is optimized)
+    result = pmf.copy()
+    for _ in range(n - 1):
+        result = signal.fftconvolve(result, pmf, mode='full')
+        # Renormalize to maintain probability distribution
+        result = result / result.sum()
+    
+    return result
 
-def _num(x, default=0.0) -> float:
-    try:
-        if isinstance(x, dict):
-            return float(x.get('value', default))
-        return float(x)
-    except Exception:
-        return float(default)
 
-def _get_cur_total(cur: Dict[str, Any], *keys: str) -> float:
-    if not cur:
-        return 0.0
-    for k in keys:
-        if k in cur:
-            return _num(cur[k], 0.0)
-        kl = k.lower(); ku = k.upper(); kt = k.title()
-        for c in (kl, ku, kt):
-            if c in cur:
-                return _num(cur[c], 0.0)
-        s = cur.get(k) or cur.get(ku) or cur.get(kl) or cur.get(kt)
-        if isinstance(s, dict) and 'value' in s:
-            return _num(s['value'], 0.0)
-    return 0.0
-
-def _is_out(status: Optional[str]) -> bool:
-    if status is None:
-        return False
-    s = str(status).strip().upper()
-    return s in {"OUT", "INJURY_RESERVE", "IR", "SUSPENDED"}
-
-def _filter_active_players(rows: List[Dict[str, Any]],
-                           exclude_day_to_day: bool = False) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
-    for r in rows or []:
-        inj = r.get("inj")
-        if _is_out(inj):
+def calculate_team_pmf(
+    team_players: List[Dict[str, Any]],
+    category: str,
+    season: str = CURRENT_SEASON
+) -> np.ndarray:
+    """
+    Calculate the PMF for a team's total in a category using convolution.
+    
+    Args:
+        team_players: List of player dicts with 'player_name' and 'games' (remaining)
+        category: Category to calculate (e.g., 'PTS', 'REB')
+        season: Season string for filtering data
+    
+    Returns:
+        PMF array where pmf[k] = P(team total = k)
+    """
+    start_time = time.time()
+    
+    # Get the column name for this category
+    stat_col = CATEGORY_COLUMN_MAP.get(category)
+    if not stat_col:
+        return np.array([1.0])  # Delta at 0
+    
+    # Start with delta at 0 (no contribution)
+    team_pmf = np.array([1.0])
+    
+    print(f"  [PMF] Processing {len(team_players)} players for {category}")
+    player_count = 0
+    
+    for player in team_players:
+        player_name = player.get('player_name')
+        games_remaining = player.get('games', 0)
+        
+        if not player_name or games_remaining <= 0:
             continue
-        if exclude_day_to_day and str(inj or "").strip().upper() == "DAY_TO_DAY":
+        
+        # Skip injured players
+        injury_status = player.get('inj', 'ACTIVE')
+        if injury_status in ('OUT', 'INJURY_RESERVE', 'IR', 'SUSPENDED'):
+            print(f"  [PMF] Skipping {player_name} (injured: {injury_status})")
             continue
-        g = r.get("games")
-        try:
-            g = float(g)
-        except Exception:
-            g = 0.0
-        if g <= 0:
+        
+        player_count += 1
+        player_start = time.time()
+        print(f"  [PMF] [{player_count}] {player_name} ({games_remaining} games)")
+        
+        # Load player's game log from S3
+        load_start = time.time()
+        df = load_player_dataset_from_s3(player_name)
+        load_time = time.time() - load_start
+        
+        if df is None or df.empty:
+            print(f"  [PMF] ⚠️  No S3 data ({load_time:.2f}s)")
             continue
-        out.append(r)
-    return out
+        
+        # Filter to recent seasons (current and next season for rookies/summer league)
+        # This allows both "2024-25" and "2025-26" data
+        if 'SEASON' in df.columns:
+            # Keep current season and next season (for rookies)
+            current_year = int(season.split('-')[0])
+            df = df[df['SEASON'].str.startswith(str(current_year)) | 
+                    df['SEASON'].str.startswith(str(current_year + 1))]
+        
+        if df.empty or stat_col not in df.columns:
+            print(f"  [PMF] ⚠️  No {stat_col} data")
+            continue
+        
+        # Get valid stat values
+        stat_values = df[stat_col].dropna().values
+        if len(stat_values) == 0:
+            print(f"  [PMF] ⚠️  No valid {stat_col} values")
+            continue
+        
+        # Build single-game PMF for this player
+        pmf_start = time.time()
+        player_single_game_pmf = build_pmf_from_games(stat_values)
+        pmf_time = time.time() - pmf_start
+        
+        # Convolve for multiple games
+        conv_start = time.time()
+        player_total_pmf = convolve_pmf_n_times(player_single_game_pmf, int(games_remaining))
+        conv_time = time.time() - conv_start
+        
+        # Add this player's contribution to team total
+        combine_start = time.time()
+        team_pmf = signal.fftconvolve(team_pmf, player_total_pmf, mode='full')
+        combine_time = time.time() - combine_start
+        
+        player_total = time.time() - player_start
+        print(f"  [PMF]   ✓ {player_total:.2f}s (load:{load_time:.2f}s pmf:{pmf_time:.3f}s conv:{conv_time:.3f}s combine:{combine_time:.3f}s) PMF size: {len(team_pmf)}")
+    
+    total_time = time.time() - start_time
+    print(f"  [PMF] ✓ Completed {category} in {total_time:.2f}s - Final PMF size: {len(team_pmf)}")
+    return team_pmf
 
-def _safe_float(x, default=0.0) -> float:
-    try:
-        return float(x)
-    except Exception:
-        return float(default)
 
-def _project_counting(players: List[Dict[str, Any]],
-                      col: str,
-                      games_col: str = 'games',
-                      *,
-                      exclude_day_to_day: bool = False) -> float:
-    total = 0.0
-    for r in _filter_active_players(players, exclude_day_to_day=exclude_day_to_day):
-        g = _safe_float(r.get(games_col), 0.0)
-        v = _safe_float(r.get(col), 0.0)
-        total += v * g
-    return float(total)
+def calculate_win_probability(team1_pmf: np.ndarray, team2_pmf: np.ndarray) -> float:
+    """
+    Calculate P(Team 1 > Team 2) given their PMFs.
+    
+    Args:
+        team1_pmf: PMF for team 1's total
+        team2_pmf: PMF for team 2's total
+    
+    Returns:
+        Probability that team 1 wins (0.0 to 1.0)
+    """
+    # Build CDF for team 2
+    cdf_team2 = np.cumsum(team2_pmf)
+    
+    # Pad with leading 0 so cdf_shifted[k] = P(Team2 <= k-1) = P(Team2 < k)
+    cdf_shifted = np.concatenate([[0.0], cdf_team2[:-1]])
+    
+    # Ensure both arrays are same length
+    max_len = max(len(team1_pmf), len(cdf_shifted))
+    team1_padded = np.pad(team1_pmf, (0, max_len - len(team1_pmf)))
+    cdf_padded = np.pad(cdf_shifted, (0, max_len - len(cdf_shifted)))
+    
+    # P(Team1 > Team2) = sum of P(Team1 = k) * P(Team2 < k)
+    win_prob = float(np.sum(team1_padded * cdf_padded))
+    
+    return win_prob
 
-def _project_makes_attempts(players: List[Dict[str, Any]],
-                            made_col: str,
-                            att_col: str,
-                            games_col: str = 'games',
-                            *,
-                            exclude_day_to_day: bool = False) -> tuple[float, float]:
-    tm = ta = 0.0
-    for r in _filter_active_players(players, exclude_day_to_day=exclude_day_to_day):
-        g = _safe_float(r.get(games_col), 0.0)
-        m = _safe_float(r.get(made_col), 0.0)
-        a = _safe_float(r.get(att_col), 0.0)
-        tm += m * g
-        ta += a * g
-    return float(tm), float(ta)
 
-def _label_class(p_left: float, p_right: float) -> str:
-    if abs(p_left - p_right) < 0.5:
-        return "is-tie"
-    return "winner-left" if p_left > p_right else "winner-right"
-
-# ---------- Snapshot ----------
-
-def build_snapshot_rows(team1_current_stats: Optional[Dict[str, Any]],
-                        team2_current_stats: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
+def build_snapshot_rows(
+    team1_current_stats: Optional[Dict[str, Any]],
+    team2_current_stats: Optional[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Build snapshot comparison rows showing current stats.
+    
+    Displays current accumulated stats for each team with visual highlighting
+    for the team that's winning each category.
+    
+    Returns list of dicts with structure:
+    {
+        "cat": str,           # Category name (PTS, REB, etc.)
+        "v1": float,          # Team 1 value
+        "v2": float,          # Team 2 value
+        "disp1": str,         # Team 1 display value
+        "disp2": str,         # Team 2 display value
+        "a1": float,          # Team 1 alpha (highlight intensity 0-1)
+        "a2": float,          # Team 2 alpha (highlight intensity 0-1)
+    }
+    """
+    categories = ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%', 'TO']
+    
+    # Scale factors for calculating highlight intensity
+    # Larger differences relative to these scales = stronger highlight
+    scale_map = {
+        'PTS': 100,
+        'REB': 30,
+        'AST': 20,
+        'STL': 15,
+        'BLK': 10,
+        '3PM': 15,
+        'FG%': 0.50,  # 5 percentage points
+        'FT%': 0.50,  # 5 percentage points
+        'TO': 10,
+    }
+    
+    rows = []
     t1 = team1_current_stats or {}
     t2 = team2_current_stats or {}
-
-    for cat in _DISPLAY_ORDER:
-        s1 = t1.get(cat) if isinstance(t1, dict) else None
-        s2 = t2.get(cat) if isinstance(t2, dict) else None
-        v1 = (s1 or {}).get("value") if isinstance(s1, dict) else None
-        v2 = (s2 or {}).get("value") if isinstance(s2, dict) else None
-
-        a1 = a2 = 0.0
+    
+    for cat in categories:
+        # Extract values from nested dict structure: {"PTS": {"value": 370.0, "result": "LOSS"}}
+        stat1 = t1.get(cat, {})
+        stat2 = t2.get(cat, {})
+        
+        v1 = stat1.get("value") if isinstance(stat1, dict) else None
+        v2 = stat2.get("value") if isinstance(stat2, dict) else None
+        
+        # Default display and alpha
         disp1 = "-"
         disp2 = "-"
-
+        a1 = 0.0
+        a2 = 0.0
+        
+        # If both values exist, calculate highlighting
         if v1 is not None and v2 is not None:
             try:
-                v1f = float(v1)
-                v2f = float(v2)
-                diff = abs(v1f - v2f)
-                scale = float(_SCALE_MAP.get(cat, 10.0))
-                intensity = _clamp(diff / scale, 0.0, 1.0)
+                v1_float = float(v1)
+                v2_float = float(v2)
+                
+                # Calculate difference and intensity
+                diff = abs(v1_float - v2_float)
+                scale = scale_map.get(cat, 10.0)
+                intensity = min(diff / scale, 1.0)  # Clamp to 0-1
+                
+                # Alpha range: 0.25 (small lead) to 0.80 (large lead)
                 alpha = 0.25 + 0.55 * intensity
-
+                
+                # Only color the WINNING team, with intensity based on margin
+                # (lower is better for TO)
                 if cat == 'TO':
-                    if v1f < v2f: a1 = alpha
-                    elif v2f < v1f: a2 = alpha
+                    if v1_float < v2_float:
+                        a1 = alpha  # Team 1 wins (blue)
+                        a2 = 0.0    # Team 2 loses (no color)
+                    elif v2_float < v1_float:
+                        a1 = 0.0    # Team 1 loses (no color)
+                        a2 = alpha  # Team 2 wins (red)
+                    # else: tie, both stay 0.0
                 else:
-                    if v1f > v2f: a1 = alpha
-                    elif v2f > v1f: a2 = alpha
-
+                    if v1_float > v2_float:
+                        a1 = alpha  # Team 1 wins (blue)
+                        a2 = 0.0    # Team 2 loses (no color)
+                    elif v2_float > v1_float:
+                        a1 = 0.0    # Team 1 loses (no color)
+                        a2 = alpha  # Team 2 wins (red)
+                    # else: tie, both stay 0.0
+                
+                # Format display values
                 if cat in ('FG%', 'FT%'):
-                    disp1 = _fmt_pct(v1f)
-                    disp2 = _fmt_pct(v2f)
+                    # Convert decimal to percentage: 0.422 -> "42.2%"
+                    disp1 = f"{v1_float * 100:.1f}%"
+                    disp2 = f"{v2_float * 100:.1f}%"
                 else:
-                    disp1 = v1 if v1 is not None else "-"
-                    disp2 = v2 if v2 is not None else "-"
-            except Exception:
+                    # Show as-is for counting stats
+                    disp1 = str(v1)
+                    disp2 = str(v2)
+                    
+            except (ValueError, TypeError):
+                # If conversion fails, leave as defaults
                 pass
         else:
+            # If only one value exists, still show it
             if cat in ('FG%', 'FT%'):
-                disp1 = _fmt_pct(v1 if v1 is not None else None)
-                disp2 = _fmt_pct(v2 if v2 is not None else None)
-
-        out.append({
+                if v1 is not None:
+                    try:
+                        disp1 = f"{float(v1) * 100:.1f}%"
+                    except:
+                        pass
+                if v2 is not None:
+                    try:
+                        disp2 = f"{float(v2) * 100:.1f}%"
+                    except:
+                        pass
+        
+        rows.append({
             "cat": cat,
-            "v1": v1, "v2": v2,
-            "disp1": disp1, "disp2": disp2,
-            "a1": round(a1, 3), "a2": round(a2, 3),
+            "v1": v1,
+            "v2": v2,
+            "disp1": disp1,
+            "disp2": disp2,
+            "a1": round(a1, 3),
+            "a2": round(a2, 3),
         })
+    
+    return rows
 
-    return out
-
-# ---------- Odds ----------
 
 def build_odds_rows(
     win1_list: List[Dict[str, Any]],
@@ -220,152 +348,145 @@ def build_odds_rows(
     data_team_players_2: Optional[List[Dict[str, Any]]] = None,
     exclude_day_to_day: bool = False,
 ) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
-
-    if not (team1_current_stats and team2_current_stats and
-            data_team_players_1 is not None and data_team_players_2 is not None):
-        return out
-
-    COUNT_MAP = {
-        'PTS': 'pts',
-        'REB': 'reb',
-        'AST': 'ast',
-        'STL': 'stl',
-        'BLK': 'blk',
-        '3PM': 'threeptm',
-        'TO': 'turno',
+    """
+    Build odds rows showing win probabilities for each category using exact convolution.
+    
+    For each category:
+    1. Build PMF for Team 1's projected total (from player game logs)
+    2. Build PMF for Team 2's projected total (from player game logs)
+    3. Add current totals to the PMFs
+    4. Calculate exact P(Team 1 wins) by comparing distributions
+    
+    Returns list of dicts with structure:
+    {
+        "cat": str,           # Category name
+        "p1": float,          # Team 1 win probability (0-100)
+        "p2": float,          # Team 2 win probability (0-100)
+        "class_name": str,    # CSS class: "winner-left", "winner-right", or "is-tie"
+        "mid_t1": str,        # Team 1 projected total (display)
+        "mid_t2": str,        # Team 2 projected total (display)
     }
-    PCT_MAP = {
-        'FG%': ('fgm', 'fga'),
-        'FT%': ('ftm', 'fta'),
-    }
-
-    EPS = 1e-9
-
-    for cat in _DISPLAY_ORDER:
-        if cat in COUNT_MAP:
-            col = COUNT_MAP[cat]
-            cur1 = _get_cur_total(team1_current_stats, cat, col)
-            cur2 = _get_cur_total(team2_current_stats, cat, col)
-            proj1 = _project_counting(data_team_players_1, col, exclude_day_to_day=exclude_day_to_day)
-            proj2 = _project_counting(data_team_players_2, col, exclude_day_to_day=exclude_day_to_day)
-
-            if abs(proj1) < EPS and abs(proj2) < EPS:
-                mu1 = cur1
-                mu2 = cur2
-                def _fmt(x: float) -> str:
-                    return f"{x:.1f}" if abs(x) < 5 else f"{round(x)}"
-                mid_t1 = _fmt(mu1)
-                mid_t2 = _fmt(mu2)
-                if abs(mu1 - mu2) < EPS:
-                    p_left, p_right = 50.0, 50.0
-                else:
-                    t1_wins = (mu1 > mu2) if cat != 'TO' else (mu1 < mu2)
-                    p_left, p_right = (100.0, 0.0) if t1_wins else (0.0, 100.0)
-                out.append({
-                    "cat": cat,
-                    "p1": p_left, "p2": p_right,
-                    "class_name": _label_class(p_left, p_right),
-                    "mid_t1": mid_t1,
-                    "mid_t2": mid_t2,
-                })
-                continue
-
-            mu1 = cur1 + proj1
-            mu2 = cur2 + proj2
-            var1 = proj1 if proj1 > 0 else 1.0
-            var2 = proj2 if proj2 > 0 else 1.0
-            diff = (mu1 - mu2) if cat != 'TO' else (mu2 - mu1)
-            denom = math.sqrt(max(var1 + var2, EPS))
-            z = diff / denom
-            p_team1 = _normal_cdf(z) * 100.0
-
-            def _fmt(x: float) -> str:
-                return f"{x:.1f}" if abs(x) < 5 else f"{round(x)}"
-            mid_t1 = _fmt(mu1)
-            mid_t2 = _fmt(mu2)
-            p_left = round(p_team1, 1)
-            p_right = round(100.0 - p_team1, 1)
-
-            out.append({
+    """
+    categories = ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%', 'TO']
+    
+    # Validate inputs
+    if not (team1_current_stats and team2_current_stats and 
+            data_team_players_1 and data_team_players_2):
+        print("[WARN] Missing required data for build_odds_rows, returning dummy data")
+        return [
+            {
                 "cat": cat,
-                "p1": p_left, "p2": p_right,
-                "class_name": _label_class(p_left, p_right),
-                "mid_t1": mid_t1,
-                "mid_t2": mid_t2,
-            })
-
-        elif cat in PCT_MAP:
-            made_col, att_col = PCT_MAP[cat]
-            cur_m1 = _get_cur_total(team1_current_stats, made_col, made_col.upper(), 'made_' + made_col)
-            cur_a1 = _get_cur_total(team1_current_stats, att_col, att_col.upper(), 'att_' + att_col)
-            cur_m2 = _get_cur_total(team2_current_stats, made_col, made_col.upper(), 'made_' + made_col)
-            cur_a2 = _get_cur_total(team2_current_stats, att_col, att_col.upper(), 'att_' + att_col)
-            proj_m1, proj_a1 = _project_makes_attempts(data_team_players_1, made_col, att_col, exclude_day_to_day=exclude_day_to_day)
-            proj_m2, proj_a2 = _project_makes_attempts(data_team_players_2, made_col, att_col, exclude_day_to_day=exclude_day_to_day)
-
-            if abs(proj_a1) < EPS and abs(proj_a2) < EPS:
-                p1_cur = (cur_m1 / cur_a1) if cur_a1 > 0 else None
-                p2_cur = (cur_m2 / cur_a2) if cur_a2 > 0 else None
-                mid_t1 = "-" if p1_cur is None else f"{p1_cur * 100.0:.1f}%"
-                mid_t2 = "-" if p2_cur is None else f"{p2_cur * 100.0:.1f}%"
-
-                if (p1_cur is None) and (p2_cur is None):
-                    p_left, p_right = 50.0, 50.0
-                elif p1_cur is None:
-                    p_left, p_right = 0.0, 100.0
-                elif p2_cur is None:
-                    p_left, p_right = 100.0, 0.0
-                else:
-                    if abs(p1_cur - p2_cur) < EPS:
-                        p_left, p_right = 50.0, 50.0
-                    else:
-                        p_left, p_right = (100.0, 0.0) if p1_cur > p2_cur else (0.0, 100.0)
-
-                out.append({
-                    "cat": cat,
-                    "p1": p_left, "p2": p_right,
-                    "class_name": _label_class(p_left, p_right),
-                    "mid_t1": mid_t1,
-                    "mid_t2": mid_t2,
-                })
-                continue
-
-            tot_m1 = cur_m1 + proj_m1; tot_a1 = cur_a1 + proj_a1
-            tot_m2 = cur_m2 + proj_m2; tot_a2 = cur_a2 + proj_a2
-            p1 = (tot_m1 / tot_a1) if tot_a1 > 0 else None
-            p2 = (tot_m2 / tot_a2) if tot_a2 > 0 else None
-            mid_t1 = "-" if p1 is None else f"{p1 * 100.0:.1f}%"
-            mid_t2 = "-" if p2 is None else f"{p2 * 100.0:.1f}%"
-
-            if (p1 is None) and (p2 is None):
-                p_team1 = 50.0
-            elif p1 is None:
-                p_team1 = 0.0
-            elif p2 is None:
-                p_team1 = 100.0
-            else:
-                var_diff = p1 * (1.0 - p1) / max(tot_a1, EPS) + p2 * (1.0 - p2) / max(tot_a2, EPS)
-                z = (p1 - p2) / math.sqrt(max(var_diff, EPS))
-                p_team1 = _normal_cdf(z) * 100.0
-
-            p_left = round(p_team1, 1)
-            p_right = round(100.0 - p_team1, 1)
-
-            out.append({
-                "cat": cat,
-                "p1": p_left, "p2": p_right,
-                "class_name": _label_class(p_left, p_right),
-                "mid_t1": mid_t1,
-                "mid_t2": mid_t2,
-            })
-
-        else:
-            out.append({
-                "cat": cat,
-                "p1": 50.0, "p2": 50.0,
+                "p1": 50.0,
+                "p2": 50.0,
                 "class_name": "is-tie",
-                "mid_t1": "-", "mid_t2": "-"
+                "mid_t1": "-",
+                "mid_t2": "-",
+            }
+            for cat in categories
+        ]
+    
+    # Filter out day-to-day players if requested
+    if exclude_day_to_day:
+        data_team_players_1 = [p for p in data_team_players_1 if p.get('inj') != 'DAY_TO_DAY']
+        data_team_players_2 = [p for p in data_team_players_2 if p.get('inj') != 'DAY_TO_DAY']
+    
+    rows = []
+    
+    for cat in categories:
+        print(f"[INFO] Calculating odds for: {cat}")
+        
+        # Skip percentage categories for now (need special handling)
+        if cat in ('FG%', 'FT%'):
+            rows.append({
+                "cat": cat,
+                "p1": 50.0,
+                "p2": 50.0,
+                "class_name": "is-tie",
+                "mid_t1": "-",
+                "mid_t2": "-",
             })
-
-    return out
+            continue
+        
+        # Get current totals
+        t1_stat = team1_current_stats.get(cat, {})
+        t2_stat = team2_current_stats.get(cat, {})
+        
+        t1_current = t1_stat.get('value', 0.0) if isinstance(t1_stat, dict) else 0.0
+        t2_current = t2_stat.get('value', 0.0) if isinstance(t2_stat, dict) else 0.0
+        
+        try:
+            # Calculate PMFs for projected totals (remaining games only)
+            print(f"  [ODDS] Calculating Team 1 PMF for {cat}...")
+            t1_projected_pmf = calculate_team_pmf(data_team_players_1, cat)
+            
+            print(f"  [ODDS] Calculating Team 2 PMF for {cat}...")
+            t2_projected_pmf = calculate_team_pmf(data_team_players_2, cat)
+            
+            # Add current totals by shifting the PMF
+            # If current = 100 and PMF is for projected, then final PMF starts at index 100
+            t1_current_int = int(round(t1_current))
+            t2_current_int = int(round(t2_current))
+            
+            print(f"  [ODDS] Adding current totals (T1: {t1_current_int}, T2: {t2_current_int})")
+            
+            # Pad with zeros to shift the distribution
+            t1_final_pmf = np.pad(t1_projected_pmf, (t1_current_int, 0))
+            t2_final_pmf = np.pad(t2_projected_pmf, (t2_current_int, 0))
+            
+            print(f"  [ODDS] Calculating win probability...")
+            
+            # Calculate win probability
+            # For TO (turnovers), lower is better, so flip the comparison
+            if cat == 'TO':
+                p_team1 = calculate_win_probability(t2_final_pmf, t1_final_pmf)  # Flipped
+                p_team1 = 1.0 - p_team1  # Convert back to P(Team1 wins)
+            else:
+                p_team1 = calculate_win_probability(t1_final_pmf, t2_final_pmf)
+            
+            p_team1_pct = p_team1 * 100.0
+            p_team2_pct = 100.0 - p_team1_pct
+            
+            print(f"  [ODDS] ✓ {cat}: Team1 {p_team1_pct:.1f}% vs Team2 {p_team2_pct:.1f}%")
+            
+            # Calculate expected values (mean of PMF)
+            t1_indices = np.arange(len(t1_final_pmf))
+            t2_indices = np.arange(len(t2_final_pmf))
+            t1_expected = np.sum(t1_indices * t1_final_pmf)
+            t2_expected = np.sum(t2_indices * t2_final_pmf)
+            
+            # Format display values
+            mid_t1 = str(round(t1_expected))
+            mid_t2 = str(round(t2_expected))
+            
+            # Determine CSS class
+            if abs(p_team1_pct - p_team2_pct) < 0.5:
+                class_name = "is-tie"
+            elif p_team1_pct > p_team2_pct:
+                class_name = "winner-left"
+            else:
+                class_name = "winner-right"
+            
+            rows.append({
+                "cat": cat,
+                "p1": round(p_team1_pct, 1),
+                "p2": round(p_team2_pct, 1),
+                "class_name": class_name,
+                "mid_t1": mid_t1,
+                "mid_t2": mid_t2,
+            })
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to calculate {cat}: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return tie as fallback
+            rows.append({
+                "cat": cat,
+                "p1": 50.0,
+                "p2": 50.0,
+                "class_name": "is-tie",
+                "mid_t1": "-",
+                "mid_t2": "-",
+            })
+    
+    return rows

@@ -13,6 +13,8 @@ services:
       S3_PREFIX: ${S3_PREFIX}
       AWS_PROFILE: ${AWS_PROFILE}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      # Local cache directory for player data
+      PLAYER_DATA_CACHE_DIR: /app/data/players
     volumes:
       # app code + static
       - .:/usr/src/app
@@ -21,3 +23,26 @@ services:
       # WINDOWS:
       - "${USERPROFILE}/.aws:/root/.aws:ro"
       # (on mac/linux use ${HOME}/.aws)
+      # Shared player data volume (read-only for web app)
+      - player_data:/app/data/players:ro
+
+  sync:
+    build: ./player-data-sync
+    env_file: .env
+    environment:
+      S3_BUCKET: ${S3_BUCKET}
+      S3_PREFIX: ${S3_PREFIX:-dev/players/}
+      AWS_PROFILE: ${AWS_PROFILE}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      PLAYER_DATA_CACHE_DIR: /app/data/players
+    volumes:
+      # mount AWS credentials for S3 access
+      - "${USERPROFILE}/.aws:/root/.aws:ro"
+      # Shared player data volume (read-write for sync)
+      - player_data:/app/data/players
+    profiles:
+      - sync  # Only runs when explicitly called with: docker-compose --profile sync run sync
+
+volumes:
+  player_data:  # Shared volume persisted on EC2
+
