@@ -2,647 +2,771 @@
 {% block title %}Compare (Categories) · Fantasy BBall{% endblock %}
 
 {% block head_extra %}
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/compare_page.css') }}">
-  <script src="https://d3js.org/d3.v7.min.js"></script>
-  <style>
-    /* keep injury-colored links */
-    .player-out a, .player-dtd a { color: inherit; text-decoration: none; }
-    .player-out a:hover, .player-dtd a:hover { text-decoration: underline; }
+<link rel="stylesheet" href="{{ url_for('static', filename='css/compare_page.css') }}">
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  /* keep injury-colored links */
+  .player-out a,
+  .player-dtd a {
+    color: inherit;
+    text-decoration: none;
+  }
 
-    /* ===== Category snapshot (labels above, pills below) ===== */
-    .cat-snapshot.card { padding: 16px 18px; }
-    .cat-grid{
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
-      gap:12px 14px;
-      align-items:start;
-    }
-    .cat-col{display:grid;grid-template-rows:auto auto;row-gap:6px;}
-    .cat-label{
-      text-align:center;
-      font-size:16px;
-      letter-spacing:.2px;
-      opacity:.9;
-    }
+  .player-out a:hover,
+  .player-dtd a:hover {
+    text-decoration: underline;
+  }
 
-    /* Split pill (snapshot) */
-    .split-pill{
-      position:relative;
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      min-height:34px;
-      border-radius:8px;
-      border:1px solid rgba(255,255,255,0.10);
-      background:#0b0e14;
-      overflow:hidden;
-      color:#e8eefc;
-      background-clip: padding-box;
-    }
-    .split-pill::after{
-      content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.18);
-    }
-    .pill-left,.pill-right{
-      padding:7px 10px;
-      display:flex;align-items:center;
-      font-size:13px;line-height:1.1;
-      background-clip: padding-box;
-    }
-    .pill-left { justify-content:flex-end; text-align:right;
-      background: rgba(70,130,180,var(--a1,0)); /* Team 1 blue */
-    }
-    .pill-right{ justify-content:flex-start; text-align:left;
-      background: rgba(255,0,0,var(--a2,0));   /* Team 2 red  */
-    }
+  /* ===== Category snapshot (labels above, pills below) ===== */
+  .cat-snapshot.card {
+    padding: 16px 18px;
+  }
 
-    /* ===== Tables ===== */
-    .data-table.table-compact{ table-layout: fixed; width: 100%; }
-    .data-table.table-compact th,
-    .data-table.table-compact td{
-      text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    .win-title{
-      margin: 10px 0 6px; text-align: center; font-size: 14px; opacity: .9;
-    }
+  .cat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px 14px;
+    align-items: start;
+  }
 
-    /* ===== Charts ===== */
-    .chart-card { padding: 12px 12px 8px 12px; }
-    .chart-card .axis text { font-size: 16px; }
+  .cat-col {
+    display: grid;
+    grid-template-rows: auto auto;
+    row-gap: 6px;
+  }
 
-    .legend {
-      display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center;
-      margin:6px 2px 0; opacity:.95; font-size:13px;
-    }
-    .legend-item { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
-    .legend .swatch { width:22px; height:2px; border-radius:2px; display:inline-block; }
-    .swatch.solid.blue { background: steelblue; }
-    .swatch.solid.red  { background: red; }
-    .swatch.dashed.blue {
-      background: repeating-linear-gradient(to right, steelblue 0 3px, transparent 3px 6px);
-    }
-    .swatch.dashed.red {
-      background: repeating-linear-gradient(to right, red 0 3px, transparent 3px 6px);
-    }
+  .cat-label {
+    text-align: center;
+    font-size: 16px;
+    letter-spacing: .2px;
+    opacity: .9;
+  }
 
-    /* ===== Odds block ===== */
-    .odds-card { padding: 16px 18px; }
+  /* Split pill (snapshot) */
+  .split-pill {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 34px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: #0b0e14;
+    overflow: hidden;
+    color: #e8eefc;
+    background-clip: padding-box;
+  }
 
-    /* Use a symmetric 3-column grid: [label][bar][spacer] */
-    .odds-list-v2 { display:grid; gap:10px; --label-w: 90px; }
-    .odds-item-v2 {
-      display:grid;
-      grid-template-columns: var(--label-w) 1fr var(--label-w);
-      gap:10px;
-      align-items:center;
-    }
-    .odds-label-v2 {
-      grid-column: 1 / 2;
-      text-align:right; font-size:14px; opacity:.9;
-    }
-    .odds-bar-v2 {
-      grid-column: 2 / 3;
-      position: relative;
-    }
-    .odds-spacer {
-      grid-column: 3 / 4;
-    }
-    .odds-mid-v2 { position:absolute; top:0; bottom:0; width:1px; left:50%;
-      background: rgba(255,255,255,0.18); pointer-events:none; }
-    .odds-stat-tag-v2{
-      position:absolute; top:50%; left:50%;
-      transform: translate(-50%,-50%);
-      font-size: 11px; line-height: 1;
-      color:#fff; pointer-events:none; z-index:2;
-      padding: 2px 4px; border-radius: 4px;
-      background: rgba(255,255,255,0.08);
-      text-shadow: 0 1px 2px rgba(0,0,0,0.35);
-      white-space: nowrap;
-    }
-    .odds-stat-tag-v2.left  { transform: translate(-110%,-50%); text-align:right; }
-    .odds-stat-tag-v2.right { transform: translate(10%,-50%);   text-align:left; }
+  .split-pill::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(255, 255, 255, .18);
+  }
 
-    .odds-left-v2 { height:100%; background:rgba(70,130,180,.8); }
-    .odds-right-v2{ height:100%; background:rgba(255,0,0,.8); float:right; }
-    .odds-tag-v2{ position:absolute; top:50%; transform:translateY(-50%); font-size:12px; padding:2px 6px; background:rgba(0,0,0,.25); border-radius:4px; color:#fff; }
-    .odds-tag-v2.left{ left:6px; }
-    .odds-tag-v2.right{ right:6px; }
-    .odds-tag-v2.strong{ font-weight:700; }
-    .odds-tag-v2.muted{ opacity:.75; }
+  .pill-left,
+  .pill-right {
+    padding: 7px 10px;
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    line-height: 1.1;
+    background-clip: padding-box;
+  }
 
-    .odds-bar-v2.is-tie .odds-left-v2,
-    .odds-bar-v2.is-tie .odds-right-v2 { opacity:.9; }
-    .odds-bar-v2.winner-left  .odds-right-v2 { opacity:.6; }
-    .odds-bar-v2.winner-right .odds-left-v2  { opacity:.6; }
+  .pill-left {
+    justify-content: flex-end;
+    text-align: right;
+    background: rgba(70, 130, 180, var(--a1, 0));
+    /* Team 1 blue */
+  }
 
-    @media (max-width: 520px) {
-      .odds-list-v2 { --label-w: 70px; }
-    }
-    @media (max-width: 420px) {
-      .odds-list-v2 { --label-w: 56px; }
-    }
+  .pill-right {
+    justify-content: flex-start;
+    text-align: left;
+    background: rgba(255, 0, 0, var(--a2, 0));
+    /* Team 2 red  */
+  }
 
-    /* Toggle buttons (reused) */
-    .toggle-row{ display:flex; align-items:center; gap:10px; margin:8px 0 12px; flex-wrap:wrap; }
-    .btn-toggle{
-      appearance:none; border:1px solid rgba(255,255,255,0.12);
-      background:#0b0e14; color:#e8eefc; padding:6px 10px; border-radius:8px;
-      cursor:pointer; font-size:14px;
+  /* ===== Tables ===== */
+  .data-table.table-compact {
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  .data-table.table-compact th,
+  .data-table.table-compact td {
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .win-title {
+    margin: 10px 0 6px;
+    text-align: center;
+    font-size: 14px;
+    opacity: .9;
+  }
+
+  /* ===== Charts ===== */
+  .chart-card {
+    padding: 12px 12px 8px 12px;
+  }
+
+  .chart-card .axis text {
+    font-size: 16px;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    align-items: center;
+    margin: 6px 2px 0;
+    opacity: .95;
+    font-size: 13px;
+  }
+
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .legend .swatch {
+    width: 22px;
+    height: 2px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+
+  .swatch.solid.blue {
+    background: steelblue;
+  }
+
+  .swatch.solid.red {
+    background: red;
+  }
+
+  .swatch.dashed.blue {
+    background: repeating-linear-gradient(to right, steelblue 0 3px, transparent 3px 6px);
+  }
+
+  .swatch.dashed.red {
+    background: repeating-linear-gradient(to right, red 0 3px, transparent 3px 6px);
+  }
+
+  /* ===== Odds block ===== */
+  .odds-card {
+    padding: 16px 18px;
+  }
+
+  /* Use a symmetric 3-column grid: [label][bar][spacer] */
+  .odds-list-v2 {
+    display: grid;
+    gap: 10px;
+    --label-w: 90px;
+  }
+
+  .odds-item-v2 {
+    display: grid;
+    grid-template-columns: var(--label-w) 1fr var(--label-w);
+    gap: 10px;
+    align-items: center;
+  }
+
+  .odds-label-v2 {
+    grid-column: 1 / 2;
+    text-align: right;
+    font-size: 14px;
+    opacity: .9;
+  }
+
+  .odds-bar-v2 {
+    grid-column: 2 / 3;
+    position: relative;
+  }
+
+  .odds-spacer {
+    grid-column: 3 / 4;
+  }
+
+  .odds-mid-v2 {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    left: 50%;
+    background: rgba(255, 255, 255, 0.18);
+    pointer-events: none;
+  }
+
+  .odds-stat-tag-v2 {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 11px;
+    line-height: 1;
+    color: #fff;
+    pointer-events: none;
+    z-index: 2;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    white-space: nowrap;
+  }
+
+  .odds-stat-tag-v2.left {
+    transform: translate(-110%, -50%);
+    text-align: right;
+  }
+
+  .odds-stat-tag-v2.right {
+    transform: translate(10%, -50%);
+    text-align: left;
+  }
+
+  .odds-left-v2 {
+    height: 100%;
+    background: rgba(70, 130, 180, .8);
+  }
+
+  .odds-right-v2 {
+    height: 100%;
+    background: rgba(255, 0, 0, .8);
+    float: right;
+  }
+
+  .odds-tag-v2 {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    padding: 2px 6px;
+    background: rgba(0, 0, 0, .25);
+    border-radius: 4px;
+    color: #fff;
+  }
+
+  .odds-tag-v2.left {
+    left: 6px;
+  }
+
+  .odds-tag-v2.right {
+    right: 6px;
+  }
+
+  .odds-tag-v2.strong {
+    font-weight: 700;
+  }
+
+  .odds-tag-v2.muted {
+    opacity: .75;
+  }
+
+  .odds-bar-v2.is-tie .odds-left-v2,
+  .odds-bar-v2.is-tie .odds-right-v2 {
+    opacity: .9;
+  }
+
+  .odds-bar-v2.winner-left .odds-right-v2 {
+    opacity: .6;
+  }
+
+  .odds-bar-v2.winner-right .odds-left-v2 {
+    opacity: .6;
+  }
+
+  @media (max-width: 520px) {
+    .odds-list-v2 {
+      --label-w: 70px;
     }
-    .btn-toggle.active{ box-shadow:0 0 0 2px rgba(70,130,180,0.35) inset; }
-    .btn-toggle:focus{ outline:2px solid rgba(70,130,180,0.6); outline-offset:2px; }
-  </style>
+  }
+
+  @media (max-width: 420px) {
+    .odds-list-v2 {
+      --label-w: 56px;
+    }
+  }
+
+  /* Toggle buttons (reused) */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0 12px;
+    flex-wrap: wrap;
+  }
+
+  .btn-toggle {
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #0b0e14;
+    color: #e8eefc;
+    padding: 6px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .btn-toggle.active {
+    box-shadow: 0 0 0 2px rgba(70, 130, 180, 0.35) inset;
+  }
+
+  .btn-toggle:focus {
+    outline: 2px solid rgba(70, 130, 180, 0.6);
+    outline-offset: 2px;
+  }
+</style>
 {% endblock head_extra %}
 
 {% block content %}
-  <div class="body-container">
-    {% set t1 = data_team_stats_1|default([{'team_name':'Team 1','team_current_points':''}], true) %}
-    {% set t2 = data_team_stats_2|default([{'team_name':'Team 2','team_current_points':''}], true) %}
+<div class="body-container">
+  {% set t1 = data_team_stats_1|default([{'team_name':'Team 1','team_current_points':''}], true) %}
+  {% set t2 = data_team_stats_2|default([{'team_name':'Team 2','team_current_points':''}], true) %}
 
-    <!-- Header pills -->
-    <div class="card teams-header">
-      <div class="team-pill left">
-        <div class="team-name left">{{ t1[0]['team_name'] }}</div>
-        <div class="team-points">{{ t1[0]['team_current_points'] }}</div>
-      </div>
-      <div class="team-pill right">
-        <div class="team-points">{{ t2[0]['team_current_points'] }}</div>
-        <div class="team-name right">{{ t2[0]['team_name'] }}</div>
-      </div>
+  <!-- Header pills -->
+  <div class="card teams-header">
+    <div class="team-pill left">
+      <div class="team-name left">{{ t1[0]['team_name'] }}</div>
+      <div class="team-points">{{ t1[0]['team_current_points'] }}</div>
     </div>
-
-    <!-- Streaming recommendations (centered) -->
-    <form method="post" action="{{ url_for('streaming.streaming_page') }}" style="margin:12px 0;">
-      <div style="display:flex; justify-content:center;">
-        <div>
-          <input type="hidden" name="myTeam"        value="{{ (data_team_stats_1|default([{'team_name':'Team 1'}], true))[0]['team_name'] }}">
-          <input type="hidden" name="opponentsTeam" value="{{ (data_team_stats_2|default([{'team_name':'Team 2'}], true))[0]['team_name'] }}">
-
-          <input type="hidden" name="week_data_json"            value='{{ week_data|tojson }}'>
-          <input type="hidden" name="stat_window"               value='{{ stat_window }}'>
-          <input type="hidden" name="scoring_type"              value='{{ scoring_type }}'>
-
-          <input type="hidden" name="league_id" value="{{ league_id }}">
-          <input type="hidden" name="year"      value="{{ year }}">
-          <input type="hidden" name="espn_s2"   value="{{ espn_s2|default('', true) }}">
-          <input type="hidden" name="swid"      value="{{ swid|default('', true) }}">
-
-          <input type="hidden" name="team1_rows_json"           value='{{ data_team_players_1|tojson }}'>
-          <input type="hidden" name="team2_rows_json"           value='{{ data_team_players_2|tojson }}'>
-          <input type="hidden" name="team1_win_pct_json"        value='{{ team1_win_pct_data|tojson }}'>
-          <input type="hidden" name="team2_win_pct_json"        value='{{ team2_win_pct_data|tojson }}'>
-          <input type="hidden" name="team1_current_stats_json"  value='{{ team1_current_stats|tojson }}'>
-          <input type="hidden" name="team2_current_stats_json"  value='{{ team2_current_stats|tojson }}'>
-
-          <button type="submit" class="btn">Streaming recommendations for this matchup</button>
-        </div>
-      </div>
-    </form>
-
-    <!-- ===== CURRENT CATEGORY SNAPSHOT ===== -->
-    <div class="card cat-snapshot">
-      <div class="cat-grid">
-        {% for row in snapshot_rows %}
-          <div class="cat-col">
-            <div class="cat-label">{{ row.cat }}</div>
-            <div class="split-pill" style="--a1:{{ '%.3f' % row.a1 }}; --a2:{{ '%.3f' % row.a2 }};"
-                title="{{ t1[0]['team_name'] }} / {{ t2[0]['team_name'] }}">
-              <div class="pill-left">{{ row.disp1 }}</div>
-              <div class="pill-right">{{ row.disp2 }}</div>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-    </div>
-
-    <!-- Players + summary tables -->
-    <div class="card">
-      <!-- View toggle for tables -->
-      <div class="toggle-row">
-        <span style="font-size:14px; opacity:.85;">Table view:</span>
-        <button type="button" class="btn-toggle view-mode-btn active" data-mode="raw">Raw stats</button>
-        <button type="button" class="btn-toggle view-mode-btn" data-mode="z">Z-scores</button>
-      </div>
-
-      <div class="table-container">
-        <div class="table-wrapper">
-          <!-- Team 1 table -->
-          <table class="data-table table-compact">
-            <thead>
-              <tr>
-                <th>Player Name</th>
-                <th>MIN</th>
-                <th>FG%</th>
-                <th>FT%</th>
-                <th>3PTM</th>
-                <th>REB</th>
-                <th>AST</th>
-                <th>STL</th>
-                <th>BLK</th>
-                <th>TO</th>
-                <th>PTS</th>
-                <th>Total</th>
-                <th>Games</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in data_team_players_1 %}
-              <tr>
-                <td class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">
-                  <a href="{{ url_for('players.player_stats') }}?player_name={{ row['player_name'] }}">{{ row['player_name'] }}</a>
-                </td>
-                <td>{{ row['min'] }}</td>
-
-                {# FG% #}
-                <td class="stat-cell"
-                    data-cat="FG%"
-                    data-raw="{{ row.fg }}"
-                    data-z="{{ row.z_fg }}">
-                  {{ (row.fg or 0.0)|float|round(3) }}
-                </td>
-            
-
-                {# FT% #}
-                <td class="stat-cell"
-                    data-cat="FT%"
-                    data-raw="{{ row.ft }}"
-                    data-z="{{ row.z_ft }}">
-                  {{ (row.ft or 0.0)|float|round(3) }}
-                </td>
-            
-
-                {# 3PTM #}
-                <td class="stat-cell"
-                    data-cat="3PM"
-                    data-raw="{{ row.threeptm }}"
-                    data-z="{{ row.z_threeptm }}">
-                  {{ row.threeptm }}
-                </td>
-
-                {# REB #}
-                <td class="stat-cell"
-                    data-cat="REB"
-                    data-raw="{{ row.reb }}"
-                    data-z="{{ row.z_reb }}">
-                  {{ row.reb }}
-                </td>
-
-                {# AST #}
-                <td class="stat-cell"
-                    data-cat="AST"
-                    data-raw="{{ row.ast }}"
-                    data-z="{{ row.z_ast }}">
-                  {{ row.ast }}
-                </td>
-
-                {# STL #}
-                <td class="stat-cell"
-                    data-cat="STL"
-                    data-raw="{{ row.stl }}"
-                    data-z="{{ row.z_stl }}">
-                  {{ row.stl }}
-                </td>
-
-                {# BLK #}
-                <td class="stat-cell"
-                    data-cat="BLK"
-                    data-raw="{{ row.blk }}"
-                    data-z="{{ row.z_blk }}">
-                  {{ row.blk }}
-                </td>
-
-                {# TO #}
-                <td class="stat-cell"
-                    data-cat="TO"
-                    data-raw="{{ row.turno }}"
-                    data-z="{{ row.z_turno }}">
-                  {{ row.turno }}
-                </td>
-
-                {# PTS #}
-                <td class="stat-cell"
-                    data-cat="PTS"
-                    data-raw="{{ row.pts }}"
-                    data-z="{{ row.z_pts }}">
-                  {{ row.pts }}
-                </td>
-
-                {# Total (per-player) #}
-                <td class="stat-total"></td>
-
-                <td>{{ row.get('games_str', row['games']) }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colspan="12" style="text-align:right; font-weight:600;">Total games (remaining / total)</td>
-                <td>{{ team1_games_remaining }}/{{ team1_games_total }}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        <div class="table-wrapper">
-          <!-- Team 2 table -->
-          <table class="data-table table-compact">
-            <thead>
-              <tr>
-                <th>Player Name</th>
-                <th>MIN</th>
-                <th>FG%</th>
-                <th>FT%</th>
-                <th>3PTM</th>
-                <th>REB</th>
-                <th>AST</th>
-                <th>STL</th>
-                <th>BLK</th>
-                <th>TO</th>
-                <th>PTS</th>
-                <th>Total</th>
-                <th>Games</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in data_team_players_2 %}
-              <tr>
-                <td class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">
-                  <a href="{{ url_for('players.player_stats') }}?player_name={{ row['player_name'] }}">{{ row['player_name'] }}</a>
-                </td>
-                <td>{{ row['min'] }}</td>
-
-                {# FG% #}
-                <td class="stat-cell"
-                    data-cat="FG%"
-                    data-raw="{{ row.fg }}"
-                    data-z="{{ row.z_fg }}">
-                  {{ (row.fg or 0.0)|float|round(3) }}
-                </td>
-            
-
-                {# FT% #}
-                <td class="stat-cell"
-                    data-cat="FT%"
-                    data-raw="{{ row.ft }}"
-                    data-z="{{ row.z_ft }}">
-                  {{ (row.ft or 0.0)|float|round(3) }}
-                </td>
-            
-
-                {# 3PTM #}
-                <td class="stat-cell"
-                    data-cat="3PM"
-                    data-raw="{{ row.threeptm }}"
-                    data-z="{{ row.z_threeptm }}">
-                  {{ row.threeptm }}
-                </td>
-
-                {# REB #}
-                <td class="stat-cell"
-                    data-cat="REB"
-                    data-raw="{{ row.reb }}"
-                    data-z="{{ row.z_reb }}">
-                  {{ row.reb }}
-                </td>
-
-                {# AST #}
-                <td class="stat-cell"
-                    data-cat="AST"
-                    data-raw="{{ row.ast }}"
-                    data-z="{{ row.z_ast }}">
-                  {{ row.ast }}
-                </td>
-
-                {# STL #}
-                <td class="stat-cell"
-                    data-cat="STL"
-                    data-raw="{{ row.stl }}"
-                    data-z="{{ row.z_stl }}">
-                  {{ row.stl }}
-                </td>
-
-                {# BLK #}
-                <td class="stat-cell"
-                    data-cat="BLK"
-                    data-raw="{{ row.blk }}"
-                    data-z="{{ row.z_blk }}">
-                  {{ row.blk }}
-                </td>
-
-                {# TO #}
-                <td class="stat-cell"
-                    data-cat="TO"
-                    data-raw="{{ row.turno }}"
-                    data-z="{{ row.z_turno }}">
-                  {{ row.turno }}
-                </td>
-
-                {# PTS #}
-                <td class="stat-cell"
-                    data-cat="PTS"
-                    data-raw="{{ row.pts }}"
-                    data-z="{{ row.z_pts }}">
-                  {{ row.pts }}
-                </td>
-
-                {# Total (per-player) #}
-                <td class="stat-total"></td>
-
-                <td>{{ row.get('games_str', row['games']) }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colspan="12" style="text-align:right; font-weight:600;">Total games (remaining / total)</td>
-                <td>{{ team2_games_remaining }}/{{ team2_games_total }}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-
-      <!-- Odds (server-rendered) -->
-      <div class="card odds-card-v2" style="margin-top:12px;">
-        <h3 class="win-title" style="margin-top:0">Odds of winning each category</h3>
-        <div class="odds-list-v2">
-          {% for row in odds_rows %}
-            <div
-              class="odds-item-v2"
-              data-cat="{{ row.cat }}"
-              data-p1="{{ row.p1 }}"
-              data-p2="{{ row.p2 }}"
-              data-mid-t1="{{ row.mid_t1 }}"
-              data-mid-t2="{{ row.mid_t2 }}"
-            >
-              <div class="odds-label-v2">{{ row.cat }}</div>
-              <div class="odds-bar-v2 {{ row.class_name }}" title="{{ row.p1 }}% vs {{ row.p2 }}%">
-                <div class="odds-left-v2"  style="width: {{ row.p1 }}%;"></div>
-                <div class="odds-right-v2" style="width: {{ row.p2 }}%;"></div>
-                <div class="odds-mid-v2"></div>
-                <div class="odds-tag-v2 left  {{ 'strong' if row.p1 > row.p2 else ('muted' if row.p1 < row.p2 else '') }}">{{ row.p1|round(0) }}%</div>
-                <div class="odds-tag-v2 right {{ 'strong' if row.p2 > row.p1 else ('muted' if row.p2 < row.p1 else '') }}">{{ row.p2|round(0) }}%</div>
-                <div class="odds-stat-tag-v2 left">{{ row.mid_t1 }}</div>
-                <div class="odds-stat-tag-v2 right">{{ row.mid_t2 }}</div>
-              </div>
-              <div class="odds-spacer" aria-hidden="true"></div>
-            </div>
-          {% endfor %}
-        </div>
-      </div>
-
-    </div>
-
-    <!-- ===== Mini charts ===== -->
-    <div id="graph-container" class="graph-section card">
-      <div class="toggle-row">
-        <h2 style="margin:0; flex:1">Team Comparison — Projected Categories</h2>
-        <button id="toggle-pred-btn" class="btn-toggle" aria-pressed="false" type="button">Show predictions from start of week</button>
-      </div>
-      <p>Graphs update at end of day (PST)</p>
-      <div class="grid-container chart-grid">
-        {% for cat in combined_jsons.keys() %}
-        <div class="graph-wrapper chart-card">
-          <div class="graph-title chart-title">{{ cat }}</div>
-          <div id="chart-{{ (cat|replace('%','pct')|replace('3PM','3pm')|lower) }}" class="chart-svg"></div>
-        </div>
-        {% endfor %}
-      </div>
+    <div class="team-pill right">
+      <div class="team-points">{{ t2[0]['team_current_points'] }}</div>
+      <div class="team-name right">{{ t2[0]['team_name'] }}</div>
     </div>
   </div>
+
+  <!-- Streaming recommendations (centered) -->
+  <form method="post" action="{{ url_for('streaming.streaming_page') }}" style="margin:12px 0;">
+    <div style="display:flex; justify-content:center;">
+      <div>
+        <input type="hidden" name="myTeam"
+          value="{{ (data_team_stats_1|default([{'team_name':'Team 1'}], true))[0]['team_name'] }}">
+        <input type="hidden" name="opponentsTeam"
+          value="{{ (data_team_stats_2|default([{'team_name':'Team 2'}], true))[0]['team_name'] }}">
+
+        <input type="hidden" name="week_data_json" value='{{ week_data|tojson }}'>
+        <input type="hidden" name="stat_window" value='{{ stat_window }}'>
+        <input type="hidden" name="scoring_type" value='{{ scoring_type }}'>
+
+        <input type="hidden" name="league_id" value="{{ league_id }}">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="espn_s2" value="{{ espn_s2|default('', true) }}">
+        <input type="hidden" name="swid" value="{{ swid|default('', true) }}">
+
+        <input type="hidden" name="team1_rows_json" value='{{ data_team_players_1|tojson }}'>
+        <input type="hidden" name="team2_rows_json" value='{{ data_team_players_2|tojson }}'>
+        <input type="hidden" name="team1_win_pct_json" value='{{ team1_win_pct_data|tojson }}'>
+        <input type="hidden" name="team2_win_pct_json" value='{{ team2_win_pct_data|tojson }}'>
+        <input type="hidden" name="team1_current_stats_json" value='{{ team1_current_stats|tojson }}'>
+        <input type="hidden" name="team2_current_stats_json" value='{{ team2_current_stats|tojson }}'>
+
+        <button type="submit" class="btn">Streaming recommendations for this matchup</button>
+      </div>
+    </div>
+  </form>
+
+  <!-- ===== CURRENT CATEGORY SNAPSHOT ===== -->
+  <div class="card cat-snapshot">
+    <div class="cat-grid">
+      {% for row in snapshot_rows %}
+      <div class="cat-col">
+        <div class="cat-label">{{ row.cat }}</div>
+        <div class="split-pill" style="--a1:{{ '%.3f' % row.a1 }}; --a2:{{ '%.3f' % row.a2 }};"
+          title="{{ t1[0]['team_name'] }} / {{ t2[0]['team_name'] }}">
+          <div class="pill-left">{{ row.disp1 }}</div>
+          <div class="pill-right">{{ row.disp2 }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Players + summary tables -->
+  <div class="card">
+    <!-- View toggle for tables -->
+    <div class="toggle-row">
+      <span style="font-size:14px; opacity:.85;">Table view:</span>
+      <button type="button" class="btn-toggle view-mode-btn active" data-mode="raw">Raw stats</button>
+      <button type="button" class="btn-toggle view-mode-btn" data-mode="z">Z-scores</button>
+    </div>
+
+    <div class="table-container">
+      <div class="table-wrapper">
+        <!-- Team 1 table -->
+        <table class="data-table table-compact">
+          <thead>
+            <tr>
+              <th>Player Name</th>
+              <th>MIN</th>
+              <th>FG%</th>
+              <th>FT%</th>
+              <th>3PTM</th>
+              <th>REB</th>
+              <th>AST</th>
+              <th>STL</th>
+              <th>BLK</th>
+              <th>TO</th>
+              <th>PTS</th>
+              <th>Total</th>
+              <th>Games</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in data_team_players_1 %}
+            <tr>
+              <td
+                class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">
+                <a href="{{ url_for('players.player_stats') }}?player_name={{ row['player_name'] }}">{{
+                  row['player_name'] }}</a>
+              </td>
+              <td>{{ row['min'] }}</td>
+
+              {# FG% #}
+              <td class="stat-cell" data-cat="FG%" data-raw="{{ row.fg }}" data-z="{{ row.z_fg }}">
+                {{ (row.fg or 0.0)|float|round(3) }}
+              </td>
+
+
+              {# FT% #}
+              <td class="stat-cell" data-cat="FT%" data-raw="{{ row.ft }}" data-z="{{ row.z_ft }}">
+                {{ (row.ft or 0.0)|float|round(3) }}
+              </td>
+
+
+              {# 3PTM #}
+              <td class="stat-cell" data-cat="3PM" data-raw="{{ row.threeptm }}" data-z="{{ row.z_threeptm }}">
+                {{ row.threeptm }}
+              </td>
+
+              {# REB #}
+              <td class="stat-cell" data-cat="REB" data-raw="{{ row.reb }}" data-z="{{ row.z_reb }}">
+                {{ row.reb }}
+              </td>
+
+              {# AST #}
+              <td class="stat-cell" data-cat="AST" data-raw="{{ row.ast }}" data-z="{{ row.z_ast }}">
+                {{ row.ast }}
+              </td>
+
+              {# STL #}
+              <td class="stat-cell" data-cat="STL" data-raw="{{ row.stl }}" data-z="{{ row.z_stl }}">
+                {{ row.stl }}
+              </td>
+
+              {# BLK #}
+              <td class="stat-cell" data-cat="BLK" data-raw="{{ row.blk }}" data-z="{{ row.z_blk }}">
+                {{ row.blk }}
+              </td>
+
+              {# TO #}
+              <td class="stat-cell" data-cat="TO" data-raw="{{ row.turno }}" data-z="{{ row.z_turno }}">
+                {{ row.turno }}
+              </td>
+
+              {# PTS #}
+              <td class="stat-cell" data-cat="PTS" data-raw="{{ row.pts }}" data-z="{{ row.z_pts }}">
+                {{ row.pts }}
+              </td>
+
+              {# Total (per-player) #}
+              <td class="stat-total"></td>
+
+              <td>{{ row.get('games_str', row['games']) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="12" style="text-align:right; font-weight:600;">Total games (remaining / total)</td>
+              <td>{{ team1_games_remaining }}/{{ team1_games_total }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="table-wrapper">
+        <!-- Team 2 table -->
+        <table class="data-table table-compact">
+          <thead>
+            <tr>
+              <th>Player Name</th>
+              <th>MIN</th>
+              <th>FG%</th>
+              <th>FT%</th>
+              <th>3PTM</th>
+              <th>REB</th>
+              <th>AST</th>
+              <th>STL</th>
+              <th>BLK</th>
+              <th>TO</th>
+              <th>PTS</th>
+              <th>Total</th>
+              <th>Games</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in data_team_players_2 %}
+            <tr>
+              <td
+                class="{{ 'player-out' if row['inj'] == 'OUT' else 'player-dtd' if row['inj'] == 'DAY_TO_DAY' else '' }}">
+                <a href="{{ url_for('players.player_stats') }}?player_name={{ row['player_name'] }}">{{
+                  row['player_name'] }}</a>
+              </td>
+              <td>{{ row['min'] }}</td>
+
+              {# FG% #}
+              <td class="stat-cell" data-cat="FG%" data-raw="{{ row.fg }}" data-z="{{ row.z_fg }}">
+                {{ (row.fg or 0.0)|float|round(3) }}
+              </td>
+
+
+              {# FT% #}
+              <td class="stat-cell" data-cat="FT%" data-raw="{{ row.ft }}" data-z="{{ row.z_ft }}">
+                {{ (row.ft or 0.0)|float|round(3) }}
+              </td>
+
+
+              {# 3PTM #}
+              <td class="stat-cell" data-cat="3PM" data-raw="{{ row.threeptm }}" data-z="{{ row.z_threeptm }}">
+                {{ row.threeptm }}
+              </td>
+
+              {# REB #}
+              <td class="stat-cell" data-cat="REB" data-raw="{{ row.reb }}" data-z="{{ row.z_reb }}">
+                {{ row.reb }}
+              </td>
+
+              {# AST #}
+              <td class="stat-cell" data-cat="AST" data-raw="{{ row.ast }}" data-z="{{ row.z_ast }}">
+                {{ row.ast }}
+              </td>
+
+              {# STL #}
+              <td class="stat-cell" data-cat="STL" data-raw="{{ row.stl }}" data-z="{{ row.z_stl }}">
+                {{ row.stl }}
+              </td>
+
+              {# BLK #}
+              <td class="stat-cell" data-cat="BLK" data-raw="{{ row.blk }}" data-z="{{ row.z_blk }}">
+                {{ row.blk }}
+              </td>
+
+              {# TO #}
+              <td class="stat-cell" data-cat="TO" data-raw="{{ row.turno }}" data-z="{{ row.z_turno }}">
+                {{ row.turno }}
+              </td>
+
+              {# PTS #}
+              <td class="stat-cell" data-cat="PTS" data-raw="{{ row.pts }}" data-z="{{ row.z_pts }}">
+                {{ row.pts }}
+              </td>
+
+              {# Total (per-player) #}
+              <td class="stat-total"></td>
+
+              <td>{{ row.get('games_str', row['games']) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="12" style="text-align:right; font-weight:600;">Total games (remaining / total)</td>
+              <td>{{ team2_games_remaining }}/{{ team2_games_total }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- Odds (server-rendered) -->
+    <div class="card odds-card-v2" style="margin-top:12px;">
+      <h3 class="win-title" style="margin-top:0">Odds of winning each category</h3>
+      <div class="odds-list-v2">
+        {% for row in odds_rows %}
+        <div class="odds-item-v2" data-cat="{{ row.cat }}" data-p1="{{ row.p1 }}" data-p2="{{ row.p2 }}"
+          data-mid-t1="{{ row.mid_t1 }}" data-mid-t2="{{ row.mid_t2 }}" data-pmf1='{{ row.pmf1|tojson|safe }}'
+          data-pmf2='{{ row.pmf2|tojson|safe }}'>
+          <div class="odds-label-v2">{{ row.cat }}</div>
+          <div class="odds-bar-v2 {{ row.class_name }}" title="{{ row.p1 }}% vs {{ row.p2 }}%">
+            <div class="odds-left-v2" style="width: {{ row.p1 }}%;"></div>
+            <div class="odds-right-v2" style="width: {{ row.p2 }}%;"></div>
+            <div class="odds-mid-v2"></div>
+            <div class="odds-tag-v2 left  {{ 'strong' if row.p1 > row.p2 else ('muted' if row.p1 < row.p2 else '') }}">
+              {{ row.p1|round(0) }}%</div>
+            <div class="odds-tag-v2 right {{ 'strong' if row.p2 > row.p1 else ('muted' if row.p2 < row.p1 else '') }}">
+              {{ row.p2|round(0) }}%</div>
+            <div class="odds-stat-tag-v2 left">{{ row.mid_t1 }}</div>
+            <div class="odds-stat-tag-v2 right">{{ row.mid_t2 }}</div>
+          </div>
+          <div class="odds-spacer" aria-hidden="true"></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===== Mini charts ===== -->
+  <div id="graph-container" class="graph-section card">
+    <div class="toggle-row">
+      <h2 style="margin:0; flex:1">Team Comparison — Projected Categories</h2>
+      <button id="toggle-pred-btn" class="btn-toggle" aria-pressed="false" type="button">Show predictions from start of
+        week</button>
+    </div>
+    <p>Graphs update at end of day (PST)</p>
+    <div class="grid-container chart-grid">
+      {% for cat in combined_jsons.keys() %}
+      <div class="graph-wrapper chart-card">
+        <div class="graph-title chart-title">{{ cat }}</div>
+        <div id="chart-{{ (cat|replace('%','pct')|replace('3PM','3pm')|lower) }}" class="chart-svg"></div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
 {% endblock content %}
 
 {% block body_js %}
-  <script>
-    const combinedJsons = {{ combined_jsons|default({}, true)|tojson }};
-    const categories = Object.keys(combinedJsons);
-    const slug = c => c.replace('%','pct').replace('3PM','3pm').toLowerCase();
+<script>
+  const combinedJsons = {{ combined_jsons|default ({}, true) | tojson }};
+  const categories = Object.keys(combinedJsons);
+  const slug = c => c.replace('%', 'pct').replace('3PM', '3pm').toLowerCase();
 
-    const team1Name = {{ (data_team_stats_1|default([{'team_name':'Team 1'}], true))[0]['team_name']|tojson }};
-    const team2Name = {{ (data_team_stats_2|default([{'team_name':'Team 2'}], true))[0]['team_name']|tojson }};
-    const shorten = s => s && s.length > 18 ? (s.slice(0,16) + '…') : (s || '');
+  const team1Name = {{ (data_team_stats_1 |default ([{ 'team_name': 'Team 1' }], true))[0]['team_name'] | tojson }};
+  const team2Name = {{ (data_team_stats_2 |default ([{ 'team_name': 'Team 2' }], true))[0]['team_name'] | tojson }};
+  const shorten = s => s && s.length > 18 ? (s.slice(0, 16) + '…') : (s || '');
 
-    // ==== Compute global date extent across all categories ====
-    const allDates = [];
-    categories.forEach(cat => {
-      (combinedJsons[cat] || []).forEach(d => allDates.push(new Date(d.date)));
-    });
-    const globalMinDate = allDates.length ? new Date(Math.min.apply(null, allDates)) : new Date();
-    const globalMaxDate = allDates.length ? new Date(Math.max.apply(null, allDates)) : new Date();
-    const today = new Date(); today.setHours(0,0,0,0);
+  // ==== Compute global date extent across all categories ====
+  const allDates = [];
+  categories.forEach(cat => {
+    (combinedJsons[cat] || []).forEach(d => allDates.push(new Date(d.date)));
+  });
+  const globalMinDate = allDates.length ? new Date(Math.min.apply(null, allDates)) : new Date();
+  const globalMaxDate = allDates.length ? new Date(Math.max.apply(null, allDates)) : new Date();
+  const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    // Default: ON if today is before graph starts, else OFF
-    let showPredicted = today < new Date(globalMinDate.getFullYear(), globalMinDate.getMonth(), globalMinDate.getDate());
+  // Default: ON if today is before graph starts, else OFF
+  let showPredicted = today < new Date(globalMinDate.getFullYear(), globalMinDate.getMonth(), globalMinDate.getDate());
 
-    const toggleBtn = document.getElementById('toggle-pred-btn');
-    function syncToggleBtn(){
-      toggleBtn.setAttribute('aria-pressed', showPredicted ? 'true' : 'false');
-      toggleBtn.classList.toggle('active', showPredicted);
-      toggleBtn.textContent = (showPredicted ? 'Hide' : 'Show') + ' predictions from start of week';
-    }
+  const toggleBtn = document.getElementById('toggle-pred-btn');
+  function syncToggleBtn() {
+    toggleBtn.setAttribute('aria-pressed', showPredicted ? 'true' : 'false');
+    toggleBtn.classList.toggle('active', showPredicted);
+    toggleBtn.textContent = (showPredicted ? 'Hide' : 'Show') + ' predictions from start of week';
+  }
+  syncToggleBtn();
+
+  toggleBtn.addEventListener('click', () => {
+    showPredicted = !showPredicted;
+    d3.selectAll('.predicted-line').style('display', showPredicted ? null : 'none');
     syncToggleBtn();
+  });
 
-    toggleBtn.addEventListener('click', () => {
-      showPredicted = !showPredicted;
-      d3.selectAll('.predicted-line').style('display', showPredicted ? null : 'none');
-      syncToggleBtn();
-    });
+  // ===== Mini charts (unchanged) =====
+  categories.forEach((cat) => {
+    const graphData = (combinedJsons[cat] || []).map(d => ({
+      date: new Date(d.date),
+      predicted_cat: +d.predicted_cat,
+      predicted_cat_from_present: +d.predicted_cat_from_present,
+      team: d.team,
+      category: d.category
+    }));
+    graphData.forEach(d => { d.date.setDate(d.date.getDate() + 1); d.date.setHours(0, 0, 0, 0); });
 
-    // ===== Mini charts (unchanged) =====
-    categories.forEach((cat) => {
-      const graphData = (combinedJsons[cat] || []).map(d => ({
-        date: new Date(d.date),
-        predicted_cat: +d.predicted_cat,
-        predicted_cat_from_present: +d.predicted_cat_from_present,
-        team: d.team,
-        category: d.category
-      }));
-      graphData.forEach(d => { d.date.setDate(d.date.getDate()+1); d.date.setHours(0,0,0,0); });
+    const team1Data = graphData.filter(d => d.team === "Team 1");
+    const team2Data = graphData.filter(d => d.team === "Team 2");
+    const team1PastData = team1Data.filter(d => d.date <= today);
+    const team1FutureData = team1Data.filter(d => d.date >= today);
+    const team2PastData = team2Data.filter(d => d.date <= today);
+    const team2FutureData = team2Data.filter(d => d.date >= today);
 
-      const team1Data = graphData.filter(d => d.team === "Team 1");
-      const team2Data = graphData.filter(d => d.team === "Team 2");
-      const team1PastData = team1Data.filter(d => d.date <= today);
-      const team1FutureData = team1Data.filter(d => d.date >= today);
-      const team2PastData = team2Data.filter(d => d.date <= today);
-      const team2FutureData = team2Data.filter(d => d.date >= today);
+    const containerSel = d3.select("#chart-" + slug(cat));
+    const containerNode = containerSel.node();
+    const containerW = (containerNode && containerNode.clientWidth) ? containerNode.clientWidth : 320;
 
-      const containerSel = d3.select("#chart-" + slug(cat));
-      const containerNode = containerSel.node();
-      const containerW = (containerNode && containerNode.clientWidth) ? containerNode.clientWidth : 320;
+    const rawMax = d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present));
+    const labelText = (cat === 'FG%' || cat === 'FT%') ? d3.format(".2f")(rawMax) : d3.format(",")(rawMax);
+    const leftMargin = Math.max(36, labelText.toString().length * 7 + 12);
 
-      const rawMax = d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present));
-      const labelText = (cat === 'FG%' || cat === 'FT%') ? d3.format(".2f")(rawMax) : d3.format(",")(rawMax);
-      const leftMargin = Math.max(36, labelText.toString().length * 7 + 12);
+    const margin = { top: 10, right: 14, bottom: 44, left: leftMargin },
+      width = containerW - margin.left - margin.right,
+      height = 210 - margin.top - margin.bottom;
 
-      const margin = { top: 10, right: 14, bottom: 44, left: leftMargin },
-            width  = containerW - margin.left - margin.right,
-            height = 210 - margin.top - margin.bottom;
+    const svg = containerSel
+      .append("svg")
+      .attr("width", containerW)
+      .attr("height", height + margin.top + margin.bottom)
+      .append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
 
-      const svg = containerSel
-        .append("svg")
-        .attr("width",  containerW)
-        .attr("height", height + margin.top + margin.bottom)
-        .append("g")
-        .attr("transform", `translate(${margin.left},${margin.top})`);
+    const x = d3.scaleTime().domain(d3.extent(graphData, d => d.date)).range([0, width]);
+    const xAxis = d3.axisBottom(x).ticks(d3.timeDay.every(1)).tickFormat(d3.timeFormat("%b %d"));
+    svg.append("g").attr("class", "axis axis--x").attr("transform", `translate(0,${height})`)
+      .call(xAxis).selectAll("text").attr("transform", "rotate(-45)").style("text-anchor", "end");
 
-      const x = d3.scaleTime().domain(d3.extent(graphData, d => d.date)).range([0, width]);
-      const xAxis = d3.axisBottom(x).ticks(d3.timeDay.every(1)).tickFormat(d3.timeFormat("%b %d"));
-      svg.append("g").attr("class","axis axis--x").attr("transform", `translate(0,${height})`)
-        .call(xAxis).selectAll("text").attr("transform","rotate(-45)").style("text-anchor","end");
+    const isPct = (cat === 'FG%' || cat === 'FT%');
+    const yMin = isPct ? Math.max(0, d3.min(graphData, d => Math.min(d.predicted_cat, d.predicted_cat_from_present)) - 0.10) : 0;
+    const yMax = isPct ? Math.min(1, d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present)) + 0.20)
+      : d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present));
+    const y = d3.scaleLinear().domain([yMin, yMax]).nice().range([height, 0]);
+    svg.append("g").attr("class", "axis axis--y").call(d3.axisLeft(y));
 
-      const isPct = (cat === 'FG%' || cat === 'FT%');
-      const yMin = isPct ? Math.max(0, d3.min(graphData, d => Math.min(d.predicted_cat, d.predicted_cat_from_present)) - 0.10) : 0;
-      const yMax = isPct ? Math.min(1, d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present)) + 0.20)
-                         : d3.max(graphData, d => Math.max(d.predicted_cat, d.predicted_cat_from_present));
-      const y = d3.scaleLinear().domain([yMin, yMax]).nice().range([height, 0]);
-      svg.append("g").attr("class","axis axis--y").call(d3.axisLeft(y));
+    const lineActual = d3.line().x(d => x(d.date)).y(d => y(d.predicted_cat_from_present));
+    const linePredicted = d3.line().x(d => x(d.date)).y(d => y(d.predicted_cat));
 
-      const lineActual    = d3.line().x(d => x(d.date)).y(d => y(d.predicted_cat_from_present));
-      const linePredicted = d3.line().x(d => x(d.date)).y(d => y(d.predicted_cat));
+    // Team 1 — actual & predicted
+    svg.append("path")
+      .datum(team1PastData)
+      .attr("fill", "none").attr("stroke", "steelblue").attr("stroke-width", 1.8)
+      .attr("d", lineActual);
 
-      // Team 1 — actual & predicted
-      svg.append("path")
-        .datum(team1PastData)
-        .attr("fill","none").attr("stroke","steelblue").attr("stroke-width",1.8)
-        .attr("d", lineActual);
+    svg.append("path")
+      .datum(team1FutureData)
+      .attr("fill", "none").attr("stroke", "steelblue").attr("stroke-width", 1.8)
+      .style("stroke-dasharray", "5,5")
+      .attr("d", lineActual);
 
-      svg.append("path")
-        .datum(team1FutureData)
-        .attr("fill","none").attr("stroke","steelblue").attr("stroke-width",1.8)
-        .style("stroke-dasharray","5,5")
-        .attr("d", lineActual);
+    svg.append("path")
+      .datum(team1Data)
+      .attr("class", "predicted-line")
+      .attr("fill", "none").attr("stroke", "steelblue").attr("stroke-width", 1.4)
+      .style("stroke-dasharray", "3,3")
+      .style("display", showPredicted ? null : "none")
+      .attr("d", linePredicted);
 
-      svg.append("path")
-        .datum(team1Data)
-        .attr("class","predicted-line")
-        .attr("fill","none").attr("stroke","steelblue").attr("stroke-width",1.4)
-        .style("stroke-dasharray","3,3")
-        .style("display", showPredicted ? null : "none")
-        .attr("d", linePredicted);
+    // Team 2 — actual & predicted
+    svg.append("path")
+      .datum(team2PastData)
+      .attr("fill", "none").attr("stroke", "red").attr("stroke-width", 1.8)
+      .attr("d", lineActual);
 
-      // Team 2 — actual & predicted
-      svg.append("path")
-        .datum(team2PastData)
-        .attr("fill","none").attr("stroke","red").attr("stroke-width",1.8)
-        .attr("d", lineActual);
+    svg.append("path")
+      .datum(team2FutureData)
+      .attr("fill", "none").attr("stroke", "red").attr("stroke-width", 1.8)
+      .style("stroke-dasharray", "5,5")
+      .attr("d", lineActual);
 
-      svg.append("path")
-        .datum(team2FutureData)
-        .attr("fill","none").attr("stroke","red").attr("stroke-width",1.8)
-        .style("stroke-dasharray","5,5")
-        .attr("d", lineActual);
+    svg.append("path")
+      .datum(team2Data)
+      .attr("class", "predicted-line")
+      .attr("fill", "none").attr("stroke", "red").attr("stroke-width", 1.4)
+      .style("stroke-dasharray", "3,3")
+      .style("display", showPredicted ? null : "none")
+      .attr("d", linePredicted);
 
-      svg.append("path")
-        .datum(team2Data)
-        .attr("class","predicted-line")
-        .attr("fill","none").attr("stroke","red").attr("stroke-width",1.4)
-        .style("stroke-dasharray","3,3")
-        .style("display", showPredicted ? null : "none")
-        .attr("d", linePredicted);
-
-      // Legend under each mini-chart
-      const t1Short = shorten(team1Name);
-      const t2Short = shorten(team2Name);
-      const legend = d3.select(containerNode.parentNode).append("div").attr("class", "legend");
-      legend.html(`
+    // Legend under each mini-chart
+    const t1Short = shorten(team1Name);
+    const t2Short = shorten(team2Name);
+    const legend = d3.select(containerNode.parentNode).append("div").attr("class", "legend");
+    legend.html(`
         <span class="legend-item" title="${team1Name}">
           <span class="swatch solid blue"></span><span>${t1Short} (Actual)</span>
         </span>
@@ -656,169 +780,295 @@
           <span class="swatch dashed red"></span><span>${t2Short} (Predicted)</span>
         </span>
       `);
+  });
+
+  // ===== Sync odds UI from server-provided values (no recompute) =====
+  (function syncServerOdds() {
+    // Create tooltip container if not exists
+    let tooltip = d3.select('#pmf-tooltip');
+    if (tooltip.empty()) {
+      tooltip = d3.select('body').append('div')
+        .attr('id', 'pmf-tooltip')
+        .style('position', 'absolute')
+        .style('z-index', '9999')
+        .style('visibility', 'hidden')
+        .style('background', '#161b22')
+        .style('border', '1px solid rgba(255,255,255,0.15)')
+        .style('border-radius', '8px')
+        .style('padding', '12px')
+        .style('box-shadow', '0 4px 12px rgba(0,0,0,0.5)')
+        .style('pointer-events', 'none')
+        .style('width', '320px');
+    }
+
+    document.querySelectorAll('.odds-item-v2').forEach(item => {
+      const p1 = Number(item.getAttribute('data-p1'));
+      const p2 = Number(item.getAttribute('data-p2'));
+      const m1 = item.getAttribute('data-mid-t1') || '-';
+      const m2 = item.getAttribute('data-mid-t2') || '-';
+
+      // Parse PMF data
+      let pmf1 = null, pmf2 = null;
+      try {
+        const raw1 = item.getAttribute('data-pmf1');
+        const raw2 = item.getAttribute('data-pmf2');
+        if (raw1) pmf1 = JSON.parse(raw1);
+        if (raw2) pmf2 = JSON.parse(raw2);
+      } catch (e) { console.error("PMF parse error", e); }
+
+      const bar = item.querySelector('.odds-bar-v2');
+      const left = item.querySelector('.odds-left-v2');
+      const right = item.querySelector('.odds-right-v2');
+      const tagL = item.querySelector('.odds-tag-v2.left');
+      const tagR = item.querySelector('.odds-tag-v2.right');
+      const statL = item.querySelector('.odds-stat-tag-v2.left');
+      const statR = item.querySelector('.odds-stat-tag-v2.right');
+
+      if (!bar || !left || !right || !tagL || !tagR || !statL || !statR) return;
+
+      left.style.width = `${p1}%`;
+      right.style.width = `${p2}%`;
+      bar.title = `${p1.toFixed(1)}% vs ${p2.toFixed(1)}%`;
+
+      tagL.textContent = `${Math.round(p1)}%`;
+      tagR.textContent = `${Math.round(p2)}%`;
+      statL.textContent = m1;
+      statR.textContent = m2;
+
+      bar.classList.remove('is-tie', 'winner-left', 'winner-right');
+      if (Math.abs(p1 - p2) < 0.5) bar.classList.add('is-tie');
+      else if (p1 > p2) bar.classList.add('winner-left');
+      else bar.classList.add('winner-right');
+
+      tagL.classList.toggle('strong', p1 > p2);
+      tagL.classList.toggle('muted', p1 < p2);
+      tagR.classList.toggle('strong', p2 > p1);
+      tagR.classList.toggle('muted', p2 < p1);
+
+      // Hover events for PMF chart
+      if (pmf1 && pmf2 && pmf1.probs.length > 0 && pmf2.probs.length > 0) {
+        item.addEventListener('mouseenter', (e) => {
+          const cat = item.getAttribute('data-cat');
+          tooltip.style('visibility', 'visible').html('');
+
+          // Reconstruct full data arrays
+          const data1 = pmf1.probs.map((p, i) => ({ x: pmf1.min + i, y: p }));
+          const data2 = pmf2.probs.map((p, i) => ({ x: pmf2.min + i, y: p }));
+
+          // Chart dimensions
+          const w = 300, h = 150;
+          const margin = { top: 20, right: 10, bottom: 20, left: 35 };
+
+          const svg = tooltip.append('svg')
+            .attr('width', w)
+            .attr('height', h);
+
+          const g = svg.append('g')
+            .attr('transform', `translate(${margin.left},${margin.top})`);
+
+          const innerW = w - margin.left - margin.right;
+          const innerH = h - margin.top - margin.bottom;
+
+          // Scales
+          const xMin = Math.min(d3.min(data1, d => d.x), d3.min(data2, d => d.x));
+          const xMax = Math.max(d3.max(data1, d => d.x), d3.max(data2, d => d.x));
+          const yMax = Math.max(d3.max(data1, d => d.y), d3.max(data2, d => d.y));
+
+          const x = d3.scaleLinear().domain([xMin, xMax]).range([0, innerW]);
+          const y = d3.scaleLinear().domain([0, yMax * 1.1]).range([innerH, 0]);
+
+          // Axes
+          g.append('g')
+            .attr('transform', `translate(0,${innerH})`)
+            .call(d3.axisBottom(x).ticks(5).tickSizeOuter(0))
+            .style('color', '#8b949e');
+
+          g.append('g')
+            .call(d3.axisLeft(y).ticks(4).tickFormat(d3.format('.0%')))
+            .style('color', '#8b949e');
+
+          // Title
+          svg.append('text')
+            .attr('x', w / 2)
+            .attr('y', 14)
+            .attr('text-anchor', 'middle')
+            .style('fill', '#e8eefc')
+            .style('font-size', '12px')
+            .style('font-weight', '600')
+            .text(`${cat} Probability Distribution`);
+
+          // Area generator
+          const area = d3.area()
+            .x(d => x(d.x))
+            .y0(innerH)
+            .y1(d => y(d.y))
+            .curve(d3.curveBasis); // Smooth curve
+
+          // Draw Team 1 (Blue)
+          g.append('path')
+            .datum(data1)
+            .attr('fill', 'rgba(70,130,180, 0.3)')
+            .attr('stroke', 'steelblue')
+            .attr('stroke-width', 1.5)
+            .attr('d', area);
+
+          // Draw Team 2 (Red)
+          g.append('path')
+            .datum(data2)
+            .attr('fill', 'rgba(255,0,0, 0.3)')
+            .attr('stroke', 'red')
+            .attr('stroke-width', 1.5)
+            .attr('d', area);
+
+          // Legend
+          const legend = svg.append('g').attr('transform', `translate(${margin.left}, ${h - 10})`);
+          // (Optional: add legend if needed, but colors match the bar)
+        });
+
+        item.addEventListener('mousemove', (e) => {
+          // Position tooltip near cursor but keep on screen
+          const tW = 320; // tooltip width
+          const tH = 180; // approx height
+
+          let left = e.pageX + 15;
+          let top = e.pageY + 15;
+
+          if (left + tW > window.innerWidth) left = e.pageX - tW - 10;
+
+          tooltip
+            .style('left', left + 'px')
+            .style('top', top + 'px');
+        });
+
+        item.addEventListener('mouseleave', () => {
+          tooltip.style('visibility', 'hidden');
+        });
+      }
+    });
+  })();
+
+  // ===== Table view toggle: raw / z =====
+  (function tableViewToggle() {
+    const MODE_RAW = 'raw';
+    const MODE_Z = 'z';
+
+    let mode = MODE_RAW;
+    const buttons = document.querySelectorAll('.view-mode-btn');
+    const cells = document.querySelectorAll('.stat-cell');
+
+    const CAT_KEYS = new Set(['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']);
+
+    function toNumberOrNaN(v) {
+      if (v === null || v === undefined) return NaN;
+      const s = String(v).trim();
+      if (s === '' || s.toLowerCase() === 'nan' || s.toLowerCase() === 'none' || s.toLowerCase() === 'null') {
+        return NaN;
+      }
+      const n = parseFloat(s);
+      return Number.isFinite(n) ? n : NaN;
+    }
+
+    // Colour based on z-score in ALL modes
+    function colorFromZ(z) {
+      const zNum = toNumberOrNaN(z);
+      if (Number.isNaN(zNum)) {
+        // neutral grey when no usable z
+        return 'rgba(128,128,128,0.35)';
+      }
+
+      const zmin = -1.6;
+      const zmax = 1.7;
+      const tRaw = (zNum - zmin) / (zmax - zmin);
+      const t = Math.max(0, Math.min(1, tRaw)); // clamp 0..1
+
+      const hue = 120 * t; // 0 = red, 120 = green
+      return `hsl(${Math.round(hue)} 70% 35% / 0.90)`;
+    }
+
+    function fmtValue(cat, raw, z) {
+      if (mode === MODE_RAW) {
+        const v = toNumberOrNaN(raw);
+        if (Number.isNaN(v)) return 'NaN';
+
+        if (cat === 'FG%' || cat === 'FT%') {
+          // raw stored as decimal 0.4923 → show 49.2%
+          return (v * 100).toFixed(1) + '%';
+        }
+        return v.toFixed(2);
+
+      } else { // MODE_Z
+        const v = toNumberOrNaN(z);
+        if (Number.isNaN(v)) return 'NaN';
+        return v.toFixed(2);
+      }
+    }
+
+    function updateTotalsPerRow() {
+      // For each table, walk each player row and compute their total (only in Z mode)
+      document.querySelectorAll('.table-wrapper table.data-table').forEach(table => {
+        const tbody = table.tBodies[0];
+        if (!tbody) return;
+
+        Array.from(tbody.rows).forEach(row => {
+          const totalCell = row.querySelector('td.stat-total');
+          if (!totalCell) return;
+
+          if (mode === MODE_RAW) {
+            // No total in raw mode
+            totalCell.textContent = '';
+            return;
+          }
+
+          let sum = 0;
+          let hasAny = false;
+
+          row.querySelectorAll('.stat-cell').forEach(cell => {
+            const cat = cell.dataset.cat;
+            if (!cat || !CAT_KEYS.has(cat)) return;
+
+            const v = toNumberOrNaN(cell.dataset.z);
+            if (Number.isNaN(v)) return;
+            sum += v;
+            hasAny = true;
+          });
+
+          if (!hasAny) {
+            totalCell.textContent = 'NaN';
+          } else {
+            totalCell.textContent = sum.toFixed(2);
+          }
+        });
+      });
+    }
+
+    function applyMode() {
+      buttons.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+      });
+
+      cells.forEach(cell => {
+        const cat = cell.dataset.cat;
+        const raw = cell.dataset.raw;
+        const z = cell.dataset.z;
+
+        // Text depends on current mode
+        cell.textContent = fmtValue(cat, raw, z);
+
+        // Colour always depends on z-score, regardless of mode
+        cell.style.backgroundColor = colorFromZ(z);
+      });
+
+      updateTotalsPerRow();
+    }
+
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        mode = btn.dataset.mode || MODE_RAW;
+        applyMode();
+      });
     });
 
-    // ===== Sync odds UI from server-provided values (no recompute) =====
-    (function syncServerOdds(){
-      document.querySelectorAll('.odds-item-v2').forEach(item => {
-        const p1 = Number(item.getAttribute('data-p1'));
-        const p2 = Number(item.getAttribute('data-p2'));
-        const m1 = item.getAttribute('data-mid-t1') || '-';
-        const m2 = item.getAttribute('data-mid-t2') || '-';
-
-        const bar   = item.querySelector('.odds-bar-v2');
-        const left  = item.querySelector('.odds-left-v2');
-        const right = item.querySelector('.odds-right-v2');
-        const tagL  = item.querySelector('.odds-tag-v2.left');
-        const tagR  = item.querySelector('.odds-tag-v2.right');
-        const statL = item.querySelector('.odds-stat-tag-v2.left');
-        const statR = item.querySelector('.odds-stat-tag-v2.right');
-
-        if (!bar || !left || !right || !tagL || !tagR || !statL || !statR) return;
-
-        left.style.width  = `${p1}%`;
-        right.style.width = `${p2}%`;
-        bar.title = `${p1.toFixed(1)}% vs ${p2.toFixed(1)}%`;
-
-        tagL.textContent = `${Math.round(p1)}%`;
-        tagR.textContent = `${Math.round(p2)}%`;
-        statL.textContent = m1;
-        statR.textContent = m2;
-
-        bar.classList.remove('is-tie','winner-left','winner-right');
-        if (Math.abs(p1 - p2) < 0.5) bar.classList.add('is-tie');
-        else if (p1 > p2) bar.classList.add('winner-left');
-        else bar.classList.add('winner-right');
-
-        tagL.classList.toggle('strong', p1 > p2);
-        tagL.classList.toggle('muted',  p1 < p2);
-        tagR.classList.toggle('strong', p2 > p1);
-        tagR.classList.toggle('muted',  p2 < p1);
-      });
-    })();
-
-    // ===== Table view toggle: raw / z =====
-    (function tableViewToggle(){
-      const MODE_RAW = 'raw';
-      const MODE_Z   = 'z';
-
-      let mode = MODE_RAW;
-      const buttons = document.querySelectorAll('.view-mode-btn');
-      const cells   = document.querySelectorAll('.stat-cell');
-
-      const CAT_KEYS = new Set(['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']);
-
-      function toNumberOrNaN(v) {
-        if (v === null || v === undefined) return NaN;
-        const s = String(v).trim();
-        if (s === '' || s.toLowerCase() === 'nan' || s.toLowerCase() === 'none' || s.toLowerCase() === 'null') {
-          return NaN;
-        }
-        const n = parseFloat(s);
-        return Number.isFinite(n) ? n : NaN;
-      }
-
-      // Colour based on z-score in ALL modes
-      function colorFromZ(z) {
-        const zNum = toNumberOrNaN(z);
-        if (Number.isNaN(zNum)) {
-          // neutral grey when no usable z
-          return 'rgba(128,128,128,0.35)';
-        }
-
-        const zmin = -1.6;
-        const zmax =  1.7;
-        const tRaw = (zNum - zmin) / (zmax - zmin);
-        const t = Math.max(0, Math.min(1, tRaw)); // clamp 0..1
-
-        const hue = 120 * t; // 0 = red, 120 = green
-        return `hsl(${Math.round(hue)} 70% 35% / 0.90)`;
-      }
-
-      function fmtValue(cat, raw, z){
-        if (mode === MODE_RAW){
-          const v = toNumberOrNaN(raw);
-          if (Number.isNaN(v)) return 'NaN';
-
-          if (cat === 'FG%' || cat === 'FT%'){
-            // raw stored as decimal 0.4923 → show 49.2%
-            return (v * 100).toFixed(1) + '%';
-          }
-          return v.toFixed(2);
-
-        } else { // MODE_Z
-          const v = toNumberOrNaN(z);
-          if (Number.isNaN(v)) return 'NaN';
-          return v.toFixed(2);
-        }
-      }
-
-      function updateTotalsPerRow() {
-        // For each table, walk each player row and compute their total (only in Z mode)
-        document.querySelectorAll('.table-wrapper table.data-table').forEach(table => {
-          const tbody = table.tBodies[0];
-          if (!tbody) return;
-
-          Array.from(tbody.rows).forEach(row => {
-            const totalCell = row.querySelector('td.stat-total');
-            if (!totalCell) return;
-
-            if (mode === MODE_RAW) {
-              // No total in raw mode
-              totalCell.textContent = '';
-              return;
-            }
-
-            let sum = 0;
-            let hasAny = false;
-
-            row.querySelectorAll('.stat-cell').forEach(cell => {
-              const cat = cell.dataset.cat;
-              if (!cat || !CAT_KEYS.has(cat)) return;
-
-              const v = toNumberOrNaN(cell.dataset.z);
-              if (Number.isNaN(v)) return;
-              sum += v;
-              hasAny = true;
-            });
-
-            if (!hasAny) {
-              totalCell.textContent = 'NaN';
-            } else {
-              totalCell.textContent = sum.toFixed(2);
-            }
-          });
-        });
-      }
-
-      function applyMode(){
-        buttons.forEach(btn => {
-          btn.classList.toggle('active', btn.dataset.mode === mode);
-        });
-
-        cells.forEach(cell => {
-          const cat = cell.dataset.cat;
-          const raw = cell.dataset.raw;
-          const z   = cell.dataset.z;
-
-          // Text depends on current mode
-          cell.textContent = fmtValue(cat, raw, z);
-
-          // Colour always depends on z-score, regardless of mode
-          cell.style.backgroundColor = colorFromZ(z);
-        });
-
-        updateTotalsPerRow();
-      }
-
-      buttons.forEach(btn => {
-        btn.addEventListener('click', () => {
-          mode = btn.dataset.mode || MODE_RAW;
-          applyMode();
-        });
-      });
-
-      applyMode(); // initial
-    })();
-  </script>
+    applyMode(); // initial
+  })();
+</script>
 {% endblock body_js %}

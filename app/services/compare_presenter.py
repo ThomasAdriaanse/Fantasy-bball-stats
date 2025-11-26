@@ -404,6 +404,8 @@ def build_odds_rows(
                 "class_name": "is-tie",
                 "mid_t1": "-",
                 "mid_t2": "-",
+                "pmf1": {'min': 0, 'probs': []},
+                "pmf2": {'min': 0, 'probs': []},
             })
             continue
         
@@ -466,6 +468,21 @@ def build_odds_rows(
             else:
                 class_name = "winner-right"
             
+            # Compress PMFs for frontend visualization
+            # Find range of significant probabilities (> 0.001) to reduce payload size
+            def compress_pmf(pmf):
+                indices = np.where(pmf > 0.0001)[0]
+                if len(indices) == 0:
+                    return {'min': 0, 'probs': []}
+                start_idx = int(indices[0])
+                end_idx = int(indices[-1])
+                # Convert to list of floats rounded to 4 decimals
+                probs = [round(float(p), 4) for p in pmf[start_idx:end_idx+1]]
+                return {'min': start_idx, 'probs': probs}
+
+            pmf1_data = compress_pmf(t1_final_pmf)
+            pmf2_data = compress_pmf(t2_final_pmf)
+            
             rows.append({
                 "cat": cat,
                 "p1": round(p_team1_pct, 1),
@@ -473,6 +490,8 @@ def build_odds_rows(
                 "class_name": class_name,
                 "mid_t1": mid_t1,
                 "mid_t2": mid_t2,
+                "pmf1": pmf1_data,
+                "pmf2": pmf2_data,
             })
             
         except Exception as e:
@@ -487,6 +506,8 @@ def build_odds_rows(
                 "class_name": "is-tie",
                 "mid_t1": "-",
                 "mid_t2": "-",
+                "pmf1": {'min': 0, 'probs': []},
+                "pmf2": {'min': 0, 'probs': []},
             })
     
     return rows
