@@ -890,16 +890,32 @@
             .range([innerH, 0]);
 
 
-          // Axes
+          // X axis — adapt number of ticks so labels don't overlap
+          const rangeWidth = xMax - xMin;
+          // Rough heuristic: ~1 tick per 60px of width, clamped.
+          const tickCount = Math.min(6, Math.max(3, Math.floor(innerW / 60)));
+
+          const xAxis = d3.axisBottom(x)
+            .ticks(tickCount)
+            .tickSizeOuter(0)
+            .tickFormat(d => {
+              if (!isPctCat) {
+                // counting stats: let d3 pick a nice format
+                return d3.format('~g')(d);
+              }
+              // % cats: use 1 decimal only when zoomed in, else integer %
+              if (rangeWidth <= 10) {
+                // e.g. 48.7% – 52.3%
+                return d.toFixed(1) + '%';
+              }
+              return Math.round(d) + '%';
+            });
+
           g.append('g')
             .attr('transform', `translate(0,${innerH})`)
-            .call(
-              d3.axisBottom(x)
-                .ticks(5)
-                .tickSizeOuter(0)
-                .tickFormat(isPctCat ? (d => d.toFixed(1) + '%') : undefined)
-            )
+            .call(xAxis)
             .style('color', '#8b949e');
+
 
           g.append('g')
             .call(d3.axisLeft(y).ticks(4).tickFormat(d3.format('.0%')))
