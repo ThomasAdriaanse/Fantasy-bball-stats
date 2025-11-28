@@ -851,9 +851,18 @@
           const cat = item.getAttribute('data-cat');
           tooltip.style('visibility', 'visible').html('');
 
+          const isPctCat = (cat === 'FG%' || cat === 'FT%');
+
           // Reconstruct full data arrays
-          const data1 = pmf1.probs.map((p, i) => ({ x: pmf1.min + i, y: p }));
-          const data2 = pmf2.probs.map((p, i) => ({ x: pmf2.min + i, y: p }));
+          const data1 = pmf1.probs.map((p, i) => ({
+            x: isPctCat ? (pmf1.min + i) / 10.0 : (pmf1.min + i),
+            y: p,
+          }));
+          const data2 = pmf2.probs.map((p, i) => ({
+            x: isPctCat ? (pmf2.min + i) / 10.0 : (pmf2.min + i),
+            y: p,
+          }));
+
 
           // Chart dimensions
           const w = 300, h = 150;
@@ -872,15 +881,24 @@
           // Scales
           const xMin = Math.min(d3.min(data1, d => d.x), d3.min(data2, d => d.x));
           const xMax = Math.max(d3.max(data1, d => d.x), d3.max(data2, d => d.x));
-          const yMax = Math.max(d3.max(data1, d => d.y), d3.max(data2, d => d.y));
 
           const x = d3.scaleLinear().domain([xMin, xMax]).range([0, innerW]);
-          const y = d3.scaleLinear().domain([0, yMax * 1.1]).range([innerH, 0]);
+
+          // Always show 0–10% on Y so shapes are comparable across cats
+          const y = d3.scaleLinear()
+            .domain([0, 0.10])      // 10% max
+            .range([innerH, 0]);
+
 
           // Axes
           g.append('g')
             .attr('transform', `translate(0,${innerH})`)
-            .call(d3.axisBottom(x).ticks(5).tickSizeOuter(0))
+            .call(
+              d3.axisBottom(x)
+                .ticks(5)
+                .tickSizeOuter(0)
+                .tickFormat(isPctCat ? (d => d.toFixed(1) + '%') : undefined)
+            )
             .style('color', '#8b949e');
 
           g.append('g')
