@@ -29,7 +29,7 @@ def _safe_filename(name: str) -> str:
     # Strip leading/trailing underscores only
     return result.strip("_").lower()
 
-def load_player_dataset_from_s3(player_name: str) -> pd.DataFrame | None:
+def load_player_dataset(player_name: str) -> pd.DataFrame | None:
     """
     Loads the per-player JSON from local cache or S3:
       Local: {LOCAL_CACHE_DIR}/<slug>.json

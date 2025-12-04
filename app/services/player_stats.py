@@ -1,7 +1,7 @@
 # app/services/player_stats.py
 import pandas as pd
 from nba_api.stats.static import players as nba_players
-from .s3_service import load_player_dataset_from_s3
+from .s3_service import load_player_dataset
 
 
 def get_active_players_list():
@@ -29,7 +29,7 @@ def build_chart_data(player_name: str, num_games: int, stat: str = "FPTS"):
           "STAT": str  # the stat actually used
         }
     """
-    df = load_player_dataset_from_s3(player_name)
+    df = load_player_dataset(player_name)
     if df is None or df.empty:
         print(f"[S3] No data for {player_name}")
         return []
