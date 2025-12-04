@@ -544,8 +544,3 @@ def range_of_current_week(day: date) -> Tuple[date, date]:
     start = day - timedelta(days=day.weekday())
     end   = start + timedelta(days=6)
     return start, end
-
-
-def get_matchup_periods(league, current_matchup_period: int):
-    # ESPN stores keys as strings
-    return league.settings.matchup_periods[str(current_matchup_period)]

@@ -2,13 +2,6 @@ from espn_api.basketball import League
 from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, ESPNInvalidLeague
 from datetime import date, timedelta
 
-def build_league(league_id, year, espn_s2=None, swid=None):
-    try:
-        if espn_s2 and swid:
-            return League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
-        return League(league_id=league_id, year=year)
-    except (ESPNUnknownError, ESPNInvalidLeague, ESPNAccessDenied) as e:
-        raise
 
 def matchup_dates(league, league_year):
     today = date.today()

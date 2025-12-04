@@ -8,7 +8,6 @@ import json
 from ...services.compare_presenter import build_snapshot_rows, build_odds_rows
 from ...services.espn_service import matchup_dates
 from ...services.z_score_calculations import raw_to_zscore
-from ...services.percent_of_win_calculations import raw_to_percent_of_win
 
 # use your existing compare modules in project root
 import compare_page.compare_page_data as cpd

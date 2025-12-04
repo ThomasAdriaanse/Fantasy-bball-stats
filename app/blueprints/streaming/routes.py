@@ -7,9 +7,6 @@ from flask import Blueprint, render_template, session, redirect, url_for, reques
 from espn_api.basketball import League
 from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, ESPNInvalidLeague
 
-from app.services.percent_of_win_calculations import (
-    CATS_ORDER,   # still re-use the category order: ["FG%", "FT%", "3PM", ...]
-)
 from app.services.z_score_calculations import raw_to_zscore
 
 bp = Blueprint("streaming", __name__)
