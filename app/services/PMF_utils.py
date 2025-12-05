@@ -112,6 +112,50 @@ def trim_1d_pmf(
     return PMF1D(trimmed)
 
 
+def trim_2d_pmf(
+    pmf2d: PMF2D,
+    eps: float = 1e-7,
+    min_m_bins: int = 3,
+    min_a_bins: int = 3,
+) -> PMF2D:
+    """
+    Trim a 2D PMF by removing rows/cols whose total probability
+    is effectively zero, then renormalize.
+    """
+    arr = pmf2d.p
+    if arr.size == 0:
+        return pmf2d
+
+    arr = arr.copy()
+    arr[arr < eps] = 0.0
+
+    if arr.sum() <= 0:
+        base = np.zeros((1, 1), dtype=float)
+        base[0, 0] = 1.0
+        return PMF2D(base)
+
+    rows, cols = np.where(arr > 0.0)
+    if rows.size == 0 or cols.size == 0:
+        base = np.zeros((1, 1), dtype=float)
+        base[0, 0] = 1.0
+        return PMF2D(base)
+
+    r_min, r_max = rows.min(), rows.max()
+    c_min, c_max = cols.min(), cols.max()
+
+    if (r_max - r_min + 1) < min_m_bins:
+        r_max = min(arr.shape[0] - 1, r_min + min_m_bins - 1)
+    if (c_max - c_min + 1) < min_a_bins:
+        c_max = min(arr.shape[1] - 1, c_min + min_a_bins - 1)
+
+    cropped = arr[r_min : r_max + 1, c_min : c_max + 1]
+    s = cropped.sum()
+    if s > 0:
+        cropped /= s
+
+    return PMF2D(cropped)
+
+
 def calculate_win_probability(team1_pmf: PMF1D, team2_pmf: PMF1D) -> float:
     """
     P(Team1 > Team2).
@@ -172,9 +216,6 @@ def build_2d_pmf_from_games(makes: np.ndarray, attempts: np.ndarray) -> PMF2D:
 
 
 def convolve_pmf_2d_n_times(pmf2d: PMF2D, n: int) -> PMF2D:
-    """
-    Convolve a 2D PMF with itself n times (e.g., n games of FG/FT attempts).
-    """
     if n <= 0:
         base = np.zeros((1, 1), dtype=float)
         base[0, 0] = 1.0
@@ -185,6 +226,7 @@ def convolve_pmf_2d_n_times(pmf2d: PMF2D, n: int) -> PMF2D:
     result = pmf2d.copy()
     for _ in range(n - 1):
         result = result.convolve(pmf2d)
+        result = trim_2d_pmf(result)
     return result
 
 
@@ -224,8 +266,7 @@ def compress_ratio_pmf_from_2d(pmf2d: PMF2D) -> Dict[str, Any]:
         0,
         RATIO_BUCKETS - 1,
     )
-    for idx, p in zip(perc_indices, probs):
-        buckets[idx] += p
+    np.add.at(buckets, perc_indices, probs)
 
     total = buckets.sum()
     if total <= 0:
@@ -470,17 +511,33 @@ def build_team_pmf_2d(
         total_2d = convolve_pmf_2d_n_times(single_2d, games_remaining)
 
         team_pmf = team_pmf.convolve(total_2d)
+        team_pmf = trim_2d_pmf(team_pmf)
 
     return team_pmf
 
 
 # ========= LOAD PLAYER PMFS FROM DOCKER VOLUME =========
 
-_PMf_LIST_DEBUG_DONE = False
 
+from functools import lru_cache
+from pathlib import Path
+from typing import Optional, Dict, Any
+import json
+import numpy as np
+
+# PMF_CACHE_DIR should already be defined somewhere in this module
+# PMF1D, PMF2D also assumed imported
+
+
+@lru_cache(maxsize=512)
 def load_player_pmfs(player_name: str) -> Optional[Dict[str, Dict[str, Any]]]:
-    global _PMf_LIST_DEBUG_DONE
+    """
+    Load and normalize a player's PMFs from disk, with in-memory caching.
 
+    Results are cached per worker process, keyed by player_name. Since this
+    function is pure with respect to its input (reads from a stable JSON file),
+    LRU caching is safe and avoids repeated JSON reads + parsing.
+    """
     if not player_name:
         return None
 
@@ -489,39 +546,19 @@ def load_player_pmfs(player_name: str) -> Optional[Dict[str, Dict[str, Any]]]:
 
     fpath = Path(PMF_CACHE_DIR) / f"{stem}_pmf.json"
 
-    print(f"[PMF-LOAD] player={player_name!r} -> stem={stem!r} -> path={fpath}")
-
     if not fpath.exists():
-        # One-time deep debug of the directory
-        if not _PMf_LIST_DEBUG_DONE:
-            _PMf_LIST_DEBUG_DONE = True
-            try:
-                exists = os.path.isdir(PMF_CACHE_DIR)
-                entries = sorted(os.listdir(PMF_CACHE_DIR)) if exists else []
-                print(
-                    f"[PMF-LOAD] DEBUG: PMF_CACHE_DIR={PMF_CACHE_DIR!r}, "
-                    f"isdir={exists}, file_count={len(entries)}"
-                )
-                print("[PMF-LOAD] DEBUG: first 40 files in PMF dir:")
-                for name in entries[:40]:
-                    print(f"    - {name}")
-            except Exception as e:
-                print(f"[PMF-LOAD] DEBUG: failed listing PMF dir: {e}")
-
-        print("[PMF-LOAD]   -> file not found (after dir introspection)")
         return None
 
-    # ----- load JSON as before -----
     try:
         with fpath.open("r") as f:
             payload = json.load(f)
-    except Exception as e:
-        print(f"[PMF-LOAD]   -> JSON load error: {e}")
+    except Exception:
         return None
 
     out_1d: Dict[str, PMF1D] = {}
     out_2d: Dict[str, PMF2D] = {}
 
+    # ---------- 1D PMFs ----------
     pmf_1d_raw = payload.get("pmf_1d", {})
     if not isinstance(pmf_1d_raw, dict):
         pmf_1d_raw = {}
@@ -536,6 +573,7 @@ def load_player_pmfs(player_name: str) -> Optional[Dict[str, Dict[str, Any]]]:
             arr = arr / s
         out_1d[stat] = PMF1D(arr)
 
+    # ---------- 2D PMFs ----------
     pmf_2d_raw = payload.get("pmf_2d", {})
     if not isinstance(pmf_2d_raw, dict):
         pmf_2d_raw = {}
@@ -549,11 +587,6 @@ def load_player_pmfs(player_name: str) -> Optional[Dict[str, Dict[str, Any]]]:
         if s > 0:
             arr = arr / s
         out_2d[stat] = PMF2D(arr)
-
-    print(
-        f"[PMF-LOAD]   -> loaded 1d stats={list(out_1d.keys())}, "
-        f"2d stats={list(out_2d.keys())}"
-    )
 
     return {
         "1d": out_1d,

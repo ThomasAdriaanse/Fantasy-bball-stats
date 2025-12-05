@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import List, Dict, Any, Optional
 
 import numpy as np
+import time
 
 from .s3_service import load_player_dataset
 from .classes.pmf1d import PMF1D
@@ -143,7 +144,6 @@ def build_snapshot_rows(
 
 
 # ========= ODDS ROWS =========
-
 def build_odds_rows(
     win1_list: List[Dict[str, Any]],
     combined_jsons: Dict[str, List[Dict[str, Any]]],
@@ -163,8 +163,13 @@ def build_odds_rows(
     """
     categories = ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%', 'TO']
 
+    # Always print at least once so we know this function is being hit
+    print(f"[build_odds_rows] called (debug={DEBUG_COMPARE_PRESENTER})")
+
+    t_start = time.perf_counter() if DEBUG_COMPARE_PRESENTER else None
+
     if DEBUG_COMPARE_PRESENTER:
-        print("========== build_odds_rows DEBUG ==========")
+        print("========== build_odds_rows ==========")
         print("  team1_current_stats keys:", list((team1_current_stats or {}).keys()))
         print("  team2_current_stats keys:", list((team2_current_stats or {}).keys()))
         print("  data_team_players_1 len:",
@@ -176,7 +181,7 @@ def build_odds_rows(
             data_team_players_1 and data_team_players_2):
         if DEBUG_COMPARE_PRESENTER:
             print("[WARN] Missing required data for build_odds_rows, returning dummy data")
-        return [
+        rows = [
             {
                 "cat": cat,
                 "p1": 50.0,
@@ -187,10 +192,16 @@ def build_odds_rows(
             }
             for cat in categories
         ]
+        if DEBUG_COMPARE_PRESENTER and t_start is not None:
+            elapsed_total = time.perf_counter() - t_start
+            print(f"[TIMING] build_odds_rows total={elapsed_total:.3f}s (dummy rows)")
+        return rows
 
     rows: List[Dict[str, Any]] = []
 
     for cat in categories:
+        cat_start = time.perf_counter() if DEBUG_COMPARE_PRESENTER else None
+
         if DEBUG_COMPARE_PRESENTER:
             print("\n----------------------------------------")
             print(f"[INFO] Calculating odds for: {cat}")
@@ -200,7 +211,6 @@ def build_odds_rows(
         # --------------------------------------------------
         if cat in ('FG%', 'FT%'):
             try:
-                # 1.1) Extract current totals (made / attempted) for both teams
                 if cat == 'FG%':
                     t1_made = float(team1_current_stats.get('FGM', {}).get('value', 0.0))
                     t1_att  = float(team1_current_stats.get('FGA', {}).get('value', 0.0))
@@ -212,17 +222,8 @@ def build_odds_rows(
                     t2_made = float(team2_current_stats.get('FTM', {}).get('value', 0.0))
                     t2_att  = float(team2_current_stats.get('FTA', {}).get('value', 0.0))
 
-                if DEBUG_COMPARE_PRESENTER:
-                    print(f"[FT%/FG% DEBUG] current totals:")
-                    print(f"  T1: made={t1_made}, att={t1_att}")
-                    print(f"  T2: made={t2_made}, att={t2_att}")
-
                 makes_col, attempts_col = PERCENTAGE_CATEGORIES[cat]
 
-                # 1.2) Build projected 2D PMFs (makes/attempts) for each team
-                if DEBUG_COMPARE_PRESENTER:
-                    print(f"  [ODDS-2D] Building Team 1 projected PMF2D for {cat} "
-                          f"using load_player_pmfs...")
                 t1_pmf_2d_proj: PMF2D = build_team_pmf_2d(
                     data_team_players_1,
                     makes_col=makes_col,
@@ -232,14 +233,6 @@ def build_odds_rows(
                     debug=DEBUG_COMPARE_PRESENTER,
                 )
 
-                if DEBUG_COMPARE_PRESENTER:
-                    proj_arr_t1 = t1_pmf_2d_proj.p
-                    print(f"    T1 projected PMF2D shape={proj_arr_t1.shape}, "
-                          f"sum={proj_arr_t1.sum():.6f}")
-
-                if DEBUG_COMPARE_PRESENTER:
-                    print(f"  [ODDS-2D] Building Team 2 projected PMF2D for {cat} "
-                          f"using load_player_pmfs...")
                 t2_pmf_2d_proj: PMF2D = build_team_pmf_2d(
                     data_team_players_2,
                     makes_col=makes_col,
@@ -249,50 +242,17 @@ def build_odds_rows(
                     debug=DEBUG_COMPARE_PRESENTER,
                 )
 
-                if DEBUG_COMPARE_PRESENTER:
-                    proj_arr_t2 = t2_pmf_2d_proj.p
-                    print(f"    T2 projected PMF2D shape={proj_arr_t2.shape}, "
-                          f"sum={proj_arr_t2.sum():.6f}")
-
-                # Some sanity: expected ratios BEFORE adding current totals
-                if DEBUG_COMPARE_PRESENTER:
-                    try:
-                        t1_proj_ratio = expected_ratio_from_2d_pmf(t1_pmf_2d_proj)
-                        t2_proj_ratio = expected_ratio_from_2d_pmf(t2_pmf_2d_proj)
-                        print(f"    T1 projected ratio (no current) ~ {t1_proj_ratio*100:.2f}%")
-                        print(f"    T2 projected ratio (no current) ~ {t2_proj_ratio*100:.2f}%")
-                    except Exception as e:
-                        print(f"    [DEBUG] Expected ratio on projected PMFs failed: {e}")
-
-                # 1.3) Add current totals into the projected distributions via shift
                 t1_made_i = int(round(t1_made))
                 t1_att_i  = int(round(t1_att))
                 t2_made_i = int(round(t2_made))
                 t2_att_i  = int(round(t2_att))
 
-                if DEBUG_COMPARE_PRESENTER:
-                    print("  [ODDS-2D] Shifting by current totals:")
-                    print(f"    T1 shift: ({t1_made_i}, {t1_att_i})")
-                    print(f"    T2 shift: ({t2_made_i}, {t2_att_i})")
-
                 t1_pmf_2d_final = t1_pmf_2d_proj.shifted(t1_made_i, t1_att_i)
                 t2_pmf_2d_final = t2_pmf_2d_proj.shifted(t2_made_i, t2_att_i)
 
-                # extra safety normalize
                 t1_pmf_2d_final.normalize()
                 t2_pmf_2d_final.normalize()
 
-                if DEBUG_COMPARE_PRESENTER:
-                    final_arr_t1 = t1_pmf_2d_final.p
-                    final_arr_t2 = t2_pmf_2d_final.p
-                    print(f"    T1 final PMF2D shape={final_arr_t1.shape}, "
-                          f"sum={final_arr_t1.sum():.6f}")
-                    print(f"    T2 final PMF2D shape={final_arr_t2.shape}, "
-                          f"sum={final_arr_t2.sum():.6f}")
-
-                # 1.4) Compute win probability in % space
-                if DEBUG_COMPARE_PRESENTER:
-                    print(f"  [ODDS-2D] Calculating win probability in % space...")
                 p_team1 = calculate_percentage_win_probability(
                     t1_pmf_2d_final,
                     t2_pmf_2d_final,
@@ -300,21 +260,12 @@ def build_odds_rows(
                 p_team1_pct = p_team1 * 100.0
                 p_team2_pct = 100.0 - p_team1_pct
 
-                if DEBUG_COMPARE_PRESENTER:
-                    print(f"  [ODDS-2D] Result {cat}: Team1 {p_team1_pct:.1f}% "
-                          f"vs Team2 {p_team2_pct:.1f}%")
-
-                # 1.5) Expected ratios for mid markers
                 t1_expected_ratio = expected_ratio_from_2d_pmf(t1_pmf_2d_final)
                 t2_expected_ratio = expected_ratio_from_2d_pmf(t2_pmf_2d_final)
 
                 mid_t1 = f"{t1_expected_ratio * 100:.1f}%"
                 mid_t2 = f"{t2_expected_ratio * 100:.1f}%"
 
-                if DEBUG_COMPARE_PRESENTER:
-                    print(f"  [ODDS-2D] mid_t1={mid_t1}, mid_t2={mid_t2}")
-
-                # 1.6) Determine CSS class
                 if abs(p_team1_pct - p_team2_pct) < 0.5:
                     class_name = "is-tie"
                 elif p_team1_pct > p_team2_pct:
@@ -322,15 +273,8 @@ def build_odds_rows(
                 else:
                     class_name = "winner-right"
 
-                # 1.7) Compress PMFs for frontend charts
                 pmf1_data = compress_ratio_pmf_from_2d(t1_pmf_2d_final)
                 pmf2_data = compress_ratio_pmf_from_2d(t2_pmf_2d_final)
-
-                if DEBUG_COMPARE_PRESENTER:
-                    print(f"  [ODDS-2D] Compressed PMF1: min={pmf1_data.get('min')}, "
-                          f"len={len(pmf1_data.get('probs', []))}")
-                    print(f"  [ODDS-2D] Compressed PMF2: min={pmf2_data.get('min')}, "
-                          f"len={len(pmf2_data.get('probs', []))}")
 
                 rows.append({
                     "cat": cat,
@@ -343,11 +287,16 @@ def build_odds_rows(
                     "pmf2": pmf2_data,
                 })
 
+                if DEBUG_COMPARE_PRESENTER and cat_start is not None:
+                    elapsed_cat = time.perf_counter() - cat_start
+                    print(f"[TIMING] {cat} (% cat) took {elapsed_cat:.3f}s "
+                          f"(T1 {p_team1_pct:.1f}% vs T2 {p_team2_pct:.1f}%)")
+
             except Exception as e:
                 if DEBUG_COMPARE_PRESENTER:
                     print(f"[ERROR] Failed to calculate {cat} (percentage cat): {e}")
-                import traceback
-                traceback.print_exc()
+                    import traceback
+                    traceback.print_exc()
                 rows.append({
                     "cat": cat,
                     "p1": 50.0,
@@ -358,6 +307,11 @@ def build_odds_rows(
                     "pmf1": {'min': 0, 'probs': []},
                     "pmf2": {'min': 0, 'probs': []},
                 })
+
+                if DEBUG_COMPARE_PRESENTER and cat_start is not None:
+                    elapsed_cat = time.perf_counter() - cat_start
+                    print(f"[TIMING] {cat} (% cat) failed after {elapsed_cat:.3f}s")
+
             continue
 
         # --------------------------------------------------
@@ -369,16 +323,8 @@ def build_odds_rows(
         t1_current = t1_stat.get('value', 0.0) if isinstance(t1_stat, dict) else 0.0
         t2_current = t2_stat.get('value', 0.0) if isinstance(t2_stat, dict) else 0.0
 
-        if DEBUG_COMPARE_PRESENTER:
-            print(f"  [ODDS] Current totals {cat}: "
-                  f"T1={t1_current} T2={t2_current}")
-
         try:
-            # 2.1) Build projected team PMFs (future games only)
             stat_col = CATEGORY_COLUMN_MAP.get(cat)
-            if DEBUG_COMPARE_PRESENTER:
-                print(f"  [ODDS] Building Team 1 projected PMF1D for {cat} "
-                      f"using load_player_pmfs (stat_col={stat_col})...")
             t1_projected_pmf: PMF1D = build_team_pmf_counting(
                 data_team_players_1,
                 stat_col=stat_col,
@@ -387,14 +333,6 @@ def build_odds_rows(
                 debug=DEBUG_COMPARE_PRESENTER,
             )
 
-            if DEBUG_COMPARE_PRESENTER:
-                arr_t1_proj = t1_projected_pmf.p
-                print(f"    T1 projected PMF size={arr_t1_proj.size}, sum={arr_t1_proj.sum():.6f}")
-                print(f"    T1 projected mean (no current)={t1_projected_pmf.mean():.3f}")
-
-            if DEBUG_COMPARE_PRESENTER:
-                print(f"  [ODDS] Building Team 2 projected PMF1D for {cat} "
-                      f"using load_player_pmfs (stat_col={stat_col})...")
             t2_projected_pmf: PMF1D = build_team_pmf_counting(
                 data_team_players_2,
                 stat_col=stat_col,
@@ -403,46 +341,16 @@ def build_odds_rows(
                 debug=DEBUG_COMPARE_PRESENTER,
             )
 
-            if DEBUG_COMPARE_PRESENTER:
-                arr_t2_proj = t2_projected_pmf.p
-                print(f"    T2 projected PMF size={arr_t2_proj.size}, sum={arr_t2_proj.sum():.6f}")
-                print(f"    T2 projected mean (no current)={t2_projected_pmf.mean():.3f}")
-
-            # 2.2) Shift by current totals to get full-week totals
             t1_current_int = int(round(t1_current))
             t2_current_int = int(round(t2_current))
-
-            if DEBUG_COMPARE_PRESENTER:
-                print(f"  [ODDS] Shifting PMFs by current totals for {cat}: "
-                      f"T1 shift={t1_current_int}, T2 shift={t2_current_int}")
 
             t1_final_pmf = t1_projected_pmf.shifted(t1_current_int)
             t2_final_pmf = t2_projected_pmf.shifted(t2_current_int)
 
-            if DEBUG_COMPARE_PRESENTER:
-                print(f"    T1 mean after shift={t1_final_pmf.mean():.3f}")
-                print(f"    T2 mean after shift={t2_final_pmf.mean():.3f}")
-
-            # 2.3) Trim tails before computing win probs / sending to frontend
             t1_final_pmf = trim_1d_pmf(t1_final_pmf)
             t2_final_pmf = trim_1d_pmf(t2_final_pmf)
 
-            if DEBUG_COMPARE_PRESENTER:
-                arr_t1_final = t1_final_pmf.p
-                arr_t2_final = t2_final_pmf.p
-                nz1 = np.where(arr_t1_final > 0)[0]
-                nz2 = np.where(arr_t2_final > 0)[0]
-                print(f"    T1 final support: "
-                      f"[{nz1[0]}..{nz1[-1]}], size={arr_t1_final.size}, sum={arr_t1_final.sum():.6f}")
-                print(f"    T2 final support: "
-                      f"[{nz2[0]}..{nz2[-1]}], size={arr_t2_final.size}, sum={arr_t2_final.sum():.6f}")
-
-            if DEBUG_COMPARE_PRESENTER:
-                print(f"  [ODDS] Calculating win probability for {cat}...")
-
-            # 2.4) Compute win probability
             if cat == 'TO':
-                # lower is better for turnovers
                 p_t2_beats_t1 = t2_final_pmf.prob_beats(t1_final_pmf)
                 p_team1 = 1.0 - p_t2_beats_t1
             else:
@@ -451,21 +359,12 @@ def build_odds_rows(
             p_team1_pct = p_team1 * 100.0
             p_team2_pct = 100.0 - p_team1_pct
 
-            if DEBUG_COMPARE_PRESENTER:
-                print(f"  [ODDS] Result {cat}: Team1 {p_team1_pct:.1f}% "
-                      f"vs Team2 {p_team2_pct:.1f}%")
-
-            # 2.5) Compute expected value (mean) of each PMF for mid-marker
             t1_expected = t1_final_pmf.mean()
             t2_expected = t2_final_pmf.mean()
 
             mid_t1 = str(round(t1_expected))
             mid_t2 = str(round(t2_expected))
 
-            if DEBUG_COMPARE_PRESENTER:
-                print(f"  [ODDS] mid_t1={mid_t1}, mid_t2={mid_t2}")
-
-            # 2.6) Determine which side wins visually
             if abs(p_team1_pct - p_team2_pct) < 0.5:
                 class_name = "is-tie"
             elif p_team1_pct > p_team2_pct:
@@ -473,17 +372,8 @@ def build_odds_rows(
             else:
                 class_name = "winner-right"
 
-            # 2.7) Compress PMFs into {min, probs[]} for frontend charts
             pmf1_data = compress_pmf(t1_final_pmf)
             pmf2_data = compress_pmf(t2_final_pmf)
-
-            if DEBUG_COMPARE_PRESENTER:
-                print(f"  [ODDS] Compressed PMF1 for {cat}: "
-                      f"min={pmf1_data.get('min')}, "
-                      f"len={len(pmf1_data.get('probs', []))}")
-                print(f"  [ODDS] Compressed PMF2 for {cat}: "
-                      f"min={pmf2_data.get('min')}, "
-                      f"len={len(pmf2_data.get('probs', []))}")
 
             rows.append({
                 "cat": cat,
@@ -496,11 +386,18 @@ def build_odds_rows(
                 "pmf2": pmf2_data,
             })
 
+            if DEBUG_COMPARE_PRESENTER and cat_start is not None:
+                elapsed_cat = time.perf_counter() - cat_start
+                print(f"[TIMING] {cat} (counting cat) took {elapsed_cat:.3f}s "
+                      f"(T1 {p_team1_pct:.1f}% vs T2 {p_team2_pct:.1f}%, "
+                      f"mid_t1={mid_t1}, mid_t2={mid_t2})")
+
         except Exception as e:
             if DEBUG_COMPARE_PRESENTER:
                 print(f"[ERROR] Failed to calculate {cat} (counting cat): {e}")
-            import traceback
-            traceback.print_exc()
+                import traceback
+                traceback.print_exc()
+
             rows.append({
                 "cat": cat,
                 "p1": 50.0,
@@ -512,7 +409,13 @@ def build_odds_rows(
                 "pmf2": {'min': 0, 'probs': []},
             })
 
-    if DEBUG_COMPARE_PRESENTER:
+            if DEBUG_COMPARE_PRESENTER and cat_start is not None:
+                elapsed_cat = time.perf_counter() - cat_start
+                print(f"[TIMING] {cat} (counting cat) failed after {elapsed_cat:.3f}s")
+
+    if DEBUG_COMPARE_PRESENTER and t_start is not None:
+        elapsed_total = time.perf_counter() - t_start
         print("\n========== build_odds_rows DONE ==========")
+        print(f"[TIMING] build_odds_rows total={elapsed_total:.3f}s")
 
     return rows
