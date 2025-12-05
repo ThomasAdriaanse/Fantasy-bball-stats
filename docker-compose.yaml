@@ -6,25 +6,19 @@ services:
     env_file: .env
     environment:
       APP_ENV: development
-      # make sure the SDK reads ~/.aws/config for region/profile
       AWS_SDK_LOAD_CONFIG: "1"
-      # expose the values from .env to the container
       S3_BUCKET: ${S3_BUCKET}
       S3_PREFIX: ${S3_PREFIX}
       AWS_PROFILE: ${AWS_PROFILE}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
-      # Local cache directory for player data
       PLAYER_DATA_CACHE_DIR: /app/data/players
+      PLAYER_PMF_CACHE_DIR: /app/data/pmf
     volumes:
-      # app code + static
       - .:/usr/src/app
       - ./static:/usr/src/app/static
-      # mount your local AWS credentials/config, read-only
-      # WINDOWS:
       - "${USERPROFILE}/.aws:/root/.aws:ro"
-      # (on mac/linux use ${HOME}/.aws)
-      # Shared player data volume (read-only for web app)
       - player_data:/app/data/players:ro
+      - player_data_pmf:/app/data/pmf:ro
 
   sync:
     build: ./player-data-sync
@@ -32,17 +26,18 @@ services:
     environment:
       S3_BUCKET: ${S3_BUCKET}
       S3_PREFIX: ${S3_PREFIX:-dev/players/}
-      AWS_PROFILE: ${AWS_PROFILE}
-      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
       PLAYER_DATA_CACHE_DIR: /app/data/players
+      PLAYER_PMF_CACHE_DIR: /app/data/pmf
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      SYNC_MODE: ${SYNC_MODE:-sync}
     volumes:
-      # mount AWS credentials for S3 access
       - "${USERPROFILE}/.aws:/root/.aws:ro"
-      # Shared player data volume (read-write for sync)
       - player_data:/app/data/players
+      - player_data_pmf:/app/data/pmf
+    command: python /app/sync_player_data.py
     profiles:
-      - sync  # Only runs when explicitly called with: docker-compose --profile sync run sync
+      - sync
 
 volumes:
-  player_data:  # Shared volume persisted on EC2
-
+  player_data:
+  player_data_pmf:

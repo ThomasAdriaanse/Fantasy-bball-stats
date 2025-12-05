@@ -9,8 +9,13 @@ PMF utilities (1D and 2D)
 
 from __future__ import annotations
 
+import os
+import json
+from pathlib import Path
 from typing import Dict, Any, Callable, List, Sequence, Tuple, Optional
 import time
+import re
+
 
 import numpy as np
 from scipy import signal
@@ -25,6 +30,8 @@ MIN_BINS_AFTER_TRIM = 10
 # For ratio PMFs
 TAIL_MASS_RATIO = 0.003
 RATIO_BUCKETS = 1001  # 0..1000 -> 0.0..100.0%
+
+PMF_CACHE_DIR = os.getenv("PLAYER_PMF_CACHE_DIR", "/app/data/pmf")
 
 
 # ========= 1D HELPERS (USING PMF1D) =========
@@ -292,97 +299,91 @@ def build_team_pmf_counting(
     *,
     stat_col: Optional[str],
     season: str,
-    load_player_df: Callable[[str], Any],
+    load_player_pmfs,  # callable: load_player_pmfs(player_name: str) -> dict|None
     games_field: str = "games",
     injury_field: str = "inj",
     skip_injury_status: Sequence[str] = ("OUT", "INJURY_RESERVE", "IR", "SUSPENDED"),
     debug: bool = False,
 ) -> PMF1D:
     """
-    Build a team-level 1D PMF for a counting stat (PTS, REB, etc.)
+    Build a team-level 1D PMF for a counting stat (PTS, REB, etc.) using pre-built
+    per-player PMFs from disk via `load_player_pmfs(player_name)`.
+
+    Expects load_player_pmfs to return (current format):
+
+        {
+            "1d": { "PTS": PMF1D(...), "REB": PMF1D(...), ... },
+            "2d": { "FG": PMF2D(...), "FT": PMF2D(...), ... },
+        }
+
+    but will also tolerate older JSON shapes.
     """
     if not stat_col:
-        return PMF1D(np.array([1.0]))  # delta at 0
+        return PMF1D(np.array([1.0]))
 
     team_pmf = PMF1D(np.array([1.0]))  # start as delta at 0
-    start_time = time.time()
     player_count = 0
-
-    if debug:
-        print(f"  [PMF] Processing {len(team_players)} players for {stat_col}")
 
     for player in team_players:
         player_name = player.get("player_name")
         games_remaining = int(player.get(games_field, 0))
-
-        if not player_name or games_remaining <= 0:
-            continue
-
         injury_status = str(player.get(injury_field, "ACTIVE"))
+
+        # Basic skip conditions
+        if not player_name:
+            continue
+        if games_remaining <= 0:
+            continue
         if injury_status in skip_injury_status:
-            if debug:
-                print(f"  [PMF] Skipping {player_name} (injured: {injury_status})")
             continue
 
         player_count += 1
-        player_start = time.time()
-        if debug:
-            print(f"  [PMF] [{player_count}] {player_name} ({games_remaining} games)")
 
-        load_start = time.time()
-        df = load_player_df(player_name)
-        load_time = time.time() - load_start
+        # ---- Load this player's PMFs from disk ----
+        pmf_payload = load_player_pmfs(player_name)
 
-        if df is None or df.empty:
-            if debug:
-                print(f"  [PMF] ⚠️  No data for {player_name} ({load_time:.2f}s)")
+        if pmf_payload is None or not isinstance(pmf_payload, dict):
             continue
 
-        if "SEASON" in df.columns:
-            current_year = int(season.split("-")[0])
-            df = df[
-                df["SEASON"].str.startswith(str(current_year))
-                | df["SEASON"].str.startswith(str(current_year + 1))
-            ]
+        # Prefer new shape {"1d": {...}, "2d": {...}}, but be backwards compatible
+        if "1d" in pmf_payload:
+            pmf_1d_block = pmf_payload["1d"]
+        elif "pmf_1d" in pmf_payload:
+            pmf_1d_block = pmf_payload["pmf_1d"]
+        else:
+            # Fallback: maybe the whole payload *is* the 1d dict
+            pmf_1d_block = pmf_payload
 
-        if df.empty or stat_col not in df.columns:
-            if debug:
-                print(f"  [PMF] ⚠️  No {stat_col} data for {player_name}")
+        if not isinstance(pmf_1d_block, dict):
             continue
 
-        values = df[stat_col].dropna().values
-        if len(values) == 0:
-            if debug:
-                print(f"  [PMF] ⚠️  No valid {stat_col} values for {player_name}")
+        stat_entry = pmf_1d_block.get(stat_col)
+        if stat_entry is None:
             continue
 
-        pmf_start = time.time()
-        single_game_pmf = build_pmf_from_games(values)
-        pmf_time = time.time() - pmf_start
+        # Handle different possible shapes for stat_entry
+        if isinstance(stat_entry, PMF1D):
+            single_game_pmf = stat_entry
+        elif isinstance(stat_entry, dict):
+            probs = np.array(stat_entry.get("probs", []), dtype=float)
+            if probs.size == 0:
+                continue
+            single_game_pmf = PMF1D(probs)
+        else:
+            # Maybe it's already an array-like
+            probs = np.array(stat_entry, dtype=float)
+            if probs.size == 0:
+                continue
+            single_game_pmf = PMF1D(probs)
 
-        conv_start = time.time()
+        # Convolve n remaining games for this player
         total_pmf = convolve_pmf_n_times(single_game_pmf, games_remaining)
-        conv_time = time.time() - conv_start
 
-        combine_start = time.time()
+        # Combine into team PMF
         team_pmf = team_pmf.convolve(total_pmf)
-        combine_time = time.time() - combine_start
 
-        if debug:
-            player_total = time.time() - player_start
-            print(
-                f"  [PMF]   ✓ {player_total:.2f}s "
-                f"(load:{load_time:.2f}s pmf:{pmf_time:.3f}s conv:{conv_time:.3f}s "
-                f"combine:{combine_time:.3f}s)"
-            )
-
-    if debug:
-        total_time = time.time() - start_time
-        print(
-            f"  [PMF] ✓ Completed {stat_col} in {total_time:.2f}s "
-            f"- Final team PMF support size: {team_pmf.size}"
-        )
     return team_pmf
+
 
 
 def build_team_pmf_2d(
@@ -391,95 +392,170 @@ def build_team_pmf_2d(
     makes_col: str,
     attempts_col: str,
     season: str,
-    load_player_df: Callable[[str], Any],
+    load_player_pmfs,  # callable: load_player_pmfs(player_name: str) -> dict|None
     games_field: str = "games",
     injury_field: str = "inj",
     skip_injury_status: Sequence[str] = ("OUT", "INJURY_RESERVE", "IR", "SUSPENDED"),
     debug: bool = False,
 ) -> PMF2D:
     """
-    Build a team-level 2D PMF for (makes, attempts) stats (FG, FT).
+    Build a team-level 2D PMF for (makes, attempts) using pre-built per-player 2D PMFs.
 
-    Returns:
-        PMF2D where p[m, a] = P(total makes=m, attempts=a) for remaining games.
+    Expects load_player_pmfs to return (current format):
+
+        {
+            "1d": { ... },
+            "2d": { "FG": PMF2D(...), "FT": PMF2D(...), ... },
+        }
+
+    but will also tolerate older JSON shapes.
     """
-    start_time = time.time()
     team_pmf = PMF2D(np.array([[1.0]]))  # delta at (0,0)
-    player_count = 0
-
-    if debug:
-        print(f"  [PMF-2D] Processing {len(team_players)} players for {makes_col}/{attempts_col}")
 
     for player in team_players:
         player_name = player.get("player_name")
         games_remaining = int(player.get(games_field, 0))
-        if not player_name or games_remaining <= 0:
-            continue
-
         injury_status = str(player.get(injury_field, "ACTIVE"))
+
+        if not player_name:
+            continue
+        if games_remaining <= 0:
+            continue
         if injury_status in skip_injury_status:
-            if debug:
-                print(f"  [PMF-2D] Skipping {player_name} (injured: {injury_status})")
             continue
 
-        player_count += 1
-        player_start = time.time()
-        if debug:
-            print(f"  [PMF-2D] [{player_count}] {player_name} ({games_remaining} games)")
+        pmf_payload = load_player_pmfs(player_name)
 
-        load_start = time.time()
-        df = load_player_df(player_name)
-        load_time = time.time() - load_start
-
-        if df is None or df.empty:
-            if debug:
-                print(f"  [PMF-2D] ⚠️  No data for {player_name} ({load_time:.2f}s)")
+        if pmf_payload is None or not isinstance(pmf_payload, dict):
             continue
 
-        if "SEASON" in df.columns:
-            current_year = int(season.split("-")[0])
-            df = df[
-                df["SEASON"].str.startswith(str(current_year))
-                | df["SEASON"].str.startswith(str(current_year + 1))
-            ]
+        # Prefer new shape {"2d": {...}}, but be backwards compatible
+        if "2d" in pmf_payload:
+            pmf_2d_block = pmf_payload["2d"]
+        elif "pmf_2d" in pmf_payload:
+            pmf_2d_block = pmf_payload["pmf_2d"]
+        else:
+            pmf_2d_block = pmf_payload  # last-resort fallback
 
-        if df.empty or makes_col not in df.columns or attempts_col not in df.columns:
-            if debug:
-                print(f"  [PMF-2D] ⚠️  No {makes_col}/{attempts_col} data for {player_name}")
+        if pmf_2d_block is None or not isinstance(pmf_2d_block, dict):
             continue
 
-        makes = df[makes_col].dropna().values
-        attempts = df[attempts_col].dropna().values
-        if len(makes) == 0 or len(attempts) == 0:
-            if debug:
-                print(f"  [PMF-2D] ⚠️  No valid {makes_col}/{attempts_col} values")
+        # In your sync script, 2D keys are "FG" / "FT"
+        if makes_col == "FGM" and attempts_col == "FGA":
+            key_2d = "FG"
+        elif makes_col == "FTM" and attempts_col == "FTA":
+            key_2d = "FT"
+        else:
+            key_2d = None
+
+        if key_2d is None or key_2d not in pmf_2d_block:
             continue
 
-        pmf_start = time.time()
-        single_2d = build_2d_pmf_from_games(makes, attempts)
-        pmf_time = time.time() - pmf_start
+        entry = pmf_2d_block[key_2d]
 
-        conv_start = time.time()
+        # Handle possible shapes
+        if isinstance(entry, PMF2D):
+            single_2d = entry
+        elif isinstance(entry, dict):
+            data = np.array(entry.get("data", []), dtype=float)
+            if data.size == 0:
+                continue
+            single_2d = PMF2D(data)
+        else:
+            data = np.array(entry, dtype=float)
+            if data.size == 0:
+                continue
+            single_2d = PMF2D(data)
+
         total_2d = convolve_pmf_2d_n_times(single_2d, games_remaining)
-        conv_time = time.time() - conv_start
 
-        combine_start = time.time()
         team_pmf = team_pmf.convolve(total_2d)
-        combine_time = time.time() - combine_start
 
-        if debug:
-            player_total = time.time() - player_start
-            print(
-                f"  [PMF-2D]   ✓ {player_total:.2f}s "
-                f"(load:{load_time:.2f}s pmf:{pmf_time:.3f}s "
-                f"conv:{conv_time:.3f}s combine:{combine_time:.3f}s) "
-                f"PMF shape: {team_pmf.shape}"
-            )
-
-    if debug:
-        total_time = time.time() - start_time
-        print(
-            f"  [PMF-2D] ✓ Completed {makes_col}/{attempts_col} in {total_time:.2f}s "
-            f"- Final PMF shape: {team_pmf.shape}"
-        )
     return team_pmf
+
+
+# ========= LOAD PLAYER PMFS FROM DOCKER VOLUME =========
+
+_PMf_LIST_DEBUG_DONE = False
+
+def load_player_pmfs(player_name: str) -> Optional[Dict[str, Dict[str, Any]]]:
+    global _PMf_LIST_DEBUG_DONE
+
+    if not player_name:
+        return None
+
+    raw = player_name.strip().lower()
+    stem = re.sub(r"[^a-z0-9]+", "_", raw).strip("_")
+
+    fpath = Path(PMF_CACHE_DIR) / f"{stem}_pmf.json"
+
+    print(f"[PMF-LOAD] player={player_name!r} -> stem={stem!r} -> path={fpath}")
+
+    if not fpath.exists():
+        # One-time deep debug of the directory
+        if not _PMf_LIST_DEBUG_DONE:
+            _PMf_LIST_DEBUG_DONE = True
+            try:
+                exists = os.path.isdir(PMF_CACHE_DIR)
+                entries = sorted(os.listdir(PMF_CACHE_DIR)) if exists else []
+                print(
+                    f"[PMF-LOAD] DEBUG: PMF_CACHE_DIR={PMF_CACHE_DIR!r}, "
+                    f"isdir={exists}, file_count={len(entries)}"
+                )
+                print("[PMF-LOAD] DEBUG: first 40 files in PMF dir:")
+                for name in entries[:40]:
+                    print(f"    - {name}")
+            except Exception as e:
+                print(f"[PMF-LOAD] DEBUG: failed listing PMF dir: {e}")
+
+        print("[PMF-LOAD]   -> file not found (after dir introspection)")
+        return None
+
+    # ----- load JSON as before -----
+    try:
+        with fpath.open("r") as f:
+            payload = json.load(f)
+    except Exception as e:
+        print(f"[PMF-LOAD]   -> JSON load error: {e}")
+        return None
+
+    out_1d: Dict[str, PMF1D] = {}
+    out_2d: Dict[str, PMF2D] = {}
+
+    pmf_1d_raw = payload.get("pmf_1d", {})
+    if not isinstance(pmf_1d_raw, dict):
+        pmf_1d_raw = {}
+
+    for stat, data in pmf_1d_raw.items():
+        probs = data.get("probs") if isinstance(data, dict) else None
+        if not isinstance(probs, list):
+            continue
+        arr = np.array(probs, dtype=float)
+        s = arr.sum()
+        if s > 0:
+            arr = arr / s
+        out_1d[stat] = PMF1D(arr)
+
+    pmf_2d_raw = payload.get("pmf_2d", {})
+    if not isinstance(pmf_2d_raw, dict):
+        pmf_2d_raw = {}
+
+    for stat, data in pmf_2d_raw.items():
+        mat = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(mat, list):
+            continue
+        arr = np.array(mat, dtype=float)
+        s = arr.sum()
+        if s > 0:
+            arr = arr / s
+        out_2d[stat] = PMF2D(arr)
+
+    print(
+        f"[PMF-LOAD]   -> loaded 1d stats={list(out_1d.keys())}, "
+        f"2d stats={list(out_2d.keys())}"
+    )
+
+    return {
+        "1d": out_1d,
+        "2d": out_2d,
+    }
