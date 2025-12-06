@@ -5,6 +5,7 @@ from flask import Blueprint, render_template, request, session, redirect, url_fo
 import numpy as np
 import pandas as pd
 
+from app.services.trade_pmf_eval import evaluate_trade_with_pmfs
 from espn_api.basketball import League
 from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, ESPNInvalidLeague
 
@@ -218,37 +219,64 @@ def trade_analyzer():
     if league is None:
         return redirect(url_for("main.entry_page", error_message="Enter your league first."))
 
+    # Debug: show mapping of enumerate index -> team_id -> name
+    print("[TRADES] League teams (idx -> team_id -> name):")
+    for idx, t in enumerate(league.teams):
+        print(f"  idx={idx}  team_id={getattr(t, 'team_id', None)}  name={t.team_name}")
+
     stat_window = (request.values.get("window") or "projected").strip().lower()
     if stat_window not in WINDOW_CHOICES:
         stat_window = "projected"
 
     # Build league pool for this window, including z_<cat> columns
     league_df = _collect_league_players(league, year, stat_window)
-    z_league  = league_df if not league_df.empty else pd.DataFrame(
+    z_league = league_df if not league_df.empty else pd.DataFrame(
         columns=["player_name"] + CATEGORIES + [f"z_{c}" for c in CATEGORIES]
     )
 
     # selections (up to 4 each side)
-    side_a = [request.values.get(k, "") for k in ("a1","a2","a3","a4")]
-    side_b = [request.values.get(k, "") for k in ("b1","b2","b3","b4")]
+    side_a = [request.values.get(k, "") for k in ("a1", "a2", "a3", "a4")]
+    side_b = [request.values.get(k, "") for k in ("b1", "b2", "b3", "b4")]
 
-    # dropdown options
+    # team selectors from UI (use team_id as canonical)
+    raw_team_a_id = request.values.get("team_a_idx")
+    raw_team_b_id = request.values.get("team_b_idx")
+
+    team_a_id = int(raw_team_a_id) if raw_team_a_id not in (None, "", "None") else None
+    team_b_id = int(raw_team_b_id) if raw_team_b_id not in (None, "", "None") else None
+
+    # ---------- Build team options for the dropdowns ----------
+    # Use team.team_id as the ID exposed to the UI
+    team_options: List[Dict[str, Any]] = [
+        {"idx": getattr(t, "team_id", idx), "name": t.team_name}
+        for idx, t in enumerate(league.teams)
+    ]
+    print("[TRADES] team_options (team_id, name):", [(t["idx"], t["name"]) for t in team_options])
+
+    # dropdown options for players
     player_names = (
         sorted(league_df["player_name"].dropna().unique().tolist())
         if not league_df.empty else []
     )
 
     results = None
+    pmf_result = None
+
     if request.method == "POST":
+        print(
+            f"[TRADES] POST /trade "
+            f"team_a_id={team_a_id} team_b_id={team_b_id} "
+            f"side_a={side_a} side_b={side_b} window={stat_window}"
+        )
+
+        # ----- Z-score based trade table -----
         a_tot = _sum_side_z(z_league, side_a)
         b_tot = _sum_side_z(z_league, side_b)
-        diff  = round(a_tot["_overall"] - b_tot["_overall"], 3)
+        diff = round(a_tot["_overall"] - b_tot["_overall"], 3)
 
-        # per-player contributions for the tables (with backend colors)
         a_rows = _build_player_rows(z_league, side_a)
         b_rows = _build_player_rows(z_league, side_b)
 
-        # ΔZ row (A - B) with backend-colored cells
         delta_cells = []
         for c in CATEGORIES:
             z = round(float(a_tot.get(c, 0.0) - b_tot.get(c, 0.0)), 2)
@@ -268,6 +296,42 @@ def trade_analyzer():
             "diff": diff,
         }
 
+        # ----- PMF-based trade evaluation (before/after, all teams) -----
+        # We now pass team_id values into evaluate_trade_with_pmfs
+        pmf_result = evaluate_trade_with_pmfs(
+            league=league,
+            year=year,
+            stat_window=stat_window,
+            side_a=side_a,
+            side_b=side_b,
+            team_a_idx=team_a_id,   # interpreted as team_id on the PMF side
+            team_b_idx=team_b_id,
+        )
+        
+        if pmf_result:
+            print("\n[TRADES] --- Trade Evaluation Results ---")
+            tt = pmf_result.get("trading_teams", {})
+            ta_id = tt.get("team_a_idx")
+            tb_id = tt.get("team_b_idx")
+            ta_name = tt.get("team_a_name")
+            tb_name = tt.get("team_b_name")
+            
+            print(f"Trade between: {ta_name} (ID: {ta_id}) and {tb_name} (ID: {tb_id})")
+            
+            before_avg = pmf_result.get("before", {}).get("avg_win_pct", {})
+            after_avg = pmf_result.get("after", {}).get("avg_win_pct", {})
+            
+            print(f"\n{ta_name} Average Win %:")
+            print(f"  Before: {before_avg.get(ta_id)}")
+            print(f"  After:  {after_avg.get(ta_id)}")
+            
+            print(f"\n{tb_name} Average Win %:")
+            print(f"  Before: {before_avg.get(tb_id)}")
+            print(f"  After:  {after_avg.get(tb_id)}")
+            print("---------------------------------------\n")
+        else:
+            print("[TRADES] PMF result is None (could not simulate trade).")
+
     return render_template(
         "trade_value.html",
         league_id=league_id,
@@ -275,8 +339,13 @@ def trade_analyzer():
         stat_window=stat_window,
         window_choices=WINDOW_CHOICES,
         player_names=player_names,
-        side_a=side_a or ["","","",""],
-        side_b=side_b or ["","","",""],
+        side_a=side_a or ["", "", "", ""],
+        side_b=side_b or ["", "", "", ""],
         categories=CATEGORIES,
-        results=results
+        results=results,
+        pmf_result=pmf_result,
+        team_a_idx=team_a_id,
+        team_b_idx=team_b_id,
+        team_options=team_options,   # for dropdowns
+        teams=team_options,          # alias, in case template still references `teams`
     )
