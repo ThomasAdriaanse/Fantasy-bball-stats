@@ -224,9 +224,9 @@ def trade_analyzer():
     for idx, t in enumerate(league.teams):
         print(f"  idx={idx}  team_id={getattr(t, 'team_id', None)}  name={t.team_name}")
 
-    stat_window = (request.values.get("window") or "projected").strip().lower()
+    stat_window = (request.values.get("window") or "total").strip().lower()
     if stat_window not in WINDOW_CHOICES:
-        stat_window = "projected"
+        stat_window = "total"
 
     # Build league pool for this window, including z_<cat> columns
     league_df = _collect_league_players(league, year, stat_window)

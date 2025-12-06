@@ -186,6 +186,24 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
+    align-items: flex-start;
+  }
+
+  /* keep both sides equal-width, prevent clipping */
+  .player-tables>div {
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .player-tables table {
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  .player-tables th,
+  .player-tables td {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   @media (max-width: 980px) {
@@ -301,6 +319,7 @@
     border-collapse: collapse;
     margin-top: 8px;
     font-size: 13px;
+    table-layout: fixed;
   }
 
   .pmf-summary-table th,
@@ -314,6 +333,27 @@
   .pmf-summary-table th:first-child,
   .pmf-summary-table td:first-child {
     text-align: left;
+  }
+
+  /* column sizing for summary table */
+  .pmf-summary-table th.col-team,
+  .pmf-summary-table td.col-team {
+    width: 16%;
+  }
+
+  .pmf-summary-table th.col-delta,
+  .pmf-summary-table td.col-delta {
+    width: 8%;
+  }
+
+  .pmf-summary-table th.col-cat,
+  .pmf-summary-table td.col-cat {
+    width: 12%;
+  }
+
+  .pmf-summary-table tr.pmf-summary-total td {
+    font-weight: 700;
+    border-top: 1px solid var(--border-2);
   }
 
   .pmf-grid {
@@ -370,6 +410,57 @@
     border-radius: 2px;
     margin-right: 4px;
   }
+
+  /* Player typeahead selector */
+  .player-typeahead-wrap {
+    position: relative;
+  }
+
+  .player-typeahead-wrap input[type="text"] {
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border-2);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+
+  .player-typeahead-wrap input[type="text"]:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.35);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+  }
+
+  .player-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 4px;
+    max-height: 260px;
+    overflow-y: auto;
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    z-index: 20;
+  }
+
+  .player-option {
+    padding: 8px 10px;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--text);
+    background: var(--card);
+  }
+
+  .player-option:hover {
+    background: rgba(255, 255, 255, .06);
+  }
+
+  .player-option.active {
+    background: rgba(70, 130, 180, 0.35);
+  }
 </style>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 {% endblock head_extra %}
@@ -390,41 +481,33 @@
           <div class="row-2">
             <div>
               <label for="a1">Player 1</label>
-              <select id="a1" name="a1">
-                <option value=""></option>
-                {% for n in player_names %}
-                <option value="{{ n }}" {% if side_a[0]==n %}selected{% endif %}>{{ n }}</option>
-                {% endfor %}
-              </select>
+              <div class="player-typeahead-wrap">
+                <input id="a1" name="a1" type="text" value="{{ side_a[0] if side_a[0] else '' }}" autocomplete="off" />
+                <div class="player-dropdown"></div>
+              </div>
             </div>
             <div>
               <label for="a2">Player 2</label>
-              <select id="a2" name="a2">
-                <option value=""></option>
-                {% for n in player_names %}
-                <option value="{{ n }}" {% if side_a[1]==n %}selected{% endif %}>{{ n }}</option>
-                {% endfor %}
-              </select>
+              <div class="player-typeahead-wrap">
+                <input id="a2" name="a2" type="text" value="{{ side_a[1] if side_a[1] else '' }}" autocomplete="off" />
+                <div class="player-dropdown"></div>
+              </div>
             </div>
           </div>
           <div class="row-2">
             <div>
               <label for="a3">Player 3</label>
-              <select id="a3" name="a3">
-                <option value=""></option>
-                {% for n in player_names %}
-                <option value="{{ n }}" {% if side_a[2]==n %}selected{% endif %}>{{ n }}</option>
-                {% endfor %}
-              </select>
+              <div class="player-typeahead-wrap">
+                <input id="a3" name="a3" type="text" value="{{ side_a[2] if side_a[2] else '' }}" autocomplete="off" />
+                <div class="player-dropdown"></div>
+              </div>
             </div>
             <div>
               <label for="a4">Player 4</label>
-              <select id="a4" name="a4">
-                <option value=""></option>
-                {% for n in player_names %}
-                <option value="{{ n }}" {% if side_a[3]==n %}selected{% endif %}>{{ n }}</option>
-                {% endfor %}
-              </select>
+              <div class="player-typeahead-wrap">
+                <input id="a4" name="a4" type="text" value="{{ side_a[3] if side_a[3] else '' }}" autocomplete="off" />
+                <div class="player-dropdown"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -440,41 +523,33 @@
           <div class="row-2">
             <div>
               <label for="b1">Player 1</label>
-              <select id="b1" name="b1">
-                <option value=""></option>
-                {% for n in player_names %}
-                <option value="{{ n }}" {% if side_b[0]==n %}selected{% endif %}>{{ n }}</option>
-                {% endfor %}
-              </select>
+              <div class="player-typeahead-wrap">
+                <input id="b1" name="b1" type="text" value="{{ side_b[0] if side_b[0] else '' }}" autocomplete="off" />
+                <div class="player-dropdown"></div>
+              </div>
             </div>
             <div>
               <label for="b2">Player 2</label>
-              <select id="b2" name="b2">
-                <option value=""></option>
-                {% for n in player_names %}
-                <option value="{{ n }}" {% if side_b[1]==n %}selected{% endif %}>{{ n }}</option>
-                {% endfor %}
-              </select>
+              <div class="player-typeahead-wrap">
+                <input id="b2" name="b2" type="text" value="{{ side_b[1] if side_b[1] else '' }}" autocomplete="off" />
+                <div class="player-dropdown"></div>
+              </div>
             </div>
           </div>
           <div class="row-2">
             <div>
               <label for="b3">Player 3</label>
-              <select id="b3" name="b3">
-                <option value=""></option>
-                {% for n in player_names %}
-                <option value="{{ n }}" {% if side_b[2]==n %}selected{% endif %}>{{ n }}</option>
-                {% endfor %}
-              </select>
+              <div class="player-typeahead-wrap">
+                <input id="b3" name="b3" type="text" value="{{ side_b[2] if side_b[2] else '' }}" autocomplete="off" />
+                <div class="player-dropdown"></div>
+              </div>
             </div>
             <div>
               <label for="b4">Player 4</label>
-              <select id="b4" name="b4">
-                <option value=""></option>
-                {% for n in player_names %}
-                <option value="{{ n }}" {% if side_b[3]==n %}selected{% endif %}>{{ n }}</option>
-                {% endfor %}
-              </select>
+              <div class="player-typeahead-wrap">
+                <input id="b4" name="b4" type="text" value="{{ side_b[3] if side_b[3] else '' }}" autocomplete="off" />
+                <div class="player-dropdown"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -617,6 +692,9 @@
   <!-- TRADE PMF / WIN% PANEL -->
   <div class="card pmf-card">
     <h3 style="margin-top:0;">Trade impact (PMFs & average win%)</h3>
+    <div style="font-weight:700; font-size:13px; margin:2px 0 6px; color:var(--muted);">
+      Leaguewide Category Comparison Graphs
+    </div>
 
     <!-- Summary win% table -->
     <div id="trade-pmf-summary"></div>
@@ -637,14 +715,142 @@
 {% endblock content %}
 
 {% block body_js %}
+
+<script>
+  // ===========================
+  // Player typeahead for all 8 inputs
+  // ===========================
+  (function () {
+    const playerNames = {{ player_names | tojson
+  }};
+  const players = playerNames.map(name => ({ full_name: name }));
+  const inputIds = ['a1', 'a2', 'a3', 'a4', 'b1', 'b2', 'b3', 'b4'];
+
+  inputIds.forEach(inputId => {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const wrap = input.closest('.player-typeahead-wrap');
+    if (!wrap) return;
+    const dropdown = wrap.querySelector('.player-dropdown');
+    if (!dropdown) return;
+
+    let activeIndex = -1;
+
+    function clearActive(options) {
+      options.forEach(opt => opt.classList.remove("active"));
+    }
+
+    function setActive(index) {
+      const options = dropdown.querySelectorAll(".player-option");
+      if (!options.length) {
+        activeIndex = -1;
+        return;
+      }
+      if (index < 0) index = 0;
+      if (index >= options.length) index = options.length - 1;
+      clearActive(options);
+      options[index].classList.add("active");
+      activeIndex = index;
+
+      const el = options[index];
+      const elTop = el.offsetTop;
+      const elBottom = elTop + el.offsetHeight;
+      const viewTop = dropdown.scrollTop;
+      const viewBottom = viewTop + dropdown.clientHeight;
+      if (elTop < viewTop) {
+        dropdown.scrollTop = elTop;
+      } else if (elBottom > viewBottom) {
+        dropdown.scrollTop = elBottom - dropdown.clientHeight;
+      }
+    }
+
+    function renderOptions(query) {
+      const q = query.trim().toLowerCase();
+      dropdown.innerHTML = "";
+      activeIndex = -1;
+      if (!q) {
+        dropdown.style.display = "none";
+        return;
+      }
+      const matches = players
+        .filter(p => (p.full_name || "").toLowerCase().includes(q))
+        .slice(0, 40);
+      if (!matches.length) {
+        dropdown.style.display = "none";
+        return;
+      }
+      matches.forEach(p => {
+        const opt = document.createElement("div");
+        opt.className = "player-option";
+        opt.textContent = p.full_name;
+        opt.addEventListener("mousedown", function (e) {
+          e.preventDefault();
+          input.value = p.full_name;
+          dropdown.style.display = "none";
+        });
+        dropdown.appendChild(opt);
+      });
+      dropdown.style.display = "block";
+      setActive(0);
+    }
+
+    input.addEventListener("input", function () {
+      renderOptions(input.value);
+    });
+
+    input.addEventListener("focus", function () {
+      if (input.value) renderOptions(input.value);
+    });
+
+    input.addEventListener("keydown", function (e) {
+      const options = dropdown.querySelectorAll(".player-option");
+      const hasOptions = options.length > 0;
+
+      if (e.key === "ArrowDown" && hasOptions) {
+        e.preventDefault();
+        if (activeIndex === -1) {
+          setActive(0);
+        } else {
+          setActive(activeIndex + 1);
+        }
+      } else if (e.key === "ArrowUp" && hasOptions) {
+        e.preventDefault();
+        if (activeIndex === -1) {
+          setActive(0);
+        } else {
+          setActive(activeIndex - 1);
+        }
+      } else if (e.key === "Enter" && hasOptions && activeIndex !== -1) {
+        e.preventDefault();
+        const chosen = options[activeIndex];
+        if (chosen) {
+          input.value = chosen.textContent;
+          dropdown.style.display = "none";
+        }
+      } else if (e.key === "Escape") {
+        dropdown.style.display = "none";
+        activeIndex = -1;
+      }
+    });
+
+    document.addEventListener("click", function (e) {
+      if (e.target !== input && !dropdown.contains(e.target)) {
+        dropdown.style.display = "none";
+        activeIndex = -1;
+      }
+    });
+  });
+  }) ();
+</script>
+
 {% if results %}
 <script>
   (function () {
     /* ---------- Radar ---------- */
-    const cats = {{ categories| tojson
+    const cats = {{ categories | tojson
   }};
-  const A = {{ results.a_totals| tojson }};
-  const B = {{ results.b_totals| tojson }};
+  const A = {{ results.a_totals | tojson }};
+  const B = {{ results.b_totals | tojson }};
   const capRadar = 3;
   const norm = (v) => Math.max(0, Math.min(1, (v + capRadar) / (2 * capRadar)));
 
@@ -788,7 +994,7 @@
 
 <script>
   (function () {
-    const pmfResult = {{ pmf_result| tojson | safe if pmf_result else 'null'
+    const pmfResult = {{ pmf_result | tojson | safe if pmf_result else 'null'
   }};
   if (!pmfResult) {
     console.log("[TRADE-PMF][JS] pmfResult is null");
@@ -829,38 +1035,175 @@
   const tA = teamById.get(String(sideAId));
   const tB = teamById.get(String(sideBId));
 
+  // accumulators for summary row (averages across categories)
+  const aBeforeVals = [];
+  const aAfterVals = [];
+  const aDeltaVals = [];
+  const bBeforeVals = [];
+  const bAfterVals = [];
+  const bDeltaVals = [];
+
   if (tA && tB) {
     const tblWrap = d3.select("#trade-pmf-summary");
     tblWrap.html("");
-
     const table = tblWrap.append("table").attr("class", "pmf-summary-table");
     const thead = table.append("thead").append("tr");
-    thead.append("th").text("Category");
-    thead.append("th").text(`${tA.team_name} before`);
-    thead.append("th").text(`${tA.team_name} after`);
-    thead.append("th").text(`${tB.team_name} before`);
-    thead.append("th").text(`${tB.team_name} after`);
+
+    thead.append("th").attr("class", "col-team").text(`${tA.team_name} before`);
+    thead.append("th").attr("class", "col-delta").text("Δ");
+    thead.append("th").attr("class", "col-team").text(`${tA.team_name} after`);
+    thead.append("th").attr("class", "col-cat").text("Category");
+    thead.append("th").attr("class", "col-team").text(`${tB.team_name} before`);
+    thead.append("th").attr("class", "col-delta").text("Δ");
+    thead.append("th").attr("class", "col-team").text(`${tB.team_name} after`);
 
     const tbody = table.append("tbody");
 
     cats.forEach(cat => {
       const row = tbody.append("tr");
-      row.append("td").text(cat);
 
       const aBefore = getPct(winBefore, sideAId, cat);
       const aAfter = getPct(winAfter, sideAId, cat);
       const bBefore = getPct(winBefore, sideBId, cat);
       const bAfter = getPct(winAfter, sideBId, cat);
 
-      [aBefore, aAfter, bBefore, bAfter].forEach(val => {
-        const cell = row.append("td");
-        if (val == null) {
-          cell.text("—");
-        } else {
-          cell.text(val.toFixed(1) + "%");
-        }
-      });
+      // Team A before
+      const cellABefore = row.append("td").attr("class", "col-team");
+      if (aBefore == null) {
+        cellABefore.text("—");
+      } else {
+        cellABefore.text(aBefore.toFixed(1) + "%");
+        aBeforeVals.push(aBefore);
+      }
+
+      // Team A delta
+      const cellADelta = row.append("td").attr("class", "col-delta");
+      if (aBefore == null || aAfter == null) {
+        cellADelta.text("—");
+      } else {
+        const delta = aAfter - aBefore;
+        aDeltaVals.push(delta);
+        const sign = delta >= 0 ? "+" : "";
+        cellADelta.text(sign + delta.toFixed(1) + "%");
+        cellADelta.style("color", delta >= 0 ? "#4ade80" : "#f87171");
+        cellADelta.style("font-weight", "600");
+      }
+
+      // Team A after
+      const cellAAfter = row.append("td").attr("class", "col-team");
+      if (aAfter == null) {
+        cellAAfter.text("—");
+      } else {
+        cellAAfter.text(aAfter.toFixed(1) + "%");
+        aAfterVals.push(aAfter);
+      }
+
+      // Category (middle)
+      row.append("td").attr("class", "col-cat").text(cat);
+
+      // Team B before
+      const cellBBefore = row.append("td").attr("class", "col-team");
+      if (bBefore == null) {
+        cellBBefore.text("—");
+      } else {
+        cellBBefore.text(bBefore.toFixed(1) + "%");
+        bBeforeVals.push(bBefore);
+      }
+
+      // Team B delta
+      const cellBDelta = row.append("td").attr("class", "col-delta");
+      if (bBefore == null || bAfter == null) {
+        cellBDelta.text("—");
+      } else {
+        const delta = bAfter - bBefore;
+        bDeltaVals.push(delta);
+        const sign = delta >= 0 ? "+" : "";
+        cellBDelta.text(sign + delta.toFixed(1) + "%");
+        cellBDelta.style("color", delta >= 0 ? "#4ade80" : "#f87171");
+        cellBDelta.style("font-weight", "600");
+      }
+
+      // Team B after
+      const cellBAfter = row.append("td").attr("class", "col-team");
+      if (bAfter == null) {
+        cellBAfter.text("—");
+      } else {
+        cellBAfter.text(bAfter.toFixed(1) + "%");
+        bAfterVals.push(bAfter);
+      }
     });
+
+    // summary row: average of all columns (including deltas)
+    function avg(arr) {
+      const vals = arr.filter(v => v != null && !isNaN(v));
+      if (!vals.length) return null;
+      return vals.reduce((s, v) => s + v, 0) / vals.length;
+    }
+
+    const aBeforeAvg = avg(aBeforeVals);
+    const aAfterAvg = avg(aAfterVals);
+    const aDeltaAvg = avg(aDeltaVals);
+    const bBeforeAvg = avg(bBeforeVals);
+    const bAfterAvg = avg(bAfterVals);
+    const bDeltaAvg = avg(bDeltaVals);
+
+    const totalRow = tbody.append("tr").attr("class", "pmf-summary-total");
+
+    // Team A before avg
+    const tABefore = totalRow.append("td").attr("class", "col-team");
+    if (aBeforeAvg == null) {
+      tABefore.text("—");
+    } else {
+      tABefore.text(aBeforeAvg.toFixed(1) + "%");
+    }
+
+    // Team A delta avg
+    const tADelta = totalRow.append("td").attr("class", "col-delta");
+    if (aDeltaAvg == null) {
+      tADelta.text("—");
+    } else {
+      const sign = aDeltaAvg >= 0 ? "+" : "";
+      tADelta.text(sign + aDeltaAvg.toFixed(1) + "%");
+      tADelta.style("color", aDeltaAvg >= 0 ? "#4ade80" : "#f87171");
+    }
+
+    // Team A after avg
+    const tAAfter = totalRow.append("td").attr("class", "col-team");
+    if (aAfterAvg == null) {
+      tAAfter.text("—");
+    } else {
+      tAAfter.text(aAfterAvg.toFixed(1) + "%");
+    }
+
+    // Label cell
+    totalRow.append("td").attr("class", "col-cat").text("All cats (avg)");
+
+    // Team B before avg
+    const tBBefore = totalRow.append("td").attr("class", "col-team");
+    if (bBeforeAvg == null) {
+      tBBefore.text("—");
+    } else {
+      tBBefore.text(bBeforeAvg.toFixed(1) + "%");
+    }
+
+    // Team B delta avg
+    const tBDelta = totalRow.append("td").attr("class", "col-delta");
+    if (bDeltaAvg == null) {
+      tBDelta.text("—");
+    } else {
+      const sign = bDeltaAvg >= 0 ? "+" : "";
+      tBDelta.text(sign + bDeltaAvg.toFixed(1) + "%");
+      tBDelta.style("color", bDeltaAvg >= 0 ? "#4ade80" : "#f87171");
+    }
+
+    // Team B after avg
+    const tBAfter = totalRow.append("td").attr("class", "col-team");
+    if (bAfterAvg == null) {
+      tBAfter.text("—");
+    } else {
+      tBAfter.text(bAfterAvg.toFixed(1) + "%");
+    }
+
   } else {
     console.warn("[TRADE-PMF][JS] Could not resolve trading teams in teamById");
   }
