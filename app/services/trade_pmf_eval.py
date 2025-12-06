@@ -12,6 +12,8 @@ from app.services.PMF_utils import (
     load_player_pmfs,
     compress_pmf,
     compress_ratio_pmf_from_2d,
+    expected_ratio_from_2d_pmf,
+    PMF_CACHE_DIR,
 )
 
 # ---------- Category definitions ----------
@@ -310,6 +312,29 @@ def evaluate_trade_with_pmfs(
     before_b = _avg_win_pct_for_team(team_b_idx_int, league, pmf1_before, pmf2_before)
     after_b  = _avg_win_pct_for_team(team_b_idx_int, league, pmf1_after,  pmf2_after)
 
+    # 4b. Calculate Raw Stats (Means)
+    print("[TRADE-PMF] Calculating Raw Stats...")
+    
+    def _calc_stats(team_idx, pmf1_map, pmf2_map):
+        stats = {}
+        for cat in ALL_CATEGORIES:
+            if cat in ("FG%", "FT%"):
+                # Expected ratio * 100 for percentage
+                pmf = pmf2_map[team_idx][cat]
+                val = expected_ratio_from_2d_pmf(pmf) * 100.0
+                print(f"[DEBUG] {cat} for team {team_idx}: ratio={val/100.0:.4f}, val={val:.4f}")
+            else:
+                # Mean of 1D PMF
+                pmf = pmf1_map[team_idx][cat]
+                val = pmf.mean()
+            stats[cat] = val
+        return stats
+
+    stats_before_a = _calc_stats(team_a_idx_int, pmf1_before, pmf2_before)
+    stats_after_a  = _calc_stats(team_a_idx_int, pmf1_after,  pmf2_after)
+    stats_before_b = _calc_stats(team_b_idx_int, pmf1_before, pmf2_before)
+    stats_after_b  = _calc_stats(team_b_idx_int, pmf1_after,  pmf2_after)
+
     # 5. Compress PMFs for Frontend
     def _compress_all(pmf1_map, pmf2_map):
         c_1d = {}
@@ -362,6 +387,10 @@ def evaluate_trade_with_pmfs(
                 team_a_id: before_a,
                 team_b_id: before_b,
             },
+            "avg_stats": {
+                team_a_id: stats_before_a,
+                team_b_id: stats_before_b,
+            },
             "pmfs": {
                 "1d": before_1d,
                 "2d": before_2d,
@@ -371,6 +400,10 @@ def evaluate_trade_with_pmfs(
             "avg_win_pct": {
                 team_a_id: after_a,
                 team_b_id: after_b,
+            },
+            "avg_stats": {
+                team_a_id: stats_after_a,
+                team_b_id: stats_after_b,
             },
             "pmfs": {
                 "1d": after_1d,

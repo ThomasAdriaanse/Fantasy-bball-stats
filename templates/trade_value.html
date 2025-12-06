@@ -473,6 +473,22 @@
   .player-option.active {
     background: rgba(70, 130, 180, 0.35);
   }
+
+  /* Toggle Switch */
+  .switch input { 
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  .switch input:checked + .slider {
+    background-color: #4ea4ff;
+  }
+  .switch input:focus + .slider {
+    box-shadow: 0 0 1px #4ea4ff;
+  }
+  .switch input:checked + .slider .slider-knob {
+    transform: translateX(16px);
+  }
 </style>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 {% endblock head_extra %}
@@ -703,31 +719,51 @@
     </div>
   </div>
 
-  <!-- DIFFERENCE (A − B) by category; Overall shown separately -->
+  <!-- DIFFERENCE (A − B) and RADAR side-by-side -->
   <div class="card" style="margin-top:12px;">
-    <div class="dz-title">Difference in Team Z-Score by Category (Side A − Side B)</div>
-    <div id="dz-chart"></div>
+    <div style="display:flex; flex-wrap:wrap; gap:20px;">
+      
+      <!-- Left: Difference Chart -->
+      <div style="flex:1; min-width:500px;">
+        <div class="dz-title">Difference in Team Z-Score by Category (Side A − Side B)</div>
+        <div id="dz-chart"></div>
 
-    {% set overall_diff = results.a_totals['_overall'] - results.b_totals['_overall'] %}
-    <div class="overall-wrap">
-      <div class="overall-pill">
-        <div>Overall Difference in Team Z-Score (Side A − Side B)</div>
-        <div class="overall-amt {{ 'amt-pos' if overall_diff>=0 else 'amt-neg' }}">
-          {{ '+' if overall_diff>=0 else '' }}{{ '%.2f' % overall_diff }}
+        {% set overall_diff = results.a_totals['_overall'] - results.b_totals['_overall'] %}
+        <div class="overall-wrap">
+          <div class="overall-pill">
+            <div>Overall Difference in Team Z-Score (Side A − Side B)</div>
+            <div class="overall-amt {{ 'amt-pos' if overall_diff>=0 else 'amt-neg' }}">
+              {{ '+' if overall_diff>=0 else '' }}{{ '%.2f' % overall_diff }}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
 
-  <!-- RADAR -->
-  <div class="card viz-grid" style="margin-top:12px;">
-    <div id="radar"></div>
+      <!-- Right: Radar -->
+      <div style="flex:1; min-width:400px; display:flex; justify-content:center; align-items:center;">
+        <div id="radar" style="width:100%; max-width:600px;"></div>
+      </div>
+
+    </div>
   </div>
 
   <!-- TRADE PMF / WIN% PANEL -->
   <div class="card pmf-card">
     <h3 style="margin-top:0;">Trade impact (PMFs & average win%)</h3>
     <div class="pmf-subtitle">Leaguewide Category Comparison Graphs</div>
+
+    <!-- Toggle for Win% / Stats -->
+    <div style="display:flex; justify-content:center; margin-bottom:10px;">
+      <div class="toggle-container" style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:20px; border:1px solid var(--border);">
+        <span id="label-win" style="font-size:12px; font-weight:600; color:#fff; cursor:pointer;">Win %</span>
+        <label class="switch" style="position:relative; display:inline-block; width:34px; height:18px;">
+          <input type="checkbox" id="stats-toggle">
+          <span class="slider round" style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background-color:#4682b4; transition:.4s; border-radius:34px;"></span>
+          <span class="slider-knob" style="position:absolute; content:''; height:12px; width:12px; left:3px; bottom:3px; background-color:white; transition:.4s; border-radius:50%;"></span>
+        </label>
+        <span id="label-stats" style="font-size:12px; font-weight:600; color:var(--muted); cursor:pointer;">Stats</span>
+      </div>
+    </div>
 
     <!-- Summary win% table -->
     <div id="trade-pmf-summary"></div>
@@ -1054,13 +1090,17 @@
   });
 
   // ---------- 3.1 Summary win% table ----------
+
+  // ---------- 3.1 Summary table (Win % OR Stats) ----------
   const winBefore = before.avg_win_pct || {};
   const winAfter = after.avg_win_pct || {};
+  const statsBefore = before.avg_stats || {};
+  const statsAfter = after.avg_stats || {};
 
-  function getPct(winDict, teamId, cat) {
+  function getValue(dict, teamId, cat) {
     if (teamId === null || teamId === undefined) return null;
     const key = String(teamId);
-    const row = winDict[key] || {};
+    const row = dict[key] || {};
     const v = row[cat];
     return (v == null || isNaN(v)) ? null : Number(v);
   }
@@ -1068,15 +1108,12 @@
   const tA = teamById.get(String(sideAId));
   const tB = teamById.get(String(sideBId));
 
-  // accumulators for summary row (averages across categories)
-  const aBeforeVals = [];
-  const aAfterVals = [];
-  const aDeltaVals = [];
-  const bBeforeVals = [];
-  const bAfterVals = [];
-  const bDeltaVals = [];
+  function renderSummaryTable(mode) {
+    // mode: 'win' or 'stats'
+    const isStats = (mode === 'stats');
+    const dictBefore = isStats ? statsBefore : winBefore;
+    const dictAfter = isStats ? statsAfter : winAfter;
 
-  if (tA && tB) {
     const tblWrap = d3.select("#trade-pmf-summary");
     tblWrap.html("");
     const table = tblWrap.append("table").attr("class", "pmf-summary-table");
@@ -1092,22 +1129,39 @@
 
     const tbody = table.append("tbody");
 
+    // accumulators for summary row
+    const aBeforeVals = [];
+    const aAfterVals = [];
+    const aDeltaVals = [];
+    const bBeforeVals = [];
+    const bAfterVals = [];
+    const bDeltaVals = [];
+
     cats.forEach(cat => {
       const row = tbody.append("tr");
 
-      const aBefore = getPct(winBefore, sideAId, cat);
-      const aAfter = getPct(winAfter, sideAId, cat);
-      const bBefore = getPct(winBefore, sideBId, cat);
-      const bAfter = getPct(winAfter, sideBId, cat);
+      const aBefore = getValue(dictBefore, sideAId, cat);
+      const aAfter = getValue(dictAfter, sideAId, cat);
+      const bBefore = getValue(dictBefore, sideBId, cat);
+      const bAfter = getValue(dictAfter, sideBId, cat);
+
+      // Formatting helper
+      const fmt = (val) => {
+        if (val == null) return "—";
+        if (isStats) {
+          // For stats: if cat is FG% or FT%, show 1 decimal + %. Else 1 decimal.
+          if (cat === "FG%" || cat === "FT%") return val.toFixed(1) + "%";
+          return val.toFixed(1);
+        } else {
+          // Win % always %
+          return val.toFixed(1) + "%";
+        }
+      };
 
       // Team A before
       const cellABefore = row.append("td").attr("class", "col-team");
-      if (aBefore == null) {
-        cellABefore.text("—");
-      } else {
-        cellABefore.text(aBefore.toFixed(1) + "%");
-        aBeforeVals.push(aBefore);
-      }
+      cellABefore.text(fmt(aBefore));
+      if (aBefore != null) aBeforeVals.push(aBefore);
 
       // Team A delta
       const cellADelta = row.append("td").attr("class", "col-delta");
@@ -1117,31 +1171,32 @@
         const delta = aAfter - aBefore;
         aDeltaVals.push(delta);
         const sign = delta >= 0 ? "+" : "";
-        cellADelta.text(sign + delta.toFixed(1) + "%");
-        cellADelta.style("color", delta >= 0 ? "#4ade80" : "#f87171");
+        
+        let txt = sign + delta.toFixed(1);
+        if (!isStats || (cat === "FG%" || cat === "FT%")) txt += "%";
+        
+        cellADelta.text(txt);
+        
+        // Color logic
+        let isGood = (delta >= 0);
+        if (isStats && cat === "TO") isGood = (delta <= 0);
+        
+        cellADelta.style("color", isGood ? "#4ade80" : "#f87171");
         cellADelta.style("font-weight", "600");
       }
 
       // Team A after
       const cellAAfter = row.append("td").attr("class", "col-team");
-      if (aAfter == null) {
-        cellAAfter.text("—");
-      } else {
-        cellAAfter.text(aAfter.toFixed(1) + "%");
-        aAfterVals.push(aAfter);
-      }
+      cellAAfter.text(fmt(aAfter));
+      if (aAfter != null) aAfterVals.push(aAfter);
 
-      // Category (middle)
+      // Category
       row.append("td").attr("class", "col-cat").text(cat);
 
       // Team B before
       const cellBBefore = row.append("td").attr("class", "col-team");
-      if (bBefore == null) {
-        cellBBefore.text("—");
-      } else {
-        cellBBefore.text(bBefore.toFixed(1) + "%");
-        bBeforeVals.push(bBefore);
-      }
+      cellBBefore.text(fmt(bBefore));
+      if (bBefore != null) bBeforeVals.push(bBefore);
 
       // Team B delta
       const cellBDelta = row.append("td").attr("class", "col-delta");
@@ -1151,90 +1206,116 @@
         const delta = bAfter - bBefore;
         bDeltaVals.push(delta);
         const sign = delta >= 0 ? "+" : "";
-        cellBDelta.text(sign + delta.toFixed(1) + "%");
-        cellBDelta.style("color", delta >= 0 ? "#4ade80" : "#f87171");
+        
+        let txt = sign + delta.toFixed(1);
+        if (!isStats || (cat === "FG%" || cat === "FT%")) txt += "%";
+
+        cellBDelta.text(txt);
+
+        let isGood = (delta >= 0);
+        if (isStats && cat === "TO") isGood = (delta <= 0);
+
+        cellBDelta.style("color", isGood ? "#4ade80" : "#f87171");
         cellBDelta.style("font-weight", "600");
       }
 
       // Team B after
       const cellBAfter = row.append("td").attr("class", "col-team");
-      if (bAfter == null) {
-        cellBAfter.text("—");
-      } else {
-        cellBAfter.text(bAfter.toFixed(1) + "%");
-        bAfterVals.push(bAfter);
-      }
+      cellBAfter.text(fmt(bAfter));
+      if (bAfter != null) bAfterVals.push(bAfter);
     });
 
-    // summary row: average of all columns (including deltas)
-    function avg(arr) {
-      const vals = arr.filter(v => v != null && !isNaN(v));
-      if (!vals.length) return null;
-      return vals.reduce((s, v) => s + v, 0) / vals.length;
+    // Summary row (only for Win%, stats average doesn't make sense across different units)
+    if (!isStats) {
+      const totalRow = tbody.append("tr").attr("class", "pmf-summary-total");
+      
+      const avg = (arr) => {
+        const vals = arr.filter(v => v != null && !isNaN(v));
+        if (!vals.length) return null;
+        return vals.reduce((s, v) => s + v, 0) / vals.length;
+      };
+
+      const aBeforeAvg = avg(aBeforeVals);
+      const aDeltaAvg = avg(aDeltaVals);
+      const aAfterAvg = avg(aAfterVals);
+      const bBeforeAvg = avg(bBeforeVals);
+      const bDeltaAvg = avg(bDeltaVals);
+      const bAfterAvg = avg(bAfterVals);
+
+      // A Before
+      totalRow.append("td").text(aBeforeAvg != null ? aBeforeAvg.toFixed(1) + "%" : "—");
+      
+      // A Delta
+      const tdAD = totalRow.append("td");
+      if (aDeltaAvg != null) {
+        const sign = aDeltaAvg >= 0 ? "+" : "";
+        tdAD.text(sign + aDeltaAvg.toFixed(1) + "%");
+        tdAD.style("color", aDeltaAvg >= 0 ? "#4ade80" : "#f87171");
+      } else {
+        tdAD.text("—");
+      }
+
+      // A After
+      totalRow.append("td").text(aAfterAvg != null ? aAfterAvg.toFixed(1) + "%" : "—");
+
+      // Label
+      totalRow.append("td").text("All cats (avg)");
+
+      // B Before
+      totalRow.append("td").text(bBeforeAvg != null ? bBeforeAvg.toFixed(1) + "%" : "—");
+
+      // B Delta
+      const tdBD = totalRow.append("td");
+      if (bDeltaAvg != null) {
+        const sign = bDeltaAvg >= 0 ? "+" : "";
+        tdBD.text(sign + bDeltaAvg.toFixed(1) + "%");
+        tdBD.style("color", bDeltaAvg >= 0 ? "#4ade80" : "#f87171");
+      } else {
+        tdBD.text("—");
+      }
+
+      // B After
+      totalRow.append("td").text(bAfterAvg != null ? bAfterAvg.toFixed(1) + "%" : "—");
     }
+  }
 
-    const aBeforeAvg = avg(aBeforeVals);
-    const aAfterAvg = avg(aAfterVals);
-    const aDeltaAvg = avg(aDeltaVals);
-    const bBeforeAvg = avg(bBeforeVals);
-    const bAfterAvg = avg(bAfterVals);
-    const bDeltaAvg = avg(bDeltaVals);
+  if (tA && tB) {
+    // Initial render: Win %
+    renderSummaryTable('win');
 
-    const totalRow = tbody.append("tr").attr("class", "pmf-summary-total");
+    // Toggle logic
+    const toggle = document.getElementById("stats-toggle");
+    const labelWin = document.getElementById("label-win");
+    const labelStats = document.getElementById("label-stats");
 
-    // Team A before avg
-    const tABefore = totalRow.append("td").attr("class", "col-team");
-    if (aBeforeAvg == null) {
-      tABefore.text("—");
-    } else {
-      tABefore.text(aBeforeAvg.toFixed(1) + "%");
-    }
-
-    // Team A delta avg
-    const tADelta = totalRow.append("td").attr("class", "col-delta");
-    if (aDeltaAvg == null) {
-      tADelta.text("—");
-    } else {
-      const sign = aDeltaAvg >= 0 ? "+" : "";
-      tADelta.text(sign + aDeltaAvg.toFixed(1) + "%");
-      tADelta.style("color", aDeltaAvg >= 0 ? "#4ade80" : "#f87171");
-    }
-
-    // Team A after avg
-    const tAAfter = totalRow.append("td").attr("class", "col-team");
-    if (aAfterAvg == null) {
-      tAAfter.text("—");
-    } else {
-      tAAfter.text(aAfterAvg.toFixed(1) + "%");
-    }
-
-    // Label cell
-    totalRow.append("td").attr("class", "col-cat").text("All cats (avg)");
-
-    // Team B before avg
-    const tBBefore = totalRow.append("td").attr("class", "col-team");
-    if (bBeforeAvg == null) {
-      tBBefore.text("—");
-    } else {
-      tBBefore.text(bBeforeAvg.toFixed(1) + "%");
-    }
-
-    // Team B delta avg
-    const tBDelta = totalRow.append("td").attr("class", "col-delta");
-    if (bDeltaAvg == null) {
-      tBDelta.text("—");
-    } else {
-      const sign = bDeltaAvg >= 0 ? "+" : "";
-      tBDelta.text(sign + bDeltaAvg.toFixed(1) + "%");
-      tBDelta.style("color", bDeltaAvg >= 0 ? "#4ade80" : "#f87171");
-    }
-
-    // Team B after avg
-    const tBAfter = totalRow.append("td").attr("class", "col-team");
-    if (bAfterAvg == null) {
-      tBAfter.text("—");
-    } else {
-      tBAfter.text(bAfterAvg.toFixed(1) + "%");
+    if (toggle) {
+      toggle.addEventListener("change", function() {
+        const mode = this.checked ? 'stats' : 'win';
+        renderSummaryTable(mode);
+        
+        // Update label colors
+        if (mode === 'stats') {
+          labelStats.style.color = "#fff";
+          labelWin.style.color = "var(--muted)";
+        } else {
+          labelWin.style.color = "#fff";
+          labelStats.style.color = "var(--muted)";
+        }
+      });
+      
+      // Click on labels to toggle
+      labelWin.addEventListener("click", () => {
+        if (toggle.checked) {
+          toggle.checked = false;
+          toggle.dispatchEvent(new Event('change'));
+        }
+      });
+      labelStats.addEventListener("click", () => {
+        if (!toggle.checked) {
+          toggle.checked = true;
+          toggle.dispatchEvent(new Event('change'));
+        }
+      });
     }
 
   } else {
