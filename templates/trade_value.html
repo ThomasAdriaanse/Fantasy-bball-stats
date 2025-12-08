@@ -222,7 +222,7 @@
 
   #radar svg {
     width: 100%;
-    height: 420px;
+    height: 250px;
     display: block;
   }
 
@@ -230,6 +230,7 @@
   .dz-title {
     font-weight: 700;
     margin-bottom: 4px;
+    text-align: center;
   }
 
   #dz-chart svg {
@@ -286,6 +287,7 @@
     display: inline-flex;
     gap: 10px;
     align-items: center;
+    justify-content: center;
     padding: 10px 14px;
     border-radius: 999px;
     border: 1px solid var(--border);
@@ -486,7 +488,7 @@
   .switch input:focus + .slider {
     box-shadow: 0 0 1px #4ea4ff;
   }
-  .switch input:checked + .slider .slider-knob {
+  .switch input:checked ~ .slider-knob {
     transform: translateX(16px);
   }
 </style>
@@ -623,7 +625,17 @@
           {% endfor %}
         </select>
       </div>
+      
       <div class="spacer"></div>
+
+      <!-- Top 10 Toggle -->
+      <div style="display:flex; flex-direction:column; margin-right: 20px;">
+          <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+              <input type="checkbox" name="top_10_only" {% if request.form.get('top_10_only') == 'on' %}checked{% endif %}>
+              <span>Top 10 Players Only</span>
+          </label>
+      </div>
+
       <button class="btn" type="submit">Evaluate</button>
     </div>
   </form>
@@ -649,6 +661,7 @@
 
   <!-- PLAYER TABLES -->
   <div class="card" style="margin-top:12px;">
+    <div class="dz-title" style="text-align:center; margin-bottom:10px;">Difference in Team Z-Score by Category (Side A − Side B)</div>
     {% set stats_count = categories|length + 1 %} {# categories + Total col #}
     {% set total_units = 2 + stats_count %}
     {% set unit = 100 / total_units %}
@@ -721,13 +734,22 @@
 
   <!-- DIFFERENCE (A − B) and RADAR side-by-side -->
   <div class="card" style="margin-top:12px;">
+    <div class="dz-title" style="text-align:center; margin-bottom:10px;">Difference in Team Z-Score by Category (Side A − Side B)</div>
     <div style="display:flex; flex-wrap:wrap; gap:20px;">
       
       <!-- Left: Difference Chart -->
-      <div style="flex:1; min-width:500px;">
-        <div class="dz-title">Difference in Team Z-Score by Category (Side A − Side B)</div>
+      <div style="flex:3; min-width:500px;">
         <div id="dz-chart"></div>
 
+
+      </div>
+
+      <!-- Right: Radar -->
+      <div style="flex:1; min-width:250px; display:flex; justify-content:center; align-items:center;">
+        <div id="radar" style="width:100%; max-width:600px;"></div>
+      </div>
+
+    </div>
         {% set overall_diff = results.a_totals['_overall'] - results.b_totals['_overall'] %}
         <div class="overall-wrap">
           <div class="overall-pill">
@@ -737,20 +759,12 @@
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- Right: Radar -->
-      <div style="flex:1; min-width:400px; display:flex; justify-content:center; align-items:center;">
-        <div id="radar" style="width:100%; max-width:600px;"></div>
-      </div>
-
-    </div>
   </div>
 
   <!-- TRADE PMF / WIN% PANEL -->
   <div class="card pmf-card">
     <h3 style="margin-top:0;">Trade impact (PMFs & average win%)</h3>
-    <div class="pmf-subtitle">Leaguewide Category Comparison Graphs</div>
+
 
     <!-- Toggle for Win% / Stats -->
     <div style="display:flex; justify-content:center; margin-bottom:10px;">
@@ -767,6 +781,8 @@
 
     <!-- Summary win% table -->
     <div id="trade-pmf-summary"></div>
+
+    <div class="pmf-subtitle">Leaguewide Category Comparison Graphs</div>
 
     <!-- 2-column PMF grid (before / after) -->
     <div class="pmf-grid" id="trade-pmf-grid"></div>
@@ -927,7 +943,9 @@
   const dataB = cats.map(c => ({ axis: c, val: norm(B[c]) }));
 
   const wrapR = d3.select("#radar");
-  const wR = wrapR.node().clientWidth || 600, hR = 420, rPad = 50;
+  const wR = wrapR.node().clientWidth || 300;
+  const hR = 250;
+  const rPad = 25;
   const cx = wR / 2, cy = hR / 2, radius = Math.min(wR, hR) / 2 - rPad;
   const angle = (i) => (i / cats.length) * 2 * Math.PI;
   const r = d3.scaleLinear().domain([0, 1]).range([0, radius]);

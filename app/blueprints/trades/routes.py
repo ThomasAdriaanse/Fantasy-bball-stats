@@ -296,6 +296,44 @@ def trade_analyzer():
             "diff": diff,
         }
 
+        # ----- Top 10 Filter Logic -----
+        top_10_only = request.form.get("top_10_only") == "on"
+        allowed_player_names = None
+
+        if top_10_only:
+            # We need z-scores for ALL players to determine top 10 per team.
+            # _collect_league_players returns a DF with "z_<cat>" columns.
+            # We can sum them to get a rough "Total Z".
+            
+            # Calculate total Z for ranking
+            z_cols = [f"z_{c}" for c in CATEGORIES]
+            # Ensure columns exist (fill 0 if missing)
+            for zc in z_cols:
+                if zc not in league_df.columns:
+                    league_df[zc] = 0.0
+            
+            league_df["_total_z"] = league_df[z_cols].sum(axis=1)
+            
+            # We need to map players to teams to filter per-team.
+            # league_df doesn't explicitly have team_id, but we can infer or re-fetch.
+            # Actually, _collect_league_players iterates teams. Let's just re-iterate league.teams
+            # and match names, or better yet, just use the fact that we have the roster objects.
+            
+            allowed_player_names = set()
+            
+            # Iterate through all teams to find their top 10
+            for team in league.teams:
+                team_player_names = [p.name for p in team.roster]
+                # Filter DF for this team
+                team_df = league_df[league_df["player_name"].isin(team_player_names)]
+                
+                if not team_df.empty:
+                    # Sort by Total Z descending
+                    top_10 = team_df.sort_values("_total_z", ascending=False).head(10)
+                    allowed_player_names.update(top_10["player_name"].tolist())
+            
+            print(f"[TRADES] Top 10 filter active. Allowed {len(allowed_player_names)} players.")
+
         # ----- PMF-based trade evaluation (before/after, all teams) -----
         # We now pass team_id values into evaluate_trade_with_pmfs
         pmf_result = evaluate_trade_with_pmfs(
@@ -306,6 +344,7 @@ def trade_analyzer():
             side_b=side_b,
             team_a_idx=team_a_id,   # interpreted as team_id on the PMF side
             team_b_idx=team_b_id,
+            allowed_player_names=allowed_player_names,
         )
         
         if pmf_result:

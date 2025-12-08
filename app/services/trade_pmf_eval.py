@@ -42,10 +42,12 @@ PERCENTAGE_CATEGORIES: Dict[str, Tuple[str, str]] = {
 def _build_team_players_from_rosters(
     league: League,
     games_per_player: int = 3,
+    allowed_player_names: Optional[Set[str]] = None,
 ) -> Tuple[Dict[int, List[Dict[str, Any]]], Dict[str, int]]:
     """
     Build team->players map from ESPN rosters.
     Hardcodes games to `games_per_player` (default 3) and assumes ACTIVE status.
+    If allowed_player_names is provided, only include players in that set.
     """
     team_players: Dict[int, List[Dict[str, Any]]] = {}
     player_to_team: Dict[str, int] = {}
@@ -55,6 +57,10 @@ def _build_team_players_from_rosters(
         for p in team.roster:
             name = str(getattr(p, "name", "")) or ""
             if not name:
+                continue
+
+            # Filter if set is provided
+            if allowed_player_names is not None and name not in allowed_player_names:
                 continue
 
             # Simplified: Hardcode 3 games, assume ACTIVE
@@ -256,6 +262,7 @@ def evaluate_trade_with_pmfs(
     side_b: List[str],
     team_a_idx: Optional[int] = None,  # ESPN team_id from UI
     team_b_idx: Optional[int] = None,  # ESPN team_id from UI
+    allowed_player_names: Optional[Set[str]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Simplified PMF-based trade assessment.
@@ -277,6 +284,7 @@ def evaluate_trade_with_pmfs(
     team_players_before, player_to_team = _build_team_players_from_rosters(
         league,
         games_per_player=3,
+        allowed_player_names=allowed_player_names,
     )
 
     # 2. Simulate Trade
