@@ -233,6 +233,7 @@ def build_team_pmf_counting(
     games_field: str = "games",
     injury_field: str = "inj",
     skip_injury_status: Sequence[str] = ("OUT", "INJURY_RESERVE", "IR", "SUSPENDED"),
+    include_injured_players: bool = True,
     debug: bool = False,
 ) -> PMF1D:
     """
@@ -264,7 +265,7 @@ def build_team_pmf_counting(
             continue
         if games_remaining <= 0:
             continue
-        if injury_status in skip_injury_status:
+        if injury_status in skip_injury_status and not include_injured_players:
             continue
 
         player_count += 1
@@ -319,6 +320,7 @@ def build_team_pmf_2d(
     games_field: str = "games",
     injury_field: str = "inj",
     skip_injury_status: Sequence[str] = ("OUT", "INJURY_RESERVE", "IR", "SUSPENDED"),
+    include_injured_players: bool = True,
     debug: bool = False,
 ) -> PMF2D:
     """
@@ -342,7 +344,7 @@ def build_team_pmf_2d(
             continue
         if games_remaining <= 0:
             continue
-        if injury_status in skip_injury_status:
+        if injury_status in skip_injury_status and not include_injured_players:
             continue
 
         pmf_payload = load_player_pmfs(player_name)

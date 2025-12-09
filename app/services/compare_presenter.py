@@ -229,6 +229,7 @@ def build_odds_rows(
                     attempts_col=attempts_col,
                     season=CURRENT_SEASON,
                     load_player_pmfs=load_player_pmfs,
+                    include_injured_players=False,
                     debug=DEBUG_COMPARE_PRESENTER,
                 )
 
@@ -238,6 +239,7 @@ def build_odds_rows(
                     attempts_col=attempts_col,
                     season=CURRENT_SEASON,
                     load_player_pmfs=load_player_pmfs,
+                    include_injured_players=False,
                     debug=DEBUG_COMPARE_PRESENTER,
                 )
 
@@ -249,6 +251,7 @@ def build_odds_rows(
                 t1_pmf_2d_final = t1_pmf_2d_proj.shifted(t1_made_i, t1_att_i)
                 t2_pmf_2d_final = t2_pmf_2d_proj.shifted(t2_made_i, t2_att_i)
 
+                # Trim PMFs
                 t1_pmf_2d_final.p[t1_pmf_2d_final.p < 1e-4] = 0
                 t2_pmf_2d_final.p[t2_pmf_2d_final.p < 1e-4] = 0
 
@@ -259,6 +262,7 @@ def build_odds_rows(
                     t1_pmf_2d_final,
                     t2_pmf_2d_final,
                 )
+                
                 p_team1_pct = p_team1 * 100.0
                 p_team2_pct = 100.0 - p_team1_pct
 
@@ -332,6 +336,7 @@ def build_odds_rows(
                 stat_col=stat_col,
                 season=CURRENT_SEASON,
                 load_player_pmfs=load_player_pmfs,
+                include_injured_players=False,
                 debug=DEBUG_COMPARE_PRESENTER,
             )
 
@@ -340,6 +345,7 @@ def build_odds_rows(
                 stat_col=stat_col,
                 season=CURRENT_SEASON,
                 load_player_pmfs=load_player_pmfs,
+                include_injured_players=False,
                 debug=DEBUG_COMPARE_PRESENTER,
             )
 
