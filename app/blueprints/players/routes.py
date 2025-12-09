@@ -22,12 +22,12 @@ def player_stats():
     # DEFAULT TO AVG_Z
     selected_stat = request.values.get("stat", "AVG_Z")
 
-    stat_options = [
-        'FPTS','PTS','REB','AST','STL','BLK','TOV',
-        'FGM','FGA','FG_PCT','FG3M','FG3A','FG3_PCT',
-        'FTM','FTA','FT_PCT','MIN','PLUS_MINUS',
-        'AVG_Z','Z_PTS','Z_FG3M','Z_REB','Z_AST','Z_STL','Z_BLK','Z_FG','Z_FT','Z_TOV'
-    ]
+    # Organize stats into three categories
+    stat_options = {
+        'raw': ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'FG_PCT', 'FG3M', 'FT_PCT'],
+        'z_score': ['Z_PTS', 'Z_FG3M', 'Z_REB', 'Z_AST', 'Z_STL', 'Z_BLK', 'Z_FG', 'Z_FT', 'Z_TOV'],
+        'other': ['AVG_Z', 'FGM', 'FGA', 'FG3A', 'FG3_PCT', 'FTM', 'FTA', 'MIN', 'PLUS_MINUS']
+    }
 
     try:
         chart_data = build_chart_data(selected_player, num_games, stat=selected_stat)

@@ -30,9 +30,21 @@
         <div>
           <label for="stat">Stat</label>
           <select id="stat" name="stat">
-            {% for s in stat_options %}
-            <option value="{{ s }}" {% if s==selected_stat %}selected{% endif %}>{{ s }}</option>
-            {% endfor %}
+            <optgroup label="Raw Stats">
+              {% for s in stat_options.raw %}
+              <option value="{{ s }}" {% if s==selected_stat %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </optgroup>
+            <optgroup label="Z-Scores">
+              {% for s in stat_options.z_score %}
+              <option value="{{ s }}" {% if s==selected_stat %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </optgroup>
+            <optgroup label="Other">
+              {% for s in stat_options.other %}
+              <option value="{{ s }}" {% if s==selected_stat %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </optgroup>
           </select>
         </div>
 
