@@ -15,7 +15,6 @@ from .classes.pmf1d import PMF1D
 from .classes.pmf2d import PMF2D
 
 from .PMF_utils import (
-    trim_1d_pmf,
     compress_pmf,
     build_team_pmf_counting,
     build_team_pmf_2d,
@@ -250,6 +249,9 @@ def build_odds_rows(
                 t1_pmf_2d_final = t1_pmf_2d_proj.shifted(t1_made_i, t1_att_i)
                 t2_pmf_2d_final = t2_pmf_2d_proj.shifted(t2_made_i, t2_att_i)
 
+                t1_pmf_2d_final.p[t1_pmf_2d_final.p < 1e-4] = 0
+                t2_pmf_2d_final.p[t2_pmf_2d_final.p < 1e-4] = 0
+
                 t1_pmf_2d_final.normalize()
                 t2_pmf_2d_final.normalize()
 
@@ -347,8 +349,9 @@ def build_odds_rows(
             t1_final_pmf = t1_projected_pmf.shifted(t1_current_int)
             t2_final_pmf = t2_projected_pmf.shifted(t2_current_int)
 
-            t1_final_pmf = trim_1d_pmf(t1_final_pmf)
-            t2_final_pmf = trim_1d_pmf(t2_final_pmf)
+            # Trim the PMFs
+            t1_final_pmf.p[t1_final_pmf.p < 1e-3] = 0
+            t2_final_pmf.p[t2_final_pmf.p < 1e-3] = 0
 
             if cat == 'TO':
                 p_t2_beats_t1 = t2_final_pmf.prob_beats(t1_final_pmf)

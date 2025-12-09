@@ -303,7 +303,7 @@ def trade_analyzer():
         if top_10_only:
             # We need z-scores for ALL players to determine top 10 per team.
             # _collect_league_players returns a DF with "z_<cat>" columns.
-            # We can sum them to get a rough "Total Z".
+            # We can sum them to get "Total Z".
             
             # Calculate total Z for ranking
             z_cols = [f"z_{c}" for c in CATEGORIES]
@@ -311,6 +311,7 @@ def trade_analyzer():
             for zc in z_cols:
                 if zc not in league_df.columns:
                     league_df[zc] = 0.0
+                    print("error adding column: ", zc)
             
             league_df["_total_z"] = league_df[z_cols].sum(axis=1)
             
@@ -348,28 +349,29 @@ def trade_analyzer():
         )
         
         if pmf_result:
-            print("\n[TRADES] --- Trade Evaluation Results ---")
+            #print("\n[TRADES] --- Trade Evaluation Results ---")
             tt = pmf_result.get("trading_teams", {})
             ta_id = tt.get("team_a_idx")
             tb_id = tt.get("team_b_idx")
             ta_name = tt.get("team_a_name")
             tb_name = tt.get("team_b_name")
             
-            print(f"Trade between: {ta_name} (ID: {ta_id}) and {tb_name} (ID: {tb_id})")
+            #print(f"Trade between: {ta_name} (ID: {ta_id}) and {tb_name} (ID: {tb_id})")
             
             before_avg = pmf_result.get("before", {}).get("avg_win_pct", {})
             after_avg = pmf_result.get("after", {}).get("avg_win_pct", {})
             
-            print(f"\n{ta_name} Average Win %:")
-            print(f"  Before: {before_avg.get(ta_id)}")
-            print(f"  After:  {after_avg.get(ta_id)}")
+            #print(f"\n{ta_name} Average Win %:")
+            #print(f"  Before: {before_avg.get(ta_id)}")
+            #print(f"  After:  {after_avg.get(ta_id)}")
             
-            print(f"\n{tb_name} Average Win %:")
-            print(f"  Before: {before_avg.get(tb_id)}")
-            print(f"  After:  {after_avg.get(tb_id)}")
-            print("---------------------------------------\n")
+            #print(f"\n{tb_name} Average Win %:")
+            #print(f"  Before: {before_avg.get(tb_id)}")
+            #print(f"  After:  {after_avg.get(tb_id)}")
+            #print("---------------------------------------\n")
         else:
-            print("[TRADES] PMF result is None (could not simulate trade).")
+            print(" ")
+            #print("[TRADES] PMF result is None (could not simulate trade).")
 
     return render_template(
         "trade_value.html",

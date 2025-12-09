@@ -22,6 +22,7 @@ class PMF2D:
     1/1
     4/4
     1/2
+    sum:
     10/13
     
     2D PMF:

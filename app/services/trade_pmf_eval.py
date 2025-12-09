@@ -61,6 +61,7 @@ def _build_team_players_from_rosters(
 
             # Filter if set is provided
             if allowed_player_names is not None and name not in allowed_player_names:
+                print("name error, skipping player: ", name)
                 continue
 
             # Simplified: Hardcode 3 games, assume ACTIVE
@@ -160,7 +161,6 @@ def _simulate_trade_on_rosters(
     for name in traded_b:
         _move_player(name, team_b_idx)
 
-    return team_a_idx, team_b_idx, team_players_after
 
     return team_a_idx, team_b_idx, team_players_after
 

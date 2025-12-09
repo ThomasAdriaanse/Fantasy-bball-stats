@@ -73,90 +73,6 @@ def convolve_pmf_n_times(pmf: PMF1D, n: int) -> PMF1D:
     return result
 
 
-def trim_1d_pmf(
-    pmf: PMF1D,
-    tail_mass: float = TAIL_MASS_1D,
-    min_bins: int = MIN_BINS_AFTER_TRIM,
-) -> PMF1D:
-    """
-    Soft-trim extreme tails from a 1D PMF by zeroing out very small
-    mass at both ends, then renormalizing.
-
-    - Keeps the array length the same (indices still mean the same totals).
-    - Uses a quantile-based cutoff so trimming adapts to the shape.
-    """
-    arr = pmf.p.copy()
-    if arr.size == 0:
-        return pmf
-
-    total = arr.sum()
-    if total <= 0:
-        return pmf
-
-    norm = arr / total
-    cdf = np.cumsum(norm)
-
-    low_idx = int(np.searchsorted(cdf, tail_mass, side="left"))
-    high_idx = int(np.searchsorted(cdf, 1.0 - tail_mass, side="right") - 1)
-
-    if high_idx - low_idx + 1 < min_bins:
-        return pmf
-
-    trimmed = np.zeros_like(arr)
-    trimmed[low_idx:high_idx + 1] = arr[low_idx:high_idx + 1]
-
-    new_total = trimmed.sum()
-    if new_total <= 0:
-        return pmf
-
-    trimmed /= new_total
-    return PMF1D(trimmed)
-
-
-def trim_2d_pmf(
-    pmf2d: PMF2D,
-    eps: float = 1e-7,
-    min_m_bins: int = 3,
-    min_a_bins: int = 3,
-) -> PMF2D:
-    """
-    Trim a 2D PMF by removing rows/cols whose total probability
-    is effectively zero, then renormalize.
-    """
-    arr = pmf2d.p
-    if arr.size == 0:
-        return pmf2d
-
-    arr = arr.copy()
-    arr[arr < eps] = 0.0
-
-    if arr.sum() <= 0:
-        base = np.zeros((1, 1), dtype=float)
-        base[0, 0] = 1.0
-        return PMF2D(base)
-
-    rows, cols = np.where(arr > 0.0)
-    if rows.size == 0 or cols.size == 0:
-        base = np.zeros((1, 1), dtype=float)
-        base[0, 0] = 1.0
-        return PMF2D(base)
-
-    r_min, r_max = rows.min(), rows.max()
-    c_min, c_max = cols.min(), cols.max()
-
-    if (r_max - r_min + 1) < min_m_bins:
-        r_max = min(arr.shape[0] - 1, r_min + min_m_bins - 1)
-    if (c_max - c_min + 1) < min_a_bins:
-        c_max = min(arr.shape[1] - 1, c_min + min_a_bins - 1)
-
-    cropped = arr[r_min : r_max + 1, c_min : c_max + 1]
-    s = cropped.sum()
-    if s > 0:
-        cropped /= s
-
-    return PMF2D(cropped)
-
-
 def calculate_win_probability(team1_pmf: PMF1D, team2_pmf: PMF1D) -> float:
     """
     P(Team1 > Team2).
@@ -168,8 +84,8 @@ def compress_pmf(pmf: PMF1D) -> Dict[str, Any]:
     """
     Compress a 1D PMF into {'min': int, 'probs': [floats]} after trimming tails.
     """
-    trimmed = trim_1d_pmf(pmf)
-    arr = trimmed.p
+    pmf.p[pmf.p < 1e-7] = 0
+    arr = pmf.p
 
     if arr.size == 0:
         return {"min": 0, "probs": []}
@@ -227,7 +143,8 @@ def convolve_pmf_2d_n_times(pmf2d: PMF2D, n: int) -> PMF2D:
     result = pmf2d.copy()
     for _ in range(n - 1):
         result = result.convolve(pmf2d)
-        result = trim_2d_pmf(result)
+        result.p[result.p < 1e-7] = 0.0
+
     return result
 
 
@@ -386,15 +303,8 @@ def build_team_pmf_counting(
 
         if pmf_payload is None or not isinstance(pmf_payload, dict):
             continue
-
-        # Prefer new shape {"1d": {...}, "2d": {...}}, but be backwards compatible
-        if "1d" in pmf_payload:
-            pmf_1d_block = pmf_payload["1d"]
-        elif "pmf_1d" in pmf_payload:
-            pmf_1d_block = pmf_payload["pmf_1d"]
-        else:
-            # Fallback: maybe the whole payload *is* the 1d dict
-            pmf_1d_block = pmf_payload
+        
+        pmf_1d_block = pmf_payload.get("1d")
 
         if not isinstance(pmf_1d_block, dict):
             continue
@@ -443,14 +353,12 @@ def build_team_pmf_2d(
     """
     Build a team-level 2D PMF for (makes, attempts) using pre-built per-player 2D PMFs.
 
-    Expects load_player_pmfs to return (current format):
+    Expects load_player_pmfs to return:
 
         {
             "1d": { ... },
             "2d": { "FG": PMF2D(...), "FT": PMF2D(...), ... },
         }
-
-    but will also tolerate older JSON shapes.
     """
     team_pmf = PMF2D(np.array([[1.0]]))  # delta at (0,0)
 
@@ -469,17 +377,13 @@ def build_team_pmf_2d(
         pmf_payload = load_player_pmfs(player_name)
 
         if pmf_payload is None or not isinstance(pmf_payload, dict):
+            print("error loading player PMF for ", player_name)
             continue
 
-        # Prefer new shape {"2d": {...}}, but be backwards compatible
-        if "2d" in pmf_payload:
-            pmf_2d_block = pmf_payload["2d"]
-        elif "pmf_2d" in pmf_payload:
-            pmf_2d_block = pmf_payload["pmf_2d"]
-        else:
-            pmf_2d_block = pmf_payload  # last-resort fallback
-
+        pmf_2d_block = pmf_payload.get("2d")
+        
         if pmf_2d_block is None or not isinstance(pmf_2d_block, dict):
+            print("error loading player PMF for ", player_name)
             continue
 
         # In your sync script, 2D keys are "FG" / "FT"
@@ -498,21 +402,26 @@ def build_team_pmf_2d(
         # Handle possible shapes
         if isinstance(entry, PMF2D):
             single_2d = entry
-        elif isinstance(entry, dict):
-            data = np.array(entry.get("data", []), dtype=float)
-            if data.size == 0:
-                continue
-            single_2d = PMF2D(data)
+        elif isinstance(entry, dict): # delete these cases later
+            #data = np.array(entry.get("data", []), dtype=float)
+            #if data.size == 0:
+            #    continue
+            #single_2d = PMF2D(data)
+            print("error loading player PMF for ", player_name)
+            continue
         else:
-            data = np.array(entry, dtype=float)
-            if data.size == 0:
-                continue
-            single_2d = PMF2D(data)
+            #data = np.array(entry, dtype=float)
+            #   if data.size == 0:
+            #    continue
+            #single_2d = PMF2D(data)
+            print("error loading player PMF for ", player_name)
+            continue
 
         total_2d = convolve_pmf_2d_n_times(single_2d, games_remaining)
 
         team_pmf = team_pmf.convolve(total_2d)
-        team_pmf = trim_2d_pmf(team_pmf)
+        # trim for speed
+        team_pmf.p[team_pmf.p < 1e-7] = 0.0
 
     return team_pmf
 
