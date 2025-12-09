@@ -1,6 +1,11 @@
 # player/routes.py
 from flask import Blueprint, render_template, request, jsonify
 from app.services.player_stats import build_chart_data, get_active_players_list
+from app.services.PMF_utils import (
+    load_player_pmfs,
+    compress_pmf,
+    compress_ratio_pmf_from_2d
+)
 
 bp = Blueprint("players", __name__)  # endpoint name = "players"
 
@@ -22,6 +27,45 @@ def player_stats():
     chart_data = build_chart_data(selected_player, num_games, stat=selected_stat)
     players = get_active_players_list()
 
+    # --- Load PMF Data (Season Distribution) ---
+    pmf_data = {}
+    raw_pmfs = load_player_pmfs(selected_player)
+
+    if raw_pmfs:
+        # We only want specific categories
+        cats = ["PTS", "REB", "AST", "STL", "BLK", "3PM", "TO", "FG%", "FT%"]
+        
+        # Mapping from UI/target cat to PMF key if different
+        # 1D keys: PTS, REB, AST, STL, BLK, FG3M, TOV
+        # 2D keys: FG, FT
+        
+        key_map = {
+            "PTS": "PTS", "REB": "REB", "AST": "AST",
+            "STL": "STL", "BLK": "BLK", "3PM": "FG3M", "TO": "TOV",
+            "FG%": "FG", "FT%": "FT"
+        }
+
+        # Check 1D
+        p1d = raw_pmfs.get("1d", {})
+        # Check 2D
+        p2d = raw_pmfs.get("2d", {})
+
+        for cat in cats:
+            pmf_key = key_map.get(cat, cat)
+            
+            if cat in ["FG%", "FT%"]:
+                if pmf_key in p2d:
+                    pmf_obj = p2d[pmf_key]
+                    compressed = compress_ratio_pmf_from_2d(pmf_obj)
+                    compressed["mean"] = pmf_obj.expected_ratio()
+                    pmf_data[cat] = compressed
+            else:
+                if pmf_key in p1d:
+                    pmf_obj = p1d[pmf_key]
+                    compressed = compress_pmf(pmf_obj)
+                    compressed["mean"] = pmf_obj.mean()
+                    pmf_data[cat] = compressed
+
     return render_template(
         "player_stats.html",
         players=players,
@@ -29,7 +73,8 @@ def player_stats():
         num_games=num_games,
         stat_options=stat_options,
         selected_stat=selected_stat,
-        chart_data_json=chart_data
+        chart_data_json=chart_data,
+        pmf_data=pmf_data
     )
 
 @bp.get("/api/player_stats")
