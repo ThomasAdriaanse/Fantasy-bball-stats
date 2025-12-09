@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Dict, Any, Callable, List, Sequence, Tuple, Optional
 import time
 import re
+import unicodedata
 
 
 import numpy as np
@@ -541,7 +542,14 @@ def load_player_pmfs(player_name: str) -> Optional[Dict[str, Dict[str, Any]]]:
     if not player_name:
         return None
 
-    raw = player_name.strip().lower()
+    # Normalize Unicode characters (e.g., "Vučević" → "Vucevic")
+    # NFD decomposes characters like č into c + combining mark
+    normalized = unicodedata.normalize('NFD', player_name)
+    # Remove combining marks (accents, diacritics)
+    ascii_name = ''.join(c for c in normalized if unicodedata.category(c) != 'Mn')
+    
+    # Convert to lowercase and replace non-alphanumeric with underscores
+    raw = ascii_name.strip().lower()
     stem = re.sub(r"[^a-z0-9]+", "_", raw).strip("_")
 
     fpath = Path(PMF_CACHE_DIR) / f"{stem}_pmf.json"

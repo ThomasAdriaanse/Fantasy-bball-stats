@@ -1,6 +1,7 @@
 # app/services/s3_service.py
 import os
 import json
+import unicodedata
 import pandas as pd
 import boto3
 from botocore.exceptions import ClientError
@@ -19,12 +20,18 @@ _PLAYER_CACHE = {}
 def _safe_filename(name: str) -> str:
     """
     Convert player name to filename format.
+    Transliterates Unicode characters to ASCII (e.g., č → c, ñ → n).
     Replace spaces, hyphens, periods, apostrophes with underscores.
-    Preserve Unicode letters like č, ć, ñ, é, etc.
     """
+    # Normalize Unicode characters (e.g., "Vučević" → "Vucevic")
+    # NFD decomposes characters like č into c + combining mark
+    normalized = unicodedata.normalize('NFD', name)
+    # Remove combining marks (accents, diacritics)
+    ascii_name = ''.join(c for c in normalized if unicodedata.category(c) != 'Mn')
+    
     # Replace common punctuation/separators with underscore
-    result = name.replace(" ", "_").replace("-", "_").replace(".", "_").replace("'", "_")
-    # Remove any other non-alphanumeric except underscores (but keep Unicode letters)
+    result = ascii_name.replace(" ", "_").replace("-", "_").replace(".", "_").replace("'", "_")
+    # Remove any other non-alphanumeric except underscores
     result = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in result)
     # Strip leading/trailing underscores only
     return result.strip("_").lower()

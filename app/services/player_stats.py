@@ -86,12 +86,34 @@ def build_chart_data(player_name: str, num_games: int, stat: str = "FPTS"):
     # Order by game number
     df = df.sort_values("Game_Number").reset_index(drop=True)
 
-    # Centered moving average over ±num_games/2 like before
-    # (Your previous code used a "half_window = num_games" and symmetric slice.)
+    # Determine if we're calculating a percentage stat that needs volume-weighted calculation
+    is_fg_pct = value_col == "FG_PCT"
+    is_fg3_pct = value_col == "FG3_PCT"
+    is_ft_pct = value_col == "FT_PCT"
+    is_percentage_stat = is_fg_pct or is_fg3_pct or is_ft_pct
+
+    # Centered moving average
     def centered_average(idx, half_window):
         start = max(0, idx - half_window)
         end = min(len(df), idx + half_window + 1)
-        return pd.to_numeric(df[value_col].iloc[start:end], errors="coerce").mean()
+        window_df = df.iloc[start:end]
+        
+        # For percentage stats, sum makes and attempts, then divide
+        if is_fg_pct:
+            makes = pd.to_numeric(window_df["FGM"], errors="coerce").sum()
+            attempts = pd.to_numeric(window_df["FGA"], errors="coerce").sum()
+            return (makes / attempts) if attempts > 0 else 0.0
+        elif is_fg3_pct:
+            makes = pd.to_numeric(window_df["FG3M"], errors="coerce").sum()
+            attempts = pd.to_numeric(window_df["FG3A"], errors="coerce").sum()
+            return (makes / attempts) if attempts > 0 else 0.0
+        elif is_ft_pct:
+            makes = pd.to_numeric(window_df["FTM"], errors="coerce").sum()
+            attempts = pd.to_numeric(window_df["FTA"], errors="coerce").sum()
+            return (makes / attempts) if attempts > 0 else 0.0
+        else:
+            # For non-percentage stats, use simple mean
+            return pd.to_numeric(window_df[value_col], errors="coerce").mean()
 
     half_window = num_games
     df["Centered_Avg"] = df.index.map(lambda i: centered_average(i, half_window))
