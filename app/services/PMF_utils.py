@@ -103,35 +103,6 @@ def compress_pmf(pmf: PMF1D) -> Dict[str, Any]:
 
 # ========= 2D PMF HELPERS (USING PMF2D) =========
 
-def build_2d_pmf_from_games(makes: np.ndarray, attempts: np.ndarray) -> PMF2D:
-    """
-    Build a single-game 2D PMF over (makes, attempts).
-
-    pmf[m, a] = probability of 'makes = m' and 'attempts = a' in a game.
-    """
-    if len(makes) == 0 or len(attempts) == 0:
-        base = np.zeros((1, 1), dtype=float)
-        base[0, 0] = 1.0
-        return PMF2D(base)
-
-    makes = np.round(makes).astype(int)
-    attempts = np.round(attempts).astype(int)
-    makes = np.clip(makes, 0, None)
-    attempts = np.clip(attempts, 0, None)
-    makes = np.minimum(makes, attempts)
-
-    max_m = makes.max()
-    max_a = attempts.max()
-    pmf = np.zeros((max_m + 1, max_a + 1), dtype=float)
-    for m, a in zip(makes, attempts):
-        pmf[m, a] += 1.0
-
-    if pmf.sum() == 0:
-        pmf[0, 0] = 1.0
-
-    return PMF2D(pmf)
-
-
 def convolve_pmf_2d_n_times(pmf2d: PMF2D, n: int) -> PMF2D:
     if n <= 0:
         base = np.zeros((1, 1), dtype=float)

@@ -354,8 +354,7 @@ def build_odds_rows(
             t2_final_pmf.p[t2_final_pmf.p < 1e-3] = 0
 
             if cat == 'TO':
-                p_t2_beats_t1 = t2_final_pmf.prob_beats(t1_final_pmf)
-                p_team1 = 1.0 - p_t2_beats_t1
+                p_team1 = t2_final_pmf.prob_beats(t1_final_pmf)
             else:
                 p_team1 = t1_final_pmf.prob_beats(t2_final_pmf)
 
