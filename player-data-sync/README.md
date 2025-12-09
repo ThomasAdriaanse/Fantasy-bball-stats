@@ -1,87 +1,75 @@
 # Player Data Sync Service
 
-Standalone Docker service that syncs NBA player data from S3 to a shared Docker volume.
+Syncs NBA player data from S3 and generates Probability Mass Functions (PMFs) for fantasy basketball analysis.
 
-## Quick Start
+## Sync Modes
 
-### 1. Build the image:
-```bash
-docker build -t player-data-sync .
-```
+The sync service has **three modes** controlled by the `SYNC_MODE` environment variable:
 
-### 2. Run the sync:
-```bash
-docker run --rm \
-  -v player_data:/app/data/players \
-  -e S3_BUCKET=fantasy-stats-dev \
-  -e S3_PREFIX=dev/players/ \
-  -e AWS_ACCESS_KEY_ID=your_key \
-  -e AWS_SECRET_ACCESS_KEY=your_secret \
-  player-data-sync
-```
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| `sync` | Download player JSON files from S3 | Update raw player data |
+| `pmf` | Generate PMF files from existing player data | Regenerate PMFs after code changes |
+| `both` | Download from S3 **then** generate PMFs | Full refresh (recommended) |
 
-## Integration with Main App
-
-Add this to your main app's `docker-compose.yml`:
-
-```yaml
-services:
-  web:
-    # Your existing web service
-    volumes:
-      - player_data:/app/data/players:ro  # Read-only access
-    environment:
-      - PLAYER_DATA_CACHE_DIR=/app/data/players
-
-  sync:
-    build: ./player-data-sync
-    volumes:
-      - player_data:/app/data/players  # Read-write access
-    environment:
-      - S3_BUCKET=${S3_BUCKET}
-      - S3_PREFIX=${S3_PREFIX:-dev/players/}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION:-ca-central-1}
-    profiles:
-      - sync  # Only runs when explicitly called
-
-volumes:
-  player_data:  # Shared volume
-```
+**Default:** `sync` (for backward compatibility)
 
 ## Running the Sync
 
-### Manual run:
+### Option 1: Download Player Data Only
 ```bash
 docker-compose run --rm sync
+# or explicitly:
+docker-compose run --rm -e SYNC_MODE=sync sync
 ```
 
-### Weekly cron job (on EC2):
+### Option 2: Generate PMFs Only (from existing player data)
 ```bash
-# Add to crontab (crontab -e):
-0 2 * * 0 cd /path/to/Fantasy-Scraper-website && docker-compose run --rm sync >> /var/log/player_sync.log 2>&1
+docker-compose run --rm -e SYNC_MODE=pmf sync
 ```
 
-### First-time setup:
+### Option 3: Full Refresh (Download + Generate PMFs)
 ```bash
-# Run sync to populate the volume
-docker-compose run --rm sync
+docker-compose run --rm -e SYNC_MODE=both sync
+```
 
-# Then start your web app
+### First-Time Setup
+```bash
+# 1. Download player data and generate PMFs
+docker-compose run --rm -e SYNC_MODE=both sync
+
+# 2. Start the web app
 docker-compose up -d web
+```
+
+### Complete Refresh (Delete Old Data)
+```bash
+# 1. Stop the web container
+docker-compose down
+
+# 2. Remove old volumes
+docker volume rm fantasy-scraper-website_player_data
+docker volume rm fantasy-scraper-website_player_data_pmf
+
+# 3. Download and generate everything
+docker-compose run --rm -e SYNC_MODE=both sync
+
+# 4. Restart the web app
+docker-compose up -d
 ```
 
 ## Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `S3_BUCKET` | Yes | - | S3 bucket name |
+| `SYNC_MODE` | No | `sync` | Mode: `sync`, `pmf`, or `both` |
+| `S3_BUCKET` | Yes* | - | S3 bucket name (*required for `sync`/`both`) |
 | `S3_PREFIX` | No | `dev/players/` | S3 prefix for player data |
-| `PLAYER_DATA_CACHE_DIR` | No | `/app/data/players` | Local cache directory |
+| `PLAYER_DATA_CACHE_DIR` | No | `/app/data/players` | Local cache for player JSON files |
+| `PLAYER_PMF_CACHE_DIR` | No | `/app/data/pmf` | Local cache for PMF files |
 | `AWS_REGION` | No | `ca-central-1` | AWS region |
-| `AWS_ACCESS_KEY_ID` | Yes | - | AWS access key |
-| `AWS_SECRET_ACCESS_KEY` | Yes | - | AWS secret key |
+| `AWS_ACCESS_KEY_ID` | Yes* | - | AWS access key (*required for `sync`/`both`) |
+| `AWS_SECRET_ACCESS_KEY` | Yes* | - | AWS secret key (*required for `sync`/`both`) |
 
 ## How It Works
 

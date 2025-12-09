@@ -263,31 +263,28 @@ def _compute_player_pmfs_from_json(json_path: Path, pmf_dir: Path) -> None:
         # 1D stats
         for stat in PMF_1D_STATS:
             v = row.get(stat)
-            if v is not None:
-                try:
-                    stat_values[stat].append(float(v))
-                except Exception:
-                    pass
+            try:
+                stat_values[stat].append(float(v))
+            except Exception:
+                pass
 
         # FG
         fgm = row.get("FGM")
         fga = row.get("FGA")
-        if fgm is not None and fga is not None:
-            try:
-                fg_makes.append(float(fgm))
-                fg_attempts.append(float(fga))
-            except Exception:
-                pass
+        try:
+            fg_makes.append(float(fgm))
+            fg_attempts.append(float(fga))
+        except Exception:
+            pass
 
         # FT
         ftm = row.get("FTM")
         fta = row.get("FTA")
-        if ftm is not None and fta is not None:
-            try:
-                ft_makes.append(float(ftm))
-                ft_attempts.append(float(fta))
-            except Exception:
-                pass
+        try:
+            ft_makes.append(float(ftm))
+            ft_attempts.append(float(fta))
+        except Exception:
+            pass
 
     # ---- 1D PMFs ----
     pmf_1d_out = {}

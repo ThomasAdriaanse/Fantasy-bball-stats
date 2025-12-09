@@ -12,6 +12,24 @@ class PMF2D:
     Dimensions:
         axis0 = makes
         axis1 = attempts
+
+    Ex:
+    cason  wallace FT stats: 
+    
+    0/0*17
+    0/2
+    2/2*2
+    1/1
+    4/4
+    1/2
+    10/13
+    
+    2D PMF:
+    [[0.75, 0.0, 0.0, 0.0, 0.0], 
+    [0.0, 0.05, 0.05, 0.0, 0.0], 
+    [0.0, 0.0, 0.1, 0.0, 0.0], 
+    [0.0, 0.0, 0.0, 0.0, 0.0], 
+    [0.0, 0.0, 0.0, 0.0, 0.05]]
     """
 
     def __init__(self, matrix: np.ndarray):
