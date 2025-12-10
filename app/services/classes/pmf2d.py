@@ -73,6 +73,9 @@ class PMF2D:
         This returns E[M] / E[A], which represents the percentage you'd get
         in expectation if you aggregated makes and attempts over many
         repeated realizations of this distribution.
+
+        This is used for comparing player's % stats with eachother because it the 
+        volume matters on a per player basis.
         """
         arr = self.p
         m_idx, a_idx = np.indices(arr.shape)
@@ -172,6 +175,9 @@ class PMF2D:
         """
         Compute E[makes/attempts] for this 2D PMF over (m, a).
         This is the expected FG%/FT% *per week* and differs from E[M]/E[A].
+
+        This is used for comparing team % stats with eachother because the ovlume does 
+        not matter, it matters if the final % is higher
         """
         arr = self.p
         if arr.size == 0:

@@ -393,7 +393,6 @@ def build_odds_rows(
             # ---------- win / tie / loss from each team's perspective ----------
             if cat == "TO":
                 # Lower is better for TO
-                # t2_final_pmf.prob_beats(t1_final_pmf) = P(T2 > T1) = P(T1 wins, since lower TO is better)
                 p1_win_raw, p1_tie_raw, p1_loss_raw = t2_final_pmf.prob_beats(t1_final_pmf)
                 
                 # Symmetry for team 2

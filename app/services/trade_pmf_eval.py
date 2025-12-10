@@ -234,12 +234,8 @@ def _avg_win_pct_for_team(
 
                 if cat == "TO":
                     # lower TO is better
-                    # calculate_win_probability(A, B) = P(A > B)
-                    # We want P(Team < Opp) = P(Opp > Team)
-                    #p = calculate_win_probability(o_pmf, t_pmf)
                     p_win, p_tie, p_loss = o_pmf.prob_beats(t_pmf)
                 else:
-                    #p = calculate_win_probability(t_pmf, o_pmf)
                     p_win, p_tie, p_loss = t_pmf.prob_beats(o_pmf)
 
             total_prob += p_win+p_tie*0.5
@@ -321,7 +317,7 @@ def evaluate_trade_with_pmfs(
     before_b = _avg_win_pct_for_team(team_b_idx_int, league, pmf1_before, pmf2_before)
     after_b  = _avg_win_pct_for_team(team_b_idx_int, league, pmf1_after,  pmf2_after)
 
-    # 4b. Calculate Raw Stats (Means)
+    # 4b. Calculate Raw Stats (weekly average)
     print("[TRADE-PMF] Calculating Raw Stats...")
     
     def _calc_stats(team_idx, pmf1_map, pmf2_map):
@@ -331,7 +327,7 @@ def evaluate_trade_with_pmfs(
                 # Expected ratio * 100 for percentage
                 pmf = pmf2_map[team_idx][cat]
                 val = pmf.expected_weekly_ratio() * 100.0
-                print(f"[DEBUG] {cat} for team {team_idx}: ratio={val/100.0:.4f}, val={val:.4f}")
+                # print(f"[DEBUG] {cat} for team {team_idx}: ratio={val/100.0:.4f}, val={val:.4f}")
             else:
                 # Mean of 1D PMF
                 pmf = pmf1_map[team_idx][cat]

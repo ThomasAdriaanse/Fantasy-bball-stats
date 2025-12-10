@@ -68,8 +68,7 @@ def player_stats():
                     if pmf_key in p2d:
                         pmf_obj = p2d[pmf_key]
                         compressed = compress_ratio_pmf_from_2d(pmf_obj)
-                        attempts, makes = pmf_obj.means()
-                        compressed["mean"] = makes / attempts
+                        compressed["mean"] = pmf_obj.means()
                         pmf_data[cat] = compressed
                 else:
                     if pmf_key in p1d:
