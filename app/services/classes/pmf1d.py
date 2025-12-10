@@ -53,23 +53,56 @@ class PMF1D:
         return float((idx * self.p).sum())
 
 
-    def prob_beats(self, other: "PMF1D") -> float:
+    def prob_beats(self, other: "PMF1D") -> tuple[float, float, float]:
         """
-        Compute P(X > Y) efficiently using CDF of Y.
+        Compute P(X > Y), P(X = Y), P(X < Y) for two integer-valued 1D PMFs.
+
+        Returns:
+            (p_win, p_tie, p_loss) from this PMF's perspective.
         """
+        px = np.asarray(self.p, dtype=float)
+        py = np.asarray(other.p, dtype=float)
+
+        # Normalize to valid PMFs (robust to minor drift / scaling)
+        sx = px.sum()
+        sy = py.sum()
+        if sx <= 0 or sy <= 0:
+            # Degenerate: treat as pure tie
+            return 0.0, 1.0, 0.0
+        px /= sx
+        py /= sy
+
+        # Zero-pad to common length
+        n = max(px.size, py.size)
+        if px.size < n:
+            px = np.pad(px, (0, n - px.size))
+        if py.size < n:
+            py = np.pad(py, (0, n - py.size))
+
         # CDF of Y
-        cdf_y = np.cumsum(other.p)
+        cdf_y = np.cumsum(py)
 
-        # P(x > y) = sum_x p(x) * P(Y < x)
-        # Use cdf shifted: cdf_y[x-1]
-        cdf_shifted = np.concatenate([[0.0], cdf_y[:-1]])
+        # P(Y < x) = CDF_Y[x-1] with P(Y < 0) = 0
+        prob_y_less = np.concatenate(([0.0], cdf_y[:-1]))
 
-        # Zero-pad to match length
-        n = max(len(self.p), len(cdf_shifted))
-        a = np.pad(self.p, (0, n - len(self.p)))
-        b = np.pad(cdf_shifted, (0, n - len(cdf_shifted)))
+        # P(Y = x) is just py
 
-        return float((a * b).sum())
+        # P(X > Y)
+        p_win = float(np.dot(px, prob_y_less))
+
+        # P(X = Y)
+        p_tie = float(np.dot(px, py))
+
+        # P(X < Y) from complement (numerically more stable)
+        p_loss = 1.0 - p_win - p_tie
+        # Clamp tiny FP noise
+        if p_loss < 0.0:
+            p_loss = 0.0
+        elif p_loss > 1.0:
+            p_loss = 1.0
+
+        return p_win, p_tie, p_loss
+
 
     # ---------------------------------------------------------
     # Utility

@@ -235,12 +235,27 @@
   .odds-left-v2 {
     height: 100%;
     background: rgba(70, 130, 180, .8);
+    display: inline-block;
   }
 
   .odds-right-v2 {
     height: 100%;
     background: rgba(255, 0, 0, .8);
-    float: right;
+    display: inline-block;
+  }
+
+  .odds-middle-v2 {
+    height: 100%;
+    background: rgba(148, 163, 184, 0.85);
+    display: inline-block;
+  }
+
+  .odds-tag-v2.tie {
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    font-size: 11px;
+    opacity: 0.9;
   }
 
   .odds-tag-v2 {
@@ -591,25 +606,36 @@
       <h3 class="win-title" style="margin-top:0">Odds of winning each category</h3>
       <div class="odds-list-v2">
         {% for row in odds_rows %}
-        <div class="odds-item-v2" data-cat="{{ row.cat }}" data-p1="{{ row.p1 }}" data-p2="{{ row.p2 }}"
-          data-mid-t1="{{ row.mid_t1 }}" data-mid-t2="{{ row.mid_t2 }}" data-pmf1='{{ row.pmf1|tojson|safe }}'
-          data-pmf2='{{ row.pmf2|tojson|safe }}'>
+        <div class="odds-item-v2" data-cat="{{ row.cat }}" data-p1-win="{{ row.p1_win }}" data-p1-tie="{{ row.p1_tie }}"
+          data-p1-loss="{{ row.p1_loss }}" data-p2-win="{{ row.p2_win }}" data-p2-tie="{{ row.p2_tie }}"
+          data-p2-loss="{{ row.p2_loss }}" data-mid-t1="{{ row.mid_t1 }}" data-mid-t2="{{ row.mid_t2 }}"
+          data-pmf1='{{ row.pmf1|tojson|safe }}' data-pmf2='{{ row.pmf2|tojson|safe }}'>
           <div class="odds-label-v2">{{ row.cat }}</div>
-          <div class="odds-bar-v2 {{ row.class_name }}" title="{{ row.p1 }}% vs {{ row.p2 }}%">
-            <div class="odds-left-v2" style="width: {{ row.p1 }}%;"></div>
-            <div class="odds-right-v2" style="width: {{ row.p2 }}%;"></div>
+
+          <div class="odds-bar-v2 {{ row.class_name }}">
+            <div class="odds-left-v2"></div>
+            <div class="odds-middle-v2"></div>
+            <div class="odds-right-v2"></div>
             <div class="odds-mid-v2"></div>
-            <div class="odds-tag-v2 left  {{ 'strong' if row.p1 > row.p2 else ('muted' if row.p1 < row.p2 else '') }}">
-              {{ row.p1|round(0) }}%</div>
-            <div class="odds-tag-v2 right {{ 'strong' if row.p2 > row.p1 else ('muted' if row.p2 < row.p1 else '') }}">
-              {{ row.p2|round(0) }}%</div>
+
+            {# tags: only T1 win and T2 win (tie shown on hover only) #}
+            <div class="odds-tag-v2 left">
+              {{ row.p1_win|round(0) }}%
+            </div>
+            <div class="odds-tag-v2 right">
+              {{ row.p2_win|round(0) }}%
+            </div>
+
             <div class="odds-stat-tag-v2 left">{{ row.mid_t1 }}</div>
             <div class="odds-stat-tag-v2 right">{{ row.mid_t2 }}</div>
           </div>
+
+
           <div class="odds-spacer" aria-hidden="true"></div>
         </div>
         {% endfor %}
       </div>
+
     </div>
 
   </div>
@@ -802,12 +828,21 @@
     }
 
     document.querySelectorAll('.odds-item-v2').forEach(item => {
-      const p1 = Number(item.getAttribute('data-p1'));
-      const p2 = Number(item.getAttribute('data-p2'));
+      const p1Win = Number(item.getAttribute('data-p1-win')) || 0;
+      const p1Tie = Number(item.getAttribute('data-p1-tie')) || 0;
+      const p1Loss = Number(item.getAttribute('data-p1-loss')) || 0;
+
+      const p2Win = Number(item.getAttribute('data-p2-win')) || 0;
+      const p2Tie = Number(item.getAttribute('data-p2-tie')) || 0;
+      const p2Loss = Number(item.getAttribute('data-p2-loss')) || 0;
+
+      // assume symmetry: p1Tie ≈ p2Tie
+      const tiePct = p1Tie || p2Tie || 0;
+
       const m1 = item.getAttribute('data-mid-t1') || '-';
       const m2 = item.getAttribute('data-mid-t2') || '-';
 
-      // Parse PMF data
+      // Parse PMF data (unchanged)
       let pmf1 = null, pmf2 = null;
       try {
         const raw1 = item.getAttribute('data-pmf1');
@@ -818,34 +853,65 @@
 
       const bar = item.querySelector('.odds-bar-v2');
       const left = item.querySelector('.odds-left-v2');
+      const mid = item.querySelector('.odds-mid-v2');
       const right = item.querySelector('.odds-right-v2');
+
       const tagL = item.querySelector('.odds-tag-v2.left');
+      const tagT = item.querySelector('.odds-tag-v2.tie');
       const tagR = item.querySelector('.odds-tag-v2.right');
       const statL = item.querySelector('.odds-stat-tag-v2.left');
       const statR = item.querySelector('.odds-stat-tag-v2.right');
 
       if (!bar || !left || !right || !tagL || !tagR || !statL || !statR) return;
 
-      left.style.width = `${p1}%`;
-      right.style.width = `${p2}%`;
-      bar.title = `${p1.toFixed(1)}% vs ${p2.toFixed(1)}%`;
+      // === BAR LAYOUT ===
+      // Simple track:
+      //   - blue segment from 0 → p1Win%
+      //   - red segment from (100 - p2Win)% → 100%
+      //   - tie lives in the neutral background between them
+      left.style.left = '0%';
+      left.style.width = `${p1Win}%`;
 
-      tagL.textContent = `${Math.round(p1)}%`;
-      tagR.textContent = `${Math.round(p2)}%`;
+      right.style.right = '0%';
+      right.style.width = `${p2Win}%`;
+
+      // Center line is *just* a thin marker at 50%, not a percentage bar
+      if (mid) {
+        mid.style.left = '50%';
+        mid.style.width = '1px';
+      }
+
+      // Tooltip still shows tie %
+      bar.title = `T1 win: ${p1Win.toFixed(1)}% · tie: ${tiePct.toFixed(1)}% · T2 win: ${p2Win.toFixed(1)}%`;
+
+      // === TAGS ===
+      tagL.textContent = `${Math.round(p1Win)}%`;
+      tagR.textContent = `${Math.round(p2Win)}%`;
+
+      // Hide tie chip on the bar (we only show tie in tooltip/hover)
+      if (tagT) {
+        tagT.textContent = '';
+        tagT.style.display = 'none';
+      }
+
       statL.textContent = m1;
       statR.textContent = m2;
 
+      // Effective win% used for class highlight (same logic as backend)
+      const p1Eff = p1Win + 0.5 * tiePct;
+      const p2Eff = p2Win + 0.5 * tiePct;
+
       bar.classList.remove('is-tie', 'winner-left', 'winner-right');
-      if (Math.abs(p1 - p2) < 0.5) bar.classList.add('is-tie');
-      else if (p1 > p2) bar.classList.add('winner-left');
+      if (Math.abs(p1Eff - p2Eff) < 0.5) bar.classList.add('is-tie');
+      else if (p1Eff > p2Eff) bar.classList.add('winner-left');
       else bar.classList.add('winner-right');
 
-      tagL.classList.toggle('strong', p1 > p2);
-      tagL.classList.toggle('muted', p1 < p2);
-      tagR.classList.toggle('strong', p2 > p1);
-      tagR.classList.toggle('muted', p2 < p1);
+      tagL.classList.toggle('strong', p1Eff > p2Eff);
+      tagL.classList.toggle('muted', p1Eff < p2Eff);
+      tagR.classList.toggle('strong', p2Eff > p1Eff);
+      tagR.classList.toggle('muted', p2Eff < p1Eff);
 
-      // Hover events for PMF chart
+      // ===== Hover events for PMF chart (unchanged) =====
       if (pmf1 && pmf2 && pmf1.probs.length > 0 && pmf2.probs.length > 0) {
         item.addEventListener('mouseenter', (e) => {
           const cat = item.getAttribute('data-cat');
@@ -853,7 +919,6 @@
 
           const isPctCat = (cat === 'FG%' || cat === 'FT%');
 
-          // Reconstruct full data arrays
           const data1 = pmf1.probs.map((p, i) => ({
             x: isPctCat ? (pmf1.min + i) / 10.0 : (pmf1.min + i),
             y: p,
@@ -863,8 +928,6 @@
             y: p,
           }));
 
-
-          // Chart dimensions
           const w = 300, h = 150;
           const margin = { top: 20, right: 10, bottom: 20, left: 35 };
 
@@ -878,36 +941,24 @@
           const innerW = w - margin.left - margin.right;
           const innerH = h - margin.top - margin.bottom;
 
-          // Scales
           const xMin = Math.min(d3.min(data1, d => d.x), d3.min(data2, d => d.x));
           const xMax = Math.max(d3.max(data1, d => d.x), d3.max(data2, d => d.x));
 
           const x = d3.scaleLinear().domain([xMin, xMax]).range([0, innerW]);
 
-          // Always show 0–10% on Y so shapes are comparable across cats
           const y = d3.scaleLinear()
-            .domain([0, 0.10])      // 10% max
+            .domain([0, 0.10])
             .range([innerH, 0]);
 
-
-          // X axis — adapt number of ticks so labels don't overlap
           const rangeWidth = xMax - xMin;
-          // Rough heuristic: ~1 tick per 60px of width, clamped.
           const tickCount = Math.min(6, Math.max(3, Math.floor(innerW / 60)));
 
           const xAxis = d3.axisBottom(x)
             .ticks(tickCount)
             .tickSizeOuter(0)
             .tickFormat(d => {
-              if (!isPctCat) {
-                // counting stats: let d3 pick a nice format
-                return d3.format('~g')(d);
-              }
-              // % cats: use 1 decimal only when zoomed in, else integer %
-              if (rangeWidth <= 10) {
-                // e.g. 48.7% – 52.3%
-                return d.toFixed(1) + '%';
-              }
+              if (!isPctCat) return d3.format('~g')(d);
+              if (rangeWidth <= 10) return d.toFixed(1) + '%';
               return Math.round(d) + '%';
             });
 
@@ -916,12 +967,10 @@
             .call(xAxis)
             .style('color', '#8b949e');
 
-
           g.append('g')
             .call(d3.axisLeft(y).ticks(4).tickFormat(d3.format('.0%')))
             .style('color', '#8b949e');
 
-          // Title
           svg.append('text')
             .attr('x', w / 2)
             .attr('y', 14)
@@ -931,14 +980,12 @@
             .style('font-weight', '600')
             .text(`${cat} Probability Distribution`);
 
-          // Area generator
           const area = d3.area()
             .x(d => x(d.x))
             .y0(innerH)
             .y1(d => y(d.y))
-            .curve(d3.curveBasis); // Smooth curve
+            .curve(d3.curveBasis);
 
-          // Draw Team 1 (Blue)
           g.append('path')
             .datum(data1)
             .attr('fill', 'rgba(70,130,180, 0.3)')
@@ -946,32 +993,26 @@
             .attr('stroke-width', 1.5)
             .attr('d', area);
 
-          // Draw Team 2 (Red)
           g.append('path')
             .datum(data2)
             .attr('fill', 'rgba(255,0,0, 0.3)')
             .attr('stroke', 'red')
             .attr('stroke-width', 1.5)
             .attr('d', area);
-
-          // Legend
-          const legend = svg.append('g').attr('transform', `translate(${margin.left}, ${h - 10})`);
-          // (Optional: add legend if needed, but colors match the bar)
         });
 
         item.addEventListener('mousemove', (e) => {
-          // Position tooltip near cursor but keep on screen
-          const tW = 320; // tooltip width
-          const tH = 180; // approx height
+          const tW = 320;
+          const tH = 180;
 
-          let left = e.pageX + 15;
-          let top = e.pageY + 15;
+          let leftPos = e.pageX + 15;
+          let topPos = e.pageY + 15;
 
-          if (left + tW > window.innerWidth) left = e.pageX - tW - 10;
+          if (leftPos + tW > window.innerWidth) leftPos = e.pageX - tW - 10;
 
           tooltip
-            .style('left', left + 'px')
-            .style('top', top + 'px');
+            .style('left', leftPos + 'px')
+            .style('top', topPos + 'px');
         });
 
         item.addEventListener('mouseleave', () => {
@@ -980,7 +1021,6 @@
       }
     });
   })();
-
   // ===== Table view toggle: raw / z =====
   (function tableViewToggle() {
     const MODE_RAW = 'raw';

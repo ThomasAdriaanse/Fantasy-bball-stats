@@ -19,7 +19,6 @@ from .PMF_utils import (
     build_team_pmf_counting,
     build_team_pmf_2d,
     compress_ratio_pmf_from_2d,
-    expected_ratio_from_2d_pmf,
     calculate_percentage_win_probability,
     load_player_pmfs,
 )
@@ -251,30 +250,44 @@ def build_odds_rows(
                 t1_pmf_2d_final = t1_pmf_2d_proj.shifted(t1_made_i, t1_att_i)
                 t2_pmf_2d_final = t2_pmf_2d_proj.shifted(t2_made_i, t2_att_i)
 
-                # Trim PMFs
-                t1_pmf_2d_final.p[t1_pmf_2d_final.p < 1e-4] = 0
-                t2_pmf_2d_final.p[t2_pmf_2d_final.p < 1e-4] = 0
+                                # Trim PMFs
+                t1_pmf_2d_final.p[t1_pmf_2d_final.p < 1e-4] = 0.0
+                t2_pmf_2d_final.p[t2_pmf_2d_final.p < 1e-4] = 0.0
 
                 t1_pmf_2d_final.normalize()
                 t2_pmf_2d_final.normalize()
 
-                p_team1 = calculate_percentage_win_probability(
-                    t1_pmf_2d_final,
-                    t2_pmf_2d_final,
-                )
-                
-                p_team1_pct = p_team1 * 100.0
-                p_team2_pct = 100.0 - p_team1_pct
+                # --- win / tie / loss probabilities from ratio PMFs ---
+                p_win, p_tie, p_loss = t1_pmf_2d_final.prob_beats(t2_pmf_2d_final)
+                # All are from Team 1’s perspective:
+                # p_win  = P(T1% > T2%)
+                # p_tie  = P(T1% = T2%)
+                # p_loss = P(T1% < T2%)
 
-                t1_expected_ratio = expected_ratio_from_2d_pmf(t1_pmf_2d_final)
-                t2_expected_ratio = expected_ratio_from_2d_pmf(t2_pmf_2d_final)
+                # Convert to percents
+                p1_win_pct  = p_win * 100.0
+                p1_tie_pct  = p_tie * 100.0
+                p1_loss_pct = p_loss * 100.0
+
+                # Team 2 is symmetric: swap win/loss, tie same
+                p2_win_pct  = p1_loss_pct
+                p2_tie_pct  = p1_tie_pct
+                p2_loss_pct = p1_win_pct
+
+                # Expected weekly ratios (for the mid labels)
+                t1_expected_ratio = t1_pmf_2d_final.expected_weekly_ratio()
+                t2_expected_ratio = t2_pmf_2d_final.expected_weekly_ratio()
 
                 mid_t1 = f"{t1_expected_ratio * 100:.1f}%"
                 mid_t2 = f"{t2_expected_ratio * 100:.1f}%"
 
-                if abs(p_team1_pct - p_team2_pct) < 0.5:
+                # Use effective win% (win + 0.5 * tie) for winner highlighting
+                p1_eff = p1_win_pct + 0.5 * p1_tie_pct
+                p2_eff = p2_win_pct + 0.5 * p2_tie_pct
+
+                if abs(p1_eff - p2_eff) < 0.5:
                     class_name = "is-tie"
-                elif p_team1_pct > p_team2_pct:
+                elif p1_eff > p2_eff:
                     class_name = "winner-left"
                 else:
                     class_name = "winner-right"
@@ -284,8 +297,15 @@ def build_odds_rows(
 
                 rows.append({
                     "cat": cat,
-                    "p1": round(p_team1_pct, 1),
-                    "p2": round(p_team2_pct, 1),
+                    # team 1
+                    "p1_win":  round(p1_win_pct,  1),
+                    "p1_tie":  round(p1_tie_pct,  1),
+                    "p1_loss": round(p1_loss_pct, 1),
+                    # team 2
+                    "p2_win":  round(p2_win_pct,  1),
+                    "p2_tie":  round(p2_tie_pct,  1),
+                    "p2_loss": round(p2_loss_pct, 1),
+
                     "class_name": class_name,
                     "mid_t1": mid_t1,
                     "mid_t2": mid_t2,
@@ -295,8 +315,11 @@ def build_odds_rows(
 
                 if DEBUG_COMPARE_PRESENTER and cat_start is not None:
                     elapsed_cat = time.perf_counter() - cat_start
-                    print(f"[TIMING] {cat} (% cat) took {elapsed_cat:.3f}s "
-                          f"(T1 {p_team1_pct:.1f}% vs T2 {p_team2_pct:.1f}%)")
+                    print(
+                        f"[TIMING] {cat} (counting cat) took {elapsed_cat:.3f}s "
+                        f"(T1 win={p1_win_pct:.1f}%, tie={p1_tie_pct:.1f}%, "
+                        f"T2 win={p2_win_pct:.1f}%, mid_t1={mid_t1}, mid_t2={mid_t2})"
+                    )
 
             except Exception as e:
                 if DEBUG_COMPARE_PRESENTER:
@@ -305,8 +328,12 @@ def build_odds_rows(
                     traceback.print_exc()
                 rows.append({
                     "cat": cat,
-                    "p1": 50.0,
-                    "p2": 50.0,
+                    "p1_win": 50.0,
+                    "p1_tie": 0.0,
+                    "p1_loss": 50.0,
+                    "p2_win": 50.0,
+                    "p2_tie": 0.0,
+                    "p2_loss": 50.0,
                     "class_name": "is-tie",
                     "mid_t1": "-",
                     "mid_t2": "-",
@@ -326,8 +353,8 @@ def build_odds_rows(
         t1_stat = team1_current_stats.get(cat, {})
         t2_stat = team2_current_stats.get(cat, {})
 
-        t1_current = t1_stat.get('value', 0.0) if isinstance(t1_stat, dict) else 0.0
-        t2_current = t2_stat.get('value', 0.0) if isinstance(t2_stat, dict) else 0.0
+        t1_current = t1_stat.get("value", 0.0) if isinstance(t1_stat, dict) else 0.0
+        t2_current = t2_stat.get("value", 0.0) if isinstance(t2_stat, dict) else 0.0
 
         try:
             stat_col = CATEGORY_COLUMN_MAP.get(cat)
@@ -349,33 +376,66 @@ def build_odds_rows(
                 debug=DEBUG_COMPARE_PRESENTER,
             )
 
+            # Shift by current stat totals
             t1_current_int = int(round(t1_current))
             t2_current_int = int(round(t2_current))
 
             t1_final_pmf = t1_projected_pmf.shifted(t1_current_int)
             t2_final_pmf = t2_projected_pmf.shifted(t2_current_int)
 
-            # Trim the PMFs
-            t1_final_pmf.p[t1_final_pmf.p < 1e-3] = 0
-            t2_final_pmf.p[t2_final_pmf.p < 1e-3] = 0
+            # Optional trim + renormalize to keep tails small but still sum to 1
+            for pmf in (t1_final_pmf, t2_final_pmf):
+                pmf.p[pmf.p < 1e-4] = 0.0
+                total = float(pmf.p.sum())
+                if total > 0:
+                    pmf.p /= total
 
-            if cat == 'TO':
-                p_team1 = t2_final_pmf.prob_beats(t1_final_pmf)
+            # ---------- win / tie / loss from each team's perspective ----------
+            if cat == "TO":
+                # Lower is better → flip arguments (team 2 "wins" when it has FEWER TO)
+                p2_win_raw, p2_tie_raw, p2_loss_raw = t2_final_pmf.prob_beats(t1_final_pmf)
+
+                # Map back to team 1 perspective
+                p1_win_raw = p2_loss_raw
+                p1_tie_raw = p2_tie_raw
+                p1_loss_raw = p2_win_raw
             else:
-                p_team1 = t1_final_pmf.prob_beats(t2_final_pmf)
+                # Higher is better (normal counting cats)
+                p1_win_raw, p1_tie_raw, p1_loss_raw = t1_final_pmf.prob_beats(t2_final_pmf)
 
-            p_team1_pct = p_team1 * 100.0
-            p_team2_pct = 100.0 - p_team1_pct
+                # Symmetry for team 2
+                p2_win_raw = p1_loss_raw
+                p2_tie_raw = p1_tie_raw
+                p2_loss_raw = p1_win_raw
 
+            # Normalize triples and convert to percents
+            def _to_pct_triple(a: float, b: float, c: float) -> tuple[float, float, float]:
+                total = max(a + b + c, 1e-12)
+                a /= total
+                b /= total
+                c /= total
+                return (a * 100.0, b * 100.0, c * 100.0)
+
+            p1_win_pct, p1_tie_pct, p1_loss_pct = _to_pct_triple(
+                p1_win_raw, p1_tie_raw, p1_loss_raw
+            )
+            p2_win_pct, p2_tie_pct, p2_loss_pct = _to_pct_triple(
+                p2_win_raw, p2_tie_raw, p2_loss_raw
+            )
+
+            # Expected values (midpoint labels)
             t1_expected = t1_final_pmf.mean()
             t2_expected = t2_final_pmf.mean()
-
             mid_t1 = str(round(t1_expected))
             mid_t2 = str(round(t2_expected))
 
-            if abs(p_team1_pct - p_team2_pct) < 0.5:
+            # Class for "who's ahead", using effective win% (ties = half-win)
+            p1_eff = p1_win_pct + 0.5 * p1_tie_pct
+            p2_eff = p2_win_pct + 0.5 * p2_tie_pct
+
+            if abs(p1_eff - p2_eff) < 0.5:
                 class_name = "is-tie"
-            elif p_team1_pct > p_team2_pct:
+            elif p1_eff > p2_eff:
                 class_name = "winner-left"
             else:
                 class_name = "winner-right"
@@ -383,43 +443,59 @@ def build_odds_rows(
             pmf1_data = compress_pmf(t1_final_pmf)
             pmf2_data = compress_pmf(t2_final_pmf)
 
-            rows.append({
-                "cat": cat,
-                "p1": round(p_team1_pct, 1),
-                "p2": round(p_team2_pct, 1),
-                "class_name": class_name,
-                "mid_t1": mid_t1,
-                "mid_t2": mid_t2,
-                "pmf1": pmf1_data,
-                "pmf2": pmf2_data,
-            })
+            rows.append(
+                {
+                    "cat": cat,
+                    "p1_win": p1_win_pct,
+                    "p1_tie": p1_tie_pct,
+                    "p1_loss": p1_loss_pct,
+                    "p2_win": p2_win_pct,
+                    "p2_tie": p2_tie_pct,
+                    "p2_loss": p2_loss_pct,
+                    "class_name": class_name,
+                    "mid_t1": mid_t1,
+                    "mid_t2": mid_t2,
+                    "pmf1": pmf1_data,
+                    "pmf2": pmf2_data,
+                }
+            )
 
             if DEBUG_COMPARE_PRESENTER and cat_start is not None:
                 elapsed_cat = time.perf_counter() - cat_start
-                print(f"[TIMING] {cat} (counting cat) took {elapsed_cat:.3f}s "
-                      f"(T1 {p_team1_pct:.1f}% vs T2 {p_team2_pct:.1f}%, "
-                      f"mid_t1={mid_t1}, mid_t2={mid_t2})")
+                print(
+                    f"[TIMING] {cat} (counting) took {elapsed_cat:.3f}s "
+                    f"(T1 win={p1_win_pct:.1f}%, tie={p1_tie_pct:.1f}%, "
+                    f"T2 win={p2_win_pct:.1f}%, mid_t1={mid_t1}, mid_t2={mid_t2})"
+                )
 
         except Exception as e:
             if DEBUG_COMPARE_PRESENTER:
                 print(f"[ERROR] Failed to calculate {cat} (counting cat): {e}")
                 import traceback
+
                 traceback.print_exc()
 
-            rows.append({
-                "cat": cat,
-                "p1": 50.0,
-                "p2": 50.0,
-                "class_name": "is-tie",
-                "mid_t1": "-",
-                "mid_t2": "-",
-                "pmf1": {'min': 0, 'probs': []},
-                "pmf2": {'min': 0, 'probs': []},
-            })
+            rows.append(
+                {
+                    "cat": cat,
+                    "p1_win": 50.0,
+                    "p1_tie": 0.0,
+                    "p1_loss": 50.0,
+                    "p2_win": 50.0,
+                    "p2_tie": 0.0,
+                    "p2_loss": 50.0,
+                    "class_name": "is-tie",
+                    "mid_t1": "-",
+                    "mid_t2": "-",
+                    "pmf1": {"min": 0, "probs": []},
+                    "pmf2": {"min": 0, "probs": []},
+                }
+            )
 
             if DEBUG_COMPARE_PRESENTER and cat_start is not None:
                 elapsed_cat = time.perf_counter() - cat_start
                 print(f"[TIMING] {cat} (counting cat) failed after {elapsed_cat:.3f}s")
+
 
     if DEBUG_COMPARE_PRESENTER and t_start is not None:
         elapsed_total = time.perf_counter() - t_start

@@ -68,46 +68,130 @@ class PMF2D:
         return PMF2D(arr)
 
 
-    def expected_ratio(self) -> float:
+    def means(self) -> float:
         """
-        Estimate E[ makes/attempts ] for this 2D PMF.
-        Zero-safe.
+        This returns E[M] / E[A], which represents the percentage you'd get
+        in expectation if you aggregated makes and attempts over many
+        repeated realizations of this distribution.
         """
-        m_idx, a_idx = np.indices(self.p.shape)
+        arr = self.p
+        m_idx, a_idx = np.indices(arr.shape)
 
-        makes = (m_idx * self.p).sum()
-        attempts = (a_idx * self.p).sum()
+        # Expected makes and attempts
+        expected_makes = float((m_idx * arr).sum())
+        expected_attempts = float((a_idx * arr).sum())
 
-        if attempts <= 0:
+        if expected_attempts <= 0:
             return 0.0
 
-        return float(makes / attempts)
+        return expected_makes / expected_attempts
 
-
-    def prob_ratio_beats(self, other: "PMF2D") -> float:
+    def prob_beats(self, other: "PMF2D") -> tuple[float, float, float]:
         """
-        Approximate P( (M1/A1) > (M2/A2) ).
-        Brute force but optimized by only iterating support.
+        Compute P(this % > other %), P(this % = other %), P(this % < other %)
+        using ratio distributions derived from the 2D PMFs over (makes, attempts).
+
+        Returns:
+            (p_win, p_tie, p_loss) from this PMF's perspective.
         """
+        arr1 = np.asarray(self.p, dtype=float)
+        arr2 = np.asarray(other.p, dtype=float)
 
-        # Get indices with non-zero mass
-        m1, a1 = np.where(self.p > 0)
-        m2, a2 = np.where(other.p > 0)
+        # ---- Flatten (m, a) -> (ratio, prob) for each PMF ----
+        def _ratios_and_probs(arr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+            m_idx, a_idx = np.nonzero(arr)
+            if m_idx.size == 0:
+                # Degenerate: ratio 0 with prob 1
+                return np.array([0.0], dtype=float), np.array([1.0], dtype=float)
 
-        p = 0.0
+            probs = arr[m_idx, a_idx].astype(float)
+            ratios = np.zeros_like(probs, dtype=float)
 
-        for i, j in zip(m1, a1):
-            r1 = i / j if j > 0 else 0.0
-            p1 = self.p[i, j]
+            mask = a_idx > 0
+            ratios[mask] = m_idx[mask] / a_idx[mask]  # m/a; 0 if a==0
 
-            # Compare vs nonzero entries in other
-            for k, l in zip(m2, a2):
-                r2 = k / l if l > 0 else 0.0
-                if r1 > r2:
-                    p += p1 * other.p[k, l]
+            s = probs.sum()
+            if s > 0:
+                probs /= s
+            else:
+                # all zero? treat as point mass at 0%
+                probs = np.array([1.0], dtype=float)
+                ratios = np.array([0.0], dtype=float)
 
-        return p
+            return ratios, probs
 
+        r1, p1 = _ratios_and_probs(arr1)
+        r2, p2 = _ratios_and_probs(arr2)
+
+        if r1.size == 0 or r2.size == 0:
+            return 0.0, 1.0, 0.0
+
+        r1 = np.asarray(r1, dtype=float)
+        r2 = np.asarray(r2, dtype=float)
+        p1 = np.asarray(p1, dtype=float)
+        p2 = np.asarray(p2, dtype=float)
+
+        # Normalize to valid PMFs (extra safety)
+        s1 = p1.sum()
+        s2 = p2.sum()
+        if s1 <= 0 or s2 <= 0:
+            return 0.0, 1.0, 0.0
+        p1 /= s1
+        p2 /= s2
+
+        # ---- CDF of other (Y) over ratio values ----
+        order2 = np.argsort(r2)
+        r2s = r2[order2]
+        p2s = p2[order2]
+        cdf2 = np.cumsum(p2s)
+
+        # For each x in r1, get P(Y < x) and P(Y <= x)
+        idx_less = np.searchsorted(r2s, r1, side="left")
+        idx_leq  = np.searchsorted(r2s, r1, side="right")
+
+        prob_less = np.where(idx_less > 0, cdf2[idx_less - 1], 0.0)  # P(Y < x)
+        prob_leq  = np.where(idx_leq  > 0, cdf2[idx_leq  - 1], 0.0)  # P(Y <= x)
+
+        # P(this % > other %)
+        p_win = float(np.dot(p1, prob_less))
+
+        # P(this % = other %)
+        p_tie = float(np.dot(p1, (prob_leq - prob_less)))
+
+        # P(this % < other %)
+        p_loss = 1.0 - p_win - p_tie
+        if p_loss < 0.0:
+            p_loss = 0.0
+        elif p_loss > 1.0:
+            p_loss = 1.0
+
+        return p_win, p_tie, p_loss
+
+
+    def expected_weekly_ratio(self) -> float:
+        """
+        Compute E[makes/attempts] for this 2D PMF over (m, a).
+        This is the expected FG%/FT% *per week* and differs from E[M]/E[A].
+        """
+        arr = self.p
+        if arr.size == 0:
+            return 0.0
+
+        m_idx, a_idx = np.indices(arr.shape)
+
+        # Only consider states with attempts > 0
+        mask = a_idx > 0
+        if not mask.any():
+            return 0.0
+
+        ratios = (m_idx[mask] / a_idx[mask]).astype(float)
+        probs  = arr[mask]
+
+        s = probs.sum()
+        if s <= 0:
+            return 0.0
+
+        return float((ratios * probs).sum() / s)
 
     def copy(self) -> "PMF2D":
         return PMF2D(self.p.copy())

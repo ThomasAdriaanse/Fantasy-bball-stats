@@ -12,7 +12,6 @@ from app.services.PMF_utils import (
     load_player_pmfs,
     compress_pmf,
     compress_ratio_pmf_from_2d,
-    expected_ratio_from_2d_pmf,
     PMF_CACHE_DIR,
 )
 
@@ -228,7 +227,7 @@ def _avg_win_pct_for_team(
             if cat in ("FG%", "FT%"):
                 t_pmf = pmf2_map[team_idx][cat]
                 o_pmf = pmf2_map[opp_idx][cat]
-                p = calculate_percentage_win_probability(t_pmf, o_pmf)
+                p_win, p_tie, p_loss = t_pmf.prob_beats(o_pmf)
             else:
                 t_pmf = pmf1_map[team_idx][cat]
                 o_pmf = pmf1_map[opp_idx][cat]
@@ -237,11 +236,13 @@ def _avg_win_pct_for_team(
                     # lower TO is better
                     # calculate_win_probability(A, B) = P(A > B)
                     # We want P(Team < Opp) = P(Opp > Team)
-                    p = calculate_win_probability(o_pmf, t_pmf)
+                    #p = calculate_win_probability(o_pmf, t_pmf)
+                    p_win, p_tie, p_loss = o_pmf.prob_beats(t_pmf)
                 else:
-                    p = calculate_win_probability(t_pmf, o_pmf)
+                    #p = calculate_win_probability(t_pmf, o_pmf)
+                    p_win, p_tie, p_loss = t_pmf.prob_beats(o_pmf)
 
-            total_prob += p
+            total_prob += p_win+p_tie*0.5
             count += 1
 
         avg_pct = (total_prob / count) * 100.0 if count else 50.0
@@ -329,7 +330,7 @@ def evaluate_trade_with_pmfs(
             if cat in ("FG%", "FT%"):
                 # Expected ratio * 100 for percentage
                 pmf = pmf2_map[team_idx][cat]
-                val = expected_ratio_from_2d_pmf(pmf) * 100.0
+                val = pmf.expected_weekly_ratio() * 100.0
                 print(f"[DEBUG] {cat} for team {team_idx}: ratio={val/100.0:.4f}, val={val:.4f}")
             else:
                 # Mean of 1D PMF

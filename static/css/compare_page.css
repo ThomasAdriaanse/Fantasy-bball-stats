@@ -1,7 +1,10 @@
 /* =============== */
 /*  GLOBAL THEME   */
 /* =============== */
-:root { color-scheme: dark; }
+:root {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   background: #0b0e14;
@@ -9,194 +12,354 @@ body {
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
-#back-button{
-  display:inline-block;
-  margin:10px;
-  color:#e8eefc;
-  text-decoration:none;
-  border:1px solid rgba(255,255,255,0.18);
-  border-radius:8px;
-  padding:8px 12px;
-  background:#10131a;
-}
-#back-button:hover{ filter:brightness(1.1); }
-
-.card{
-  background:#10131a;
-  border:1px solid rgba(255,255,255,0.08);
-  border-radius:10px;
-  padding:16px 18px;
-  box-shadow:0 6px 18px rgba(0,0,0,0.25);
+#back-button {
+  display: inline-block;
   margin: 10px;
-  overflow: hidden; /* contain any inner overflow */
+  color: #e8eefc;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #10131a;
 }
 
-.body-container{ max-width:96vw; margin:0 auto; padding:14px 0 32px; }
+#back-button:hover {
+  filter: brightness(1.1);
+}
+
+.card {
+  background: #10131a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  margin: 10px;
+  overflow: hidden;
+  /* contain any inner overflow */
+}
+
+.body-container {
+  max-width: 96vw;
+  margin: 0 auto;
+  padding: 14px 0 32px;
+}
 
 /* Header */
-.teams-header{ display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:stretch; }
-.team-pill{ display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-radius:10px; background:#0b0e14; border:1px solid rgba(255,255,255,0.08); }
-.team-pill.left{ box-shadow: inset 0 0 0 1px rgba(70,130,180,0.35); }
-.team-pill.right{ box-shadow: inset 0 0 0 1px rgba(255,0,0,0.35); }
-.team-name{ font-size:18px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.team-name.left{ color:#63a0d4; }
-.team-name.right{ color:#ff7a7a; }
-.team-points{ font-size:16px; opacity:0.9; }
+.teams-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.team-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #0b0e14;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.team-pill.left {
+  box-shadow: inset 0 0 0 1px rgba(70, 130, 180, 0.35);
+}
+
+.team-pill.right {
+  box-shadow: inset 0 0 0 1px rgba(255, 0, 0, 0.35);
+}
+
+.team-name {
+  font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team-name.left {
+  color: #63a0d4;
+}
+
+.team-name.right {
+  color: #ff7a7a;
+}
+
+.team-points {
+  font-size: 16px;
+  opacity: 0.9;
+}
 
 /* ===================== */
 /*      TABLES (FIX)     */
 /* ===================== */
-.table-container{
-  display:grid;
-  grid-template-columns: minmax(0,1fr) minmax(0,1fr); /* allow shrinking in grid */
-  gap:18px;
-  width:100%;
-  align-items:start;
+.table-container {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /* allow shrinking in grid */
+  gap: 18px;
+  width: 100%;
+  align-items: start;
 }
 
-.table-wrapper{
-  max-width:100%;
-  min-width:0;                 /* critical for grid children */
-  overflow:auto;               /* scroll instead of spilling */
+.table-wrapper {
+  max-width: 100%;
+  min-width: 0;
+  /* critical for grid children */
+  overflow: auto;
+  /* scroll instead of spilling */
   -webkit-overflow-scrolling: touch;
 }
 
-table.data-table{
-  width:100%;
-  max-width:100%;
-  border-collapse:collapse;
-  color:#e8eefc;
-  font-size:14px;
-  background:#0b0e14;
-  border:1px solid rgba(255,255,255,0.08);
-  table-layout: fixed;         /* stable column widths */
+table.data-table {
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+  color: #e8eefc;
+  font-size: 14px;
+  background: #0b0e14;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  table-layout: fixed;
+  /* stable column widths */
 }
 
 .data-table th,
-.data-table td{
-  border-bottom:1px solid rgba(255,255,255,0.08);
-  padding:8px 10px;
-  text-align:right;
-  white-space:nowrap;
-  overflow: visible;   /* no clipping */
-  text-overflow:ellipsis;      /* show … */
+.data-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 8px 10px;
+  text-align: right;
+  white-space: nowrap;
+  overflow: visible;
+  /* no clipping */
+  text-overflow: ellipsis;
+  /* show … */
 }
 
 /* === Name column: give it more space + allow wrapping === */
 .data-table th:first-child,
-.data-table td:first-child{
+.data-table td:first-child {
   text-align: left;
-  width: 13%;          /* more horizontal space */
-  min-width: 50px;    /* keep roomy even in wider views */
+  width: 13%;
+  /* more horizontal space */
+  min-width: 50px;
+  /* keep roomy even in wider views */
   max-width: none;
-  text-overflow: clip; /* disable ellipsis */
+  text-overflow: clip;
+  /* disable ellipsis */
 }
 
-@media (max-width: 980px){
+@media (max-width: 980px) {
+
   .data-table th:first-child,
-  .data-table td:first-child{
-    width: 100%;       /* stack nicely on narrow screens */
+  .data-table td:first-child {
+    width: 100%;
+    /* stack nicely on narrow screens */
     min-width: 220px;
   }
 }
 
 
-.data-table thead th{ background:#121722; font-weight:600; }
-
-.table-compact thead th,
-.table-compact td{
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+.data-table thead th {
+  background: #121722;
+  font-weight: 600;
 }
 
-.player-out{ color:#ff6b6b; }
-.player-dtd{ color:#ffd166; }
-a{ color:#63a0d4; text-decoration:none; }
-a:hover{ text-decoration:underline; }
+.table-compact thead th,
+.table-compact td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-@media (max-width: 980px){
-  .table-container{ grid-template-columns:1fr; }
-  .data-table{ font-size:13px; }
+.player-out {
+  color: #ff6b6b;
+}
+
+.player-dtd {
+  color: #ffd166;
+}
+
+a {
+  color: #63a0d4;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 980px) {
+  .table-container {
+    grid-template-columns: 1fr;
+  }
+
+  .data-table {
+    font-size: 13px;
+  }
+
   .data-table th:first-child,
-  .data-table td:first-child{ max-width: 200px; }
+  .data-table td:first-child {
+    max-width: 200px;
+  }
 }
 
 /* Graph sections */
-.graph-section{ padding:12px; }
-.graph-section h2,.graph-section p{ text-align:center; margin:0 0 12px; }
+.graph-section {
+  padding: 12px;
+}
 
-.chart-area{ display:flex; justify-content:center; width:100%; }
-#chart{
-  background:#0b0e14; padding:12px; border-radius:10px;
-  border:1px solid rgba(255,255,255,0.08); box-shadow:0 6px 18px rgba(0,0,0,0.25);
-  max-width:800px; width:100%;
+.graph-section h2,
+.graph-section p {
+  text-align: center;
+  margin: 0 0 12px;
+}
+
+.chart-area {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+#chart {
+  background: #0b0e14;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  max-width: 800px;
+  width: 100%;
 }
 
 /* Grid for categories page */
-.grid-container.chart-grid{
-  display:grid; grid-template-columns: repeat(3, minmax(320px,1fr)); gap:20px;
-  max-width:1200px; margin-left:auto; margin-right:auto; justify-content:center; align-items:stretch;
+.grid-container.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(320px, 1fr));
+  gap: 20px;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+  justify-content: center;
+  align-items: stretch;
 }
-.chart-card{ background:#0b0e14; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 12px 4px 12px; overflow:visible; }
-.chart-title{ text-align:center; font-weight:600; font-size:16px; margin-bottom:8px; opacity:0.95; }
-.chart-svg{ display:block; width:100%; height:220px; }
-.chart-card svg{ display:block; width:100% !important; height:220px !important; overflow:visible; }
-@media (max-width: 1200px){ .grid-container.chart-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
-@media (max-width: 800px){ .grid-container.chart-grid{ grid-template-columns: 1fr; } }
+
+.chart-card {
+  background: #0b0e14;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 12px 12px 4px 12px;
+  overflow: visible;
+}
+
+.chart-title {
+  text-align: center;
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 8px;
+  opacity: 0.95;
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: 220px;
+}
+
+.chart-card svg {
+  display: block;
+  width: 100% !important;
+  height: 220px !important;
+  overflow: visible;
+}
+
+@media (max-width: 1200px) {
+  .grid-container.chart-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 800px) {
+  .grid-container.chart-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* Axes */
-.axis text { font-size: 12px; fill: #e8eefc; }
-.axis path, .axis line { stroke: rgba(255,255,255,.35); stroke-width: 1; }
-svg .tick text{ fill:#e8eefc; font-size:12px; }
-svg .domain, svg .tick line{ stroke:rgba(255,255,255,0.35); }
+.axis text {
+  font-size: 12px;
+  fill: #e8eefc;
+}
+
+.axis path,
+.axis line {
+  stroke: rgba(255, 255, 255, .35);
+  stroke-width: 1;
+}
+
+svg .tick text {
+  fill: #e8eefc;
+  font-size: 12px;
+}
+
+svg .domain,
+svg .tick line {
+  stroke: rgba(255, 255, 255, 0.35);
+}
 
 /* NEW: unified legend look (white text) */
-.chart-legend text{ fill:#ffffff; font-size:12px; }
+.chart-legend text {
+  fill: #ffffff;
+  font-size: 12px;
+}
 
 /* Player-stats style legend (shared by both compare pages) */
-.legend{
-  display:flex;
-  gap:22px;
-  align-items:center;
-  margin-top:12px;
-  opacity:.95;
-  font-size:16px;
-  flex-wrap:wrap;
+.legend {
+  display: flex;
+  gap: 22px;
+  align-items: center;
+  margin-top: 12px;
+  opacity: .95;
+  font-size: 16px;
+  flex-wrap: wrap;
 }
-.legend .swatch{
-  width:26px;
-  height:4px;
-  border-radius:2px;
-  display:inline-block;
+
+.legend .swatch {
+  width: 26px;
+  height: 4px;
+  border-radius: 2px;
+  display: inline-block;
 }
 
 /* Solid swatches */
-.legend .swatch.blue-line{ background: steelblue; }
-.legend .swatch.red-line { background: red; }
+.legend .swatch.blue-line {
+  background: steelblue;
+}
+
+.legend .swatch.red-line {
+  background: red;
+}
 
 /* Dashed swatches to represent "Predicted" */
-.legend .swatch.blue-dashed{
-  background-image: linear-gradient(
-    to right,
-    steelblue 0 40%, transparent 40% 60%, steelblue 60% 100%
-  );
+.legend .swatch.blue-dashed {
+  background-image: linear-gradient(to right,
+      steelblue 0 40%, transparent 40% 60%, steelblue 60% 100%);
   background-size: 10px 4px;
   background-repeat: repeat-x;
   background-color: transparent;
 }
-.legend .swatch.red-dashed{
-  background-image: linear-gradient(
-    to right,
-    red 0 40%, transparent 40% 60%, red 60% 100%
-  );
+
+.legend .swatch.red-dashed {
+  background-image: linear-gradient(to right,
+      red 0 40%, transparent 40% 60%, red 60% 100%);
   background-size: 10px 4px;
   background-repeat: repeat-x;
   background-color: transparent;
 }
 
 /* ====== ODDS (v2) — single centered bar per category ====== */
-.odds-card-v2 { padding: 16px 18px; }
+.odds-card-v2 {
+  padding: 16px 18px;
+}
 
 .odds-list-v2 {
   display: grid;
@@ -223,47 +386,92 @@ svg .domain, svg .tick line{ stroke:rgba(255,255,255,0.35); }
   position: relative;
   height: 26px;
   border-radius: 999px;
-  background: #0b0e14;
-  border: 1px solid rgba(255,255,255,0.12);
+  background: #3a3f4b;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 /* Both sides visible (baseline softness) */
 .odds-left-v2,
 .odds-right-v2 {
-  position: absolute; top: 0; bottom: 0;
+  position: absolute;
+  top: 0;
+  bottom: 0;
 }
-.odds-left-v2  { left: 0;  background: rgba(70,130,180,0.30); } /* steelblue, soft */
-.odds-right-v2 { right: 0; background: rgba(255,72,72,0.30); }  /* red, soft */
+
+.odds-left-v2 {
+  left: 0;
+  background: rgba(70, 130, 180, 0.30);
+}
+
+/* steelblue, soft */
+.odds-right-v2 {
+  right: 0;
+  background: rgba(255, 72, 72, 0.30);
+}
+
+/* red, soft */
 
 /* Winner more intense; loser a bit more faded */
-.odds-bar-v2.winner-left  .odds-left-v2  { background: rgba(70,130,180,0.66); }
-.odds-bar-v2.winner-left  .odds-right-v2 { background: rgba(255,72,72,0.22); }
+.odds-bar-v2.winner-left .odds-left-v2 {
+  background: rgba(70, 130, 180, 0.66);
+}
 
-.odds-bar-v2.winner-right .odds-right-v2 { background: rgba(255,72,72,0.66); }
-.odds-bar-v2.winner-right .odds-left-v2  { background: rgba(70,130,180,0.22); }
+.odds-bar-v2.winner-left .odds-right-v2 {
+  background: rgba(255, 72, 72, 0.22);
+}
+
+.odds-bar-v2.winner-right .odds-right-v2 {
+  background: rgba(255, 72, 72, 0.66);
+}
+
+.odds-bar-v2.winner-right .odds-left-v2 {
+  background: rgba(70, 130, 180, 0.22);
+}
 
 /* Tie: small lift so both look equal and readable */
 .odds-bar-v2.is-tie .odds-left-v2,
-.odds-bar-v2.is-tie .odds-right-v2 { filter: brightness(1.06); }
+.odds-bar-v2.is-tie .odds-right-v2 {
+  filter: brightness(1.06);
+}
 
 /* Midpoint marker at exact 50% */
 .odds-mid-v2 {
-  position: absolute; top: 0; bottom: 0; width: 1px; left: 50%;
-  background: rgba(255,255,255,0.14);
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  left: 50%;
+  background: rgba(255, 255, 255, 0.14);
   pointer-events: none;
 }
 
 /* Percent chips overlay the bar; don't shift layout */
 .odds-tag-v2 {
-  position: absolute; top: 50%; transform: translateY(-50%);
-  font-size: 12px; line-height: 1; color: #e8eefc;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  line-height: 1;
+  color: #e8eefc;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
   pointer-events: none;
 }
-.odds-tag-v2.left  { left: 8px; }
-.odds-tag-v2.right { right: 8px; }
 
-.odds-tag-v2.strong { opacity: 0.98; font-weight: 600; }
-.odds-tag-v2.muted  { opacity: 0.62; }
+.odds-tag-v2.left {
+  left: 8px;
+}
+
+.odds-tag-v2.right {
+  right: 8px;
+}
+
+.odds-tag-v2.strong {
+  opacity: 0.98;
+  font-weight: 600;
+}
+
+.odds-tag-v2.muted {
+  opacity: 0.62;
+}

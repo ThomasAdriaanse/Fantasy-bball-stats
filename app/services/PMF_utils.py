@@ -181,45 +181,66 @@ def compress_ratio_pmf_from_2d(pmf2d: PMF2D) -> Dict[str, Any]:
     return {'min': start, 'probs': probs_list}
 
 
-def expected_ratio_from_2d_pmf(pmf2d: PMF2D) -> float:
-    """
-    E[ratio] from 2D PMF.
-
-    Thin wrapper around PMF2D.expected_ratio() for call-site symmetry.
-    """
-    return pmf2d.expected_ratio()
-
-
 def calculate_percentage_win_probability(
     team1_pmf2d: PMF2D,
     team2_pmf2d: PMF2D,
-) -> float:
+) -> tuple[float, float, float]:
     """
-    P(Team1% > Team2%) using ratio distributions from 2D PMFs.
-    Ties counted as 0.5.
+    Compute P(Team1% > Team2%), P(Team1% = Team2%), P(Team1% < Team2%)
+    using ratio distributions derived from 2D PMFs over (makes, attempts).
+
+    Returns:
+        (p_win, p_tie, p_loss) from Team 1's perspective.
     """
+    # Flatten (m, a) -> (ratio, prob)
     r1, p1 = _ratios_and_probs_from_2d_pmf(team1_pmf2d)
     r2, p2 = _ratios_and_probs_from_2d_pmf(team2_pmf2d)
-    if len(r1) == 0 or len(r2) == 0:
-        return 0.5
 
+    if len(r1) == 0 or len(r2) == 0:
+        # Degenerate: treat as pure tie
+        return 0.0, 1.0, 0.0
+
+    r1 = np.asarray(r1, dtype=float)
+    r2 = np.asarray(r2, dtype=float)
+    p1 = np.asarray(p1, dtype=float)
+    p2 = np.asarray(p2, dtype=float)
+
+    # Normalize to valid PMFs (robust to small errors)
+    s1 = p1.sum()
+    s2 = p2.sum()
+    if s1 <= 0 or s2 <= 0:
+        return 0.0, 1.0, 0.0
+    p1 /= s1
+    p2 /= s2
+
+    # Sort Team 2's ratios for CDF-based lookups
     order2 = np.argsort(r2)
     r2s = r2[order2]
     p2s = p2[order2]
     cdf2 = np.cumsum(p2s)
 
+    # For each x in r1, get P(Y < x) and P(Y <= x)
     idx_less = np.searchsorted(r2s, r1, side="left")
-    idx_leq = np.searchsorted(r2s, r1, side="right")
+    idx_leq  = np.searchsorted(r2s, r1, side="right")
 
-    prob_less = np.where(idx_less > 0, cdf2[idx_less - 1], 0.0)
-    prob_leq = np.where(idx_leq > 0, cdf2[idx_leq - 1], 0.0)
+    prob_less = np.where(idx_less > 0, cdf2[idx_less - 1], 0.0)   # P(Y < x)
+    prob_leq  = np.where(idx_leq  > 0, cdf2[idx_leq  - 1], 0.0)   # P(Y <= x)
 
-    win_states = p1 * prob_less
-    tie_states = p1 * (prob_leq - prob_less)
+    # P(Team1% > Team2%)
+    p_win = float(np.dot(p1, prob_less))
 
-    p_win = float(win_states.sum())
-    p_tie = float(tie_states.sum())
-    return p_win + 0.5 * p_tie
+    # P(Team1% = Team2%) = Σ p1(x) * P(Y = x) = Σ p1(x) * (P(Y<=x) - P(Y<x))
+    p_tie = float(np.dot(p1, (prob_leq - prob_less)))
+
+    # P(Team1% < Team2%)
+    p_loss = 1.0 - p_win - p_tie
+    if p_loss < 0.0:
+        p_loss = 0.0
+    elif p_loss > 1.0:
+        p_loss = 1.0
+
+    return p_win, p_tie, p_loss
+
 
 
 # ========= TEAM-LEVEL BUILDERS (GENERIC, REUSABLE FOR PROJECT) =========
