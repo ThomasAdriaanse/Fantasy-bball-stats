@@ -643,7 +643,7 @@
       <div style="display:flex; flex-direction:column; margin-right: 20px;">
         <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
           <input type="checkbox" name="use_darko_z" {% if request.form.get('use_darko_z')=='on' %}checked{% endif %}>
-          <span>Use DARKO Z-Scores</span>
+          <span>Use DARKO Projections</span>
         </label>
       </div>
 
@@ -652,6 +652,24 @@
   </form>
 
   {% if results %}
+  <!-- Z-Score / Raw Stats Toggle -->
+  <div style="display:flex; justify-content:center; margin-top:16px; margin-bottom:8px;">
+    <div class="toggle-container"
+      style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:20px; border:1px solid var(--border);">
+      <span id="label-zscore" style="font-size:12px; font-weight:600; color:#fff; cursor:pointer;"
+        onclick="toggleStatsDisplay('zscore')">Z-Scores</span>
+      <label class="switch" style="position:relative; display:inline-block; width:34px; height:18px;">
+        <input type="checkbox" id="stats-display-toggle" onchange="toggleStatsDisplay()">
+        <span class="slider round"
+          style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background-color:#4682b4; transition:.4s; border-radius:34px;"></span>
+        <span class="slider-knob"
+          style="position:absolute; content:''; height:12px; width:12px; left:3px; bottom:3px; background-color:white; transition:.4s; border-radius:50%;"></span>
+      </label>
+      <span id="label-raw" style="font-size:12px; font-weight:600; color:var(--muted); cursor:pointer;"
+        onclick="toggleStatsDisplay('raw')">Raw Stats</span>
+    </div>
+  </div>
+
   <!-- SUMMARY (Team Z-Score after selection) -->
   <div class="summary-grid">
     <div class="sum-box sum-a">
@@ -701,7 +719,8 @@
               {% set ns = namespace(total=0) %}
               {% for cell in row.cells %}
               {% set ns.total = ns.total + cell.z %}
-              <td class="zcell" style="background: {{ cell.bg }};">{{ '%.2f' % cell.z }}</td>
+              <td class="zcell" style="background: {{ cell.bg }};" data-z="{{ cell.z }}" data-raw="{{ cell.raw }}"
+                data-cat="{{ cell.cat }}">{{ '%.2f' % cell.z }}</td>
               {% endfor %}
               <td class="zcell">{{ '%.2f' % ns.total }}</td>
             </tr>
@@ -733,7 +752,8 @@
               {% set ns = namespace(total=0) %}
               {% for cell in row.cells %}
               {% set ns.total = ns.total + cell.z %}
-              <td class="zcell" style="background: {{ cell.bg }};">{{ '%.2f' % cell.z }}</td>
+              <td class="zcell" style="background: {{ cell.bg }};" data-z="{{ cell.z }}" data-raw="{{ cell.raw }}"
+                data-cat="{{ cell.cat }}">{{ '%.2f' % cell.z }}</td>
               {% endfor %}
               <td class="zcell">{{ '%.2f' % ns.total }}</td>
             </tr>
@@ -1521,6 +1541,63 @@
   });
 
   }) ();
+
+  // Toggle between Z-scores and Raw stats display (GLOBAL SCOPE)
+  let currentStatsMode = 'zscore'; // 'zscore' or 'raw'
+
+  function toggleStatsDisplay(mode) {
+    const toggle = document.getElementById('stats-display-toggle');
+    const labelZscore = document.getElementById('label-zscore');
+    const labelRaw = document.getElementById('label-raw');
+
+    if (!toggle || !labelZscore || !labelRaw) {
+      console.error('Toggle elements not found');
+      return;
+    }
+
+    // Determine mode
+    if (mode === 'zscore' || mode === 'raw') {
+      currentStatsMode = mode;
+      toggle.checked = (mode === 'raw');
+    } else {
+      // Called from toggle switch
+      currentStatsMode = toggle.checked ? 'raw' : 'zscore';
+    }
+
+    // Update label styles
+    if (currentStatsMode === 'zscore') {
+      labelZscore.style.color = '#fff';
+      labelRaw.style.color = 'var(--muted)';
+    } else {
+      labelZscore.style.color = 'var(--muted)';
+      labelRaw.style.color = '#fff';
+    }
+
+    // Update all stat cells in player tables
+    const statCells = document.querySelectorAll('.zcell');
+    console.log('Found', statCells.length, 'cells to update');
+
+    statCells.forEach(cell => {
+      const zValue = cell.getAttribute('data-z');
+      const rawValue = cell.getAttribute('data-raw');
+      const cat = cell.getAttribute('data-cat');
+
+      if (currentStatsMode === 'zscore' && zValue !== null) {
+        cell.textContent = parseFloat(zValue).toFixed(2);
+      } else if (currentStatsMode === 'raw' && rawValue !== null) {
+        const val = parseFloat(rawValue);
+        // Format based on category (percentages get % sign)
+        if (cat === 'FG%' || cat === 'FT%') {
+          cell.textContent = (val * 100).toFixed(1) + '%';
+        } else {
+          cell.textContent = val.toFixed(1);
+        }
+      }
+    });
+
+    console.log('Switched to', currentStatsMode, 'mode');
+  }
+
 </script>
 {% endif %}
 {% endblock body_js %}

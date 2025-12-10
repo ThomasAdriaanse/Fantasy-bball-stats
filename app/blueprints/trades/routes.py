@@ -12,6 +12,7 @@ from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, 
 import compare_page.compare_page_data as cpd
 from app.services.z_score_calculations import raw_to_zscore
 from app.services import darko_services
+from app.services.player_name_mapper import get_canonical_name
 
 bp = Blueprint("trades", __name__)
 
@@ -252,19 +253,55 @@ def _sum_side_z(zdf: pd.DataFrame, names: List[str]) -> Dict[str, float]:
 def _build_player_rows(z_league: pd.DataFrame, names: List[str]) -> List[Dict[str, Any]]:
     """
     Build per-player rows preserving selection order.
-    Each row: {'player_name': str, 'cells': [{'cat': c, 'z': float, 'bg': str}, ...]}
+    Each row: {'player_name': str, 'cells': [{'cat': c, 'z': float, 'raw': float, 'bg': str}, ...]}
     """
     rows: List[Dict[str, Any]] = []
+    
+    # Debug: print all available names
+    print(f"[DEBUG] Total players in z_league: {len(z_league)}")
+    print(f"[DEBUG] Sample player names: {list(z_league['player_name'].head(10))}")
+    
     for name in [n for n in names if n]:
+        print(f"\n[DEBUG] Looking for player: '{name}' (type: {type(name)})")
+        
+        # Try to find player with name normalization
+        canonical_name = get_canonical_name(name)
+        print(f"[DEBUG] Canonical name: '{canonical_name}'")
+        
+        # Try exact match first
         rec = z_league[z_league["player_name"] == name]
+        print(f"[DEBUG] Exact match found: {not rec.empty}")
+        
+        # Try canonical name
+        if rec.empty and canonical_name != name:
+            rec = z_league[z_league["player_name"] == canonical_name]
+            print(f"[DEBUG] Canonical match found: {not rec.empty}")
+        
+        # Try case-insensitive match
         if rec.empty:
-            cells = [{"cat": c, "z": 0.0, "bg": _z_to_hsl_bg(0.0)} for c in CATEGORIES]
+            rec = z_league[z_league["player_name"].str.lower() == name.lower()]
+            print(f"[DEBUG] Case-insensitive match found: {not rec.empty}")
+        
+        # Try normalized version of all names in database
+        if rec.empty:
+            for db_name in z_league["player_name"].unique():
+                if get_canonical_name(db_name) == canonical_name:
+                    print(f"[DEBUG] Found via normalization: '{db_name}'")
+                    rec = z_league[z_league["player_name"] == db_name]
+                    break
+        
+        if rec.empty:
+            print(f"[TRADES] WARNING: Player '{name}' not found in data. Canonical: '{canonical_name}'")
+            print(f"[DEBUG] Names containing 'wash': {[n for n in z_league['player_name'].unique() if 'wash' in n.lower()]}")
+            cells = [{"cat": c, "z": 0.0, "raw": 0.0, "bg": _z_to_hsl_bg(0.0)} for c in CATEGORIES]
         else:
+            print(f"[DEBUG] Successfully found player!")
             r = rec.iloc[0]
             cells = []
             for c in CATEGORIES:
                 z = float(r.get(f"z_{c}", 0.0))
-                cells.append({"cat": c, "z": z, "bg": _z_to_hsl_bg(z)})
+                raw = float(r.get(c, 0.0))  # Get raw value
+                cells.append({"cat": c, "z": z, "raw": raw, "bg": _z_to_hsl_bg(z)})
         rows.append({"player_name": name, "cells": cells})
     return rows
 
@@ -405,6 +442,7 @@ def trade_analyzer():
             team_a_idx=team_a_id,   # interpreted as team_id on the PMF side
             team_b_idx=team_b_id,
             allowed_player_names=allowed_player_names,
+            use_darko_z=use_darko_z,  # Pass DARKO flag
         )
         
         if pmf_result:

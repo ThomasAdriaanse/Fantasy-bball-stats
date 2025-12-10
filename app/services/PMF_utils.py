@@ -445,19 +445,16 @@ def load_player_pmfs(player_name: str) -> Optional[Dict[str, Dict[str, Any]]]:
     if not player_name:
         return None
 
-    # Normalize Unicode characters (e.g., "Vučević" → "Vucevic")
-    # NFD decomposes characters like č into c + combining mark
-    normalized = unicodedata.normalize('NFD', player_name)
-    # Remove combining marks (accents, diacritics)
-    ascii_name = ''.join(c for c in normalized if unicodedata.category(c) != 'Mn')
-    
-    # Convert to lowercase and replace non-alphanumeric with underscores
-    raw = ascii_name.strip().lower()
-    stem = re.sub(r"[^a-z0-9]+", "_", raw).strip("_")
+    # Use the same filename conversion as S3 service for consistency
+    from app.services.s3_service import _safe_filename
+    stem = _safe_filename(player_name)
 
     fpath = Path(PMF_CACHE_DIR) / f"{stem}_pmf.json"
+    
+    print(f"[PMF-LOAD] Looking for PMF: player='{player_name}' -> stem='{stem}' -> file='{fpath.name}'")
 
     if not fpath.exists():
+        print(f"[PMF-LOAD] File not found: {fpath}")
         return None
 
     try:

@@ -171,12 +171,27 @@ def _simulate_trade_on_rosters(
 def _build_all_team_pmfs(
     team_players_map: Dict[int, List[Dict[str, Any]]],
     season: str,
+    use_darko_z: bool = False,
 ) -> Tuple[Dict[int, Dict[str, Any]], Dict[int, Dict[str, Any]]]:
     """
     Build 1D and 2D PMFs for all teams.
+    
+    If use_darko_z is True, use DARKO-adjusted PMF builders.
     """
     pmf_1d: Dict[int, Dict[str, Any]] = {}
     pmf_2d: Dict[int, Dict[str, Any]] = {}
+    
+    # Import DARKO helpers if needed
+    if use_darko_z:
+        from app.services.darko_pmf_helper import (
+            build_team_pmf_counting_with_darko,
+            build_team_pmf_2d_with_darko,
+            _get_darko_lookup,
+        )
+        # Get DARKO data once for all teams
+        darko_lookup = _get_darko_lookup()
+    else:
+        darko_lookup = None
 
     for t_idx, players in team_players_map.items():
         pmf_1d[t_idx] = {}
@@ -185,21 +200,40 @@ def _build_all_team_pmfs(
         for cat in ALL_CATEGORIES:
             if cat in ("FG%", "FT%"):
                 makes_col, attempts_col = PERCENTAGE_CATEGORIES[cat]
-                pmf_2d[t_idx][cat] = build_team_pmf_2d(
-                    players,
-                    makes_col=makes_col,
-                    attempts_col=attempts_col,
-                    season=season,
-                    load_player_pmfs=load_player_pmfs,
-                )
+                
+                if use_darko_z:
+                    pmf_2d[t_idx][cat] = build_team_pmf_2d_with_darko(
+                        players,
+                        makes_col=makes_col,
+                        attempts_col=attempts_col,
+                        season=season,
+                        darko_lookup=darko_lookup,
+                    )
+                else:
+                    pmf_2d[t_idx][cat] = build_team_pmf_2d(
+                        players,
+                        makes_col=makes_col,
+                        attempts_col=attempts_col,
+                        season=season,
+                        load_player_pmfs=load_player_pmfs,
+                    )
             else:
                 stat_col = CATEGORY_COLUMN_MAP.get(cat)
-                pmf_1d[t_idx][cat] = build_team_pmf_counting(
-                    players,
-                    stat_col=stat_col,
-                    season=season,
-                    load_player_pmfs=load_player_pmfs,
-                )
+                
+                if use_darko_z:
+                    pmf_1d[t_idx][cat] = build_team_pmf_counting_with_darko(
+                        players,
+                        stat_col=stat_col,
+                        season=season,
+                        darko_lookup=darko_lookup,
+                    )
+                else:
+                    pmf_1d[t_idx][cat] = build_team_pmf_counting(
+                        players,
+                        stat_col=stat_col,
+                        season=season,
+                        load_player_pmfs=load_player_pmfs,
+                    )
 
     return pmf_1d, pmf_2d
 
@@ -260,6 +294,7 @@ def evaluate_trade_with_pmfs(
     team_a_idx: Optional[int] = None,  # ESPN team_id from UI
     team_b_idx: Optional[int] = None,  # ESPN team_id from UI
     allowed_player_names: Optional[Set[str]] = None,
+    use_darko_z: bool = False,  # NEW: Use DARKO-adjusted PMFs
 ) -> Optional[Dict[str, Any]]:
     """
     Simplified PMF-based trade assessment.
@@ -303,11 +338,11 @@ def evaluate_trade_with_pmfs(
     season_str = str(year)
 
     # 3. Build PMFs
-    print("[TRADE-PMF] Building 'Before' PMFs...")
-    pmf1_before, pmf2_before = _build_all_team_pmfs(team_players_before, season_str)
+    print(f"[TRADE-PMF] Building 'Before' PMFs... (DARKO: {use_darko_z})")
+    pmf1_before, pmf2_before = _build_all_team_pmfs(team_players_before, season_str, use_darko_z=use_darko_z)
     
-    print("[TRADE-PMF] Building 'After' PMFs...")
-    pmf1_after, pmf2_after = _build_all_team_pmfs(team_players_after, season_str)
+    print(f"[TRADE-PMF] Building 'After' PMFs... (DARKO: {use_darko_z})")
+    pmf1_after, pmf2_after = _build_all_team_pmfs(team_players_after, season_str, use_darko_z=use_darko_z)
 
     # 4. Calculate Win %
     print("[TRADE-PMF] Calculating Win %...")
