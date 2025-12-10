@@ -65,11 +65,23 @@ def index():
 
         ranked_players.append(p)
 
-    # Sort descending by Total DARKO Z
-    ranked_players.sort(key=lambda x: x["total_z_darko"], reverse=True)
+    # Filter to top 250 by Real Z-score (for players with real data)
+    # Sort by real z first to get top 250
+    players_with_real = [p for p in ranked_players if p.get("has_real_data", False)]
+    players_without_real = [p for p in ranked_players if not p.get("has_real_data", False)]
+    
+    # Sort players with real data by real z-score
+    players_with_real.sort(key=lambda x: x["total_z_real"], reverse=True)
+    
+    # Take top 250 with real data
+    top_250_real = players_with_real[:250]
+    
+    # Final list: top 250 by real z-score, sorted by DARKO Z
+    final_players = top_250_real
+    final_players.sort(key=lambda x: x["total_z_darko"], reverse=True)
     
     # Add rank index
-    for i, p in enumerate(ranked_players):
+    for i, p in enumerate(final_players):
         p["rank"] = i + 1
 
-    return render_template('rankings.html', players=ranked_players)
+    return render_template('rankings.html', players=final_players)

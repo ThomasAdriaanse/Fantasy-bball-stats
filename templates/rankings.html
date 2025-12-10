@@ -5,38 +5,130 @@
 {% block head_extra %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/compare_page.css') }}">
 <style>
-    /* Custom overrides for rankings page */
+    /* ===== IMPROVED TABLE STYLING ===== */
+
+    /* Sticky header */
+    #rankingsTable thead {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: #121722;
+    }
+
+    #rankingsTable thead th {
+        background: #121722;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Column widths */
+    #rankingsTable th:nth-child(1),
+    /* Rank */
+    #rankingsTable td:nth-child(1) {
+        width: 50px;
+        min-width: 50px;
+        text-align: center;
+        background: rgba(255, 255, 255, 0.02);
+        font-weight: 600;
+    }
+
+    #rankingsTable th:nth-child(2),
+    /* Player */
+    #rankingsTable td:nth-child(2) {
+        width: 180px;
+        min-width: 180px;
+        text-align: left;
+        position: sticky;
+        left: 0;
+        background: #10131a;
+        z-index: 5;
+    }
+
+    #rankingsTable thead th:nth-child(2) {
+        z-index: 11;
+    }
+
+    #rankingsTable th:nth-child(3),
+    /* Team */
+    #rankingsTable td:nth-child(3) {
+        width: 70px;
+        min-width: 70px;
+        text-align: center;
+    }
+
+    /* Summary columns - visual separation */
+    #rankingsTable th:nth-child(4),
+    /* Darko Z */
+    #rankingsTable th:nth-child(5),
+    /* Real Z */
+    #rankingsTable th:nth-child(6),
+    /* Diff */
+    #rankingsTable td:nth-child(4),
+    #rankingsTable td:nth-child(5),
+    #rankingsTable td:nth-child(6) {
+        width: 75px;
+        min-width: 75px;
+        border-left: 1px solid rgba(255, 255, 255, 0.1);
+        font-weight: 600;
+    }
+
+    /* Stat columns - consistent width */
+    #rankingsTable th:nth-child(n+7):nth-child(-n+15),
+    #rankingsTable td:nth-child(n+7):nth-child(-n+15) {
+        width: 65px;
+        min-width: 65px;
+        text-align: center;
+    }
+
+    /* Total column - strong visual separation */
+    #rankingsTable th:nth-child(16),
+    /* Total */
+    #rankingsTable td:nth-child(16) {
+        width: 75px;
+        min-width: 75px;
+        border-left: 2px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.03);
+        font-weight: 700;
+        text-align: center;
+    }
+
+    /* Text contrast improvements */
+    .dynamic-cell,
+    .stat-cell {
+        color: #fff;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Ranking meta columns */
     .ranking-meta {
-        text-align: right;
-        font-weight: bold;
-    }
-
-    .text-success {
-        color: #4ade80 !important;
-    }
-
-    .text-danger {
-        color: #f87171 !important;
-    }
-
-    .text-muted {
-        color: #888 !important;
+        text-align: center;
+        font-weight: 600;
     }
 
     /* Make the table container fill the card */
     .table-container {
         grid-template-columns: 1fr;
-        /* Single column layout unlike compare page */
+        overflow-x: auto;
     }
 
     .sortable {
         cursor: pointer;
         user-select: none;
+        transition: background-color 0.15s;
     }
 
     .sortable:hover {
         background-color: #1a202c;
-        /* slightly lighter dark */
+    }
+
+    /* Sort indicator */
+    .sortable[data-sort-dir="asc"]::after {
+        content: " ↑";
+        opacity: 0.7;
+    }
+
+    .sortable[data-sort-dir="desc"]::after {
+        content: " ↓";
+        opacity: 0.7;
     }
 
     /* Toggle buttons styles */
@@ -44,6 +136,7 @@
         display: flex;
         gap: 10px;
         margin-bottom: 20px;
+        flex-wrap: wrap;
     }
 
     .btn-toggle-view {
@@ -55,6 +148,7 @@
         cursor: pointer;
         opacity: 0.7;
         transition: all 0.2s;
+        font-size: 14px;
     }
 
     .btn-toggle-view:hover {
@@ -65,15 +159,22 @@
     .btn-toggle-view.active {
         opacity: 1;
         background: #3182ce;
-        /* Blue */
         border-color: #63b3ed;
         font-weight: bold;
     }
 
-    /* Header dynamic text */
-    .header-dynamic {
-        text-decoration: underline;
-        text-decoration-style: dotted;
+    /* Page subtitle */
+    #pageSubtitle {
+        font-size: 18px;
+        font-weight: 400;
+        opacity: 0.8;
+    }
+
+    /* Improve table wrapper */
+    .table-wrapper {
+        max-height: calc(100vh - 200px);
+        overflow-y: auto;
+        overflow-x: auto;
     }
 </style>
 {% endblock %}
@@ -108,17 +209,17 @@
                                 Real Z</th>
                             <th class="sortable" title="Darko - Real" onclick="sortTable(5, 'number')">Diff</th>
 
-                            <!-- Individual Z Scores (Dynamic) -->
-                            <!-- We use a common class 'dynamic-col' to update logic if needed, but mainly cell content changes -->
-                            <th class="sortable dynamic-header" onclick="sortTable(6, 'number')">PTS</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(7, 'number')">3PM</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(8, 'number')">REB</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(9, 'number')">AST</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(10, 'number')">STL</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(11, 'number')">BLK</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(12, 'number')">TOV</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(13, 'number')">FG%</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(14, 'number')">FT%</th>
+                            <!-- Individual Z Scores (Same order as compare page: FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS) -->
+                            <th class="sortable dynamic-header" onclick="sortTable(6, 'number')">FG%</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(7, 'number')">FT%</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(8, 'number')">3PM</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(9, 'number')">REB</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(10, 'number')">AST</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(11, 'number')">STL</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(12, 'number')">BLK</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(13, 'number')">TO</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(14, 'number')">PTS</th>
+                            <th class="sortable" onclick="sortTable(15, 'number')">Total</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -133,12 +234,11 @@
                             <td>{{ p.team }}</td>
 
                             <!-- Totals -->
-                            <td class="ranking-meta {{ 'text-success' if p.total_z_darko > 0 else 'text-danger' }}">
+                            <td class="ranking-meta">
                                 {{ "%.2f"|format(p.total_z_darko) }}
                             </td>
 
-                            <td class="ranking-meta {{ 'text-muted' if not p.has_real_data else ('text-success' if p.total_z_real > 0 else 'text-danger') }}"
-                                data-val="{{ p.total_z_real if p.has_real_data else -9999 }}">
+                            <td class="ranking-meta" data-val="{{ p.total_z_real if p.has_real_data else -9999 }}">
                                 {% if p.has_real_data %}
                                 {{ "%.2f"|format(p.total_z_real) }}
                                 {% else %}
@@ -146,8 +246,7 @@
                                 {% endif %}
                             </td>
 
-                            <td class="ranking-meta {{ 'text-success' if p.diff_z > 0 else 'text-danger' }}"
-                                data-val="{{ p.diff_z }}">
+                            <td class="ranking-meta" data-val="{{ p.diff_z }}">
                                 {% if p.has_real_data %}
                                 {{ "%+.2f"|format(p.diff_z) }}
                                 {% else %}
@@ -155,17 +254,16 @@
                                 {% endif %}
                             </td>
 
-                            <!-- Individual Z Scores -->
-                            <!-- We render ALL 3 values in data-attributes -->
-                            <!-- Default view is Darko. -->
+                            <!-- Individual Z Scores in compare page order -->
                             {% set zd = p.Z_DARKO %}
                             {% set zr = p.Z_REAL %}
                             {% set zdiff = p.Z_DIFF %}
 
+                            <!-- Order: FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS -->
                             {% set cats = [
-                            ('PTS', 'Z_PTS'), ('FG3M', 'Z_FG3M'), ('REB', 'Z_REB'),
-                            ('AST', 'Z_AST'), ('STL', 'Z_STL'), ('BLK', 'Z_BLK'),
-                            ('TOV', 'Z_TOV'), ('FG', 'Z_FG'), ('FT', 'Z_FT')
+                            ('FG', 'Z_FG'), ('FT', 'Z_FT'), ('FG3M', 'Z_FG3M'),
+                            ('REB', 'Z_REB'), ('AST', 'Z_AST'), ('STL', 'Z_STL'),
+                            ('BLK', 'Z_BLK'), ('TOV', 'Z_TOV'), ('PTS', 'Z_PTS')
                             ] %}
 
                             {% for _, key in cats %}
@@ -173,12 +271,16 @@
                             {% set val_r = zr.get(key, 0.0)|float %}
                             {% set val_diff = zdiff.get(key, 0.0)|float %}
 
-                            <td class="dynamic-cell {{ 'text-success' if val_d > 0 else 'text-danger' }}"
-                                data-darko="{{ val_d }}" data-real="{{ val_r }}" data-diff="{{ val_diff }}"
-                                data-val="{{ val_d }}"> <!-- Initial sort value is darko -->
+                            <td class="dynamic-cell stat-cell" data-darko="{{ val_d }}" data-real="{{ val_r }}"
+                                data-diff="{{ val_diff }}" data-val="{{ val_d }}">
                                 {{ "%.2f"|format(val_d) }}
                             </td>
                             {% endfor %}
+
+                            <!-- Total column -->
+                            <td class="stat-total" data-val="{{ p.total_z_darko }}">
+                                {{ "%.2f"|format(p.total_z_darko) }}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -191,6 +293,22 @@
 <script>
     // Current active mode
     let currentMode = 'darko';
+
+    // Color function matching compare page
+    function colorFromZ(z) {
+        const zNum = parseFloat(z);
+        if (isNaN(zNum)) {
+            return 'rgba(128,128,128,0.35)';
+        }
+
+        const zmin = -1.6;
+        const zmax = 1.7;
+        const tRaw = (zNum - zmin) / (zmax - zmin);
+        const t = Math.max(0, Math.min(1, tRaw)); // clamp 0..1
+
+        const hue = 120 * t; // 0 = red, 120 = green
+        return `hsl(${Math.round(hue)} 70% 35% / 0.90)`;
+    }
 
     function switchView(mode, btn) {
         currentMode = mode;
@@ -210,36 +328,55 @@
         cells.forEach(cell => {
             // Get value based on mode
             let val = 0.0;
-            if (mode === 'darko') val = parseFloat(cell.getAttribute('data-darko'));
-            if (mode === 'real') val = parseFloat(cell.getAttribute('data-real'));
-            if (mode === 'diff') val = parseFloat(cell.getAttribute('data-diff'));
+            let zForColor = 0.0; // Z-score to use for coloring
+
+            if (mode === 'darko') {
+                val = parseFloat(cell.getAttribute('data-darko'));
+                zForColor = val;
+            } else if (mode === 'real') {
+                val = parseFloat(cell.getAttribute('data-real'));
+                zForColor = val;
+            } else if (mode === 'diff') {
+                val = parseFloat(cell.getAttribute('data-diff'));
+                // For diff mode, color based on the diff value itself
+                zForColor = val;
+            }
 
             // Validate
             if (isNaN(val)) val = 0.0;
 
             // Update Text
-            // For Diff, show +/- sign
             if (mode === 'diff') {
                 cell.innerText = (val > 0 ? "+" : "") + val.toFixed(2);
             } else {
                 cell.innerText = val.toFixed(2);
             }
 
-            // Update Color Class
-            cell.classList.remove('text-success', 'text-danger', 'text-muted');
-            if (val > 0) cell.classList.add('text-success');
-            else if (val < 0) cell.classList.add('text-danger');
-            // TOV is special? In Z-score, higher is better (fewer TO). 
-            // Calculated as (LeagueMean - Player) / StdDev.
-            // So if Player TO < Mean, term is positive. 
-            // So Positive Z is ALWAYS "Good" (Green). My logic holds.
+            // Apply background color based on z-score (matching compare page)
+            cell.style.backgroundColor = colorFromZ(zForColor);
 
-            // If real mode and value is effectively 0 because of missing data?
-            // backend passes z_real=0 if missing. 
-            // We can check if "has_real_data" on the ROW, but simpler to just show 0.00.
-
-            // Update data-val for sorting!
+            // Update data-val for sorting
             cell.setAttribute('data-val', val);
+        });
+
+        // Update Total column
+        updateTotals(mode);
+    }
+
+    function updateTotals(mode) {
+        const rows = document.querySelectorAll('#rankingsTable tbody tr');
+        rows.forEach(row => {
+            const totalCell = row.querySelector('.stat-total');
+            const statCells = row.querySelectorAll('.dynamic-cell');
+
+            let sum = 0;
+            statCells.forEach(cell => {
+                const val = parseFloat(cell.getAttribute('data-val'));
+                if (!isNaN(val)) sum += val;
+            });
+
+            totalCell.textContent = sum.toFixed(2);
+            totalCell.setAttribute('data-val', sum);
         });
     }
 
@@ -280,5 +417,14 @@
             tbody.appendChild(row);
         });
     }
+
+    // Apply initial colors on page load
+    document.addEventListener('DOMContentLoaded', function () {
+        const cells = document.querySelectorAll('.dynamic-cell');
+        cells.forEach(cell => {
+            const zVal = parseFloat(cell.getAttribute('data-darko'));
+            cell.style.backgroundColor = colorFromZ(zVal);
+        });
+    });
 </script>
 {% endblock %}
