@@ -21,6 +21,7 @@ services:
       - player_data_pmf:/app/data/pmf:ro
       - darko_data:/app/data/player_darko:ro
       - team_pace_data:/app/data/team_pace:ro
+      - player_season_avgs:/app/data/season_avgs:ro
 
   sync:
     build: ./player-data-sync
@@ -38,6 +39,7 @@ services:
       - player_data_pmf:/app/data/pmf
       - darko_data:/app/data/player_darko
       - team_pace_data:/app/data/team_pace
+      - player_season_avgs:/app/data/season_avgs
     command: python /app/sync_player_data.py
     profiles:
       - sync
@@ -47,3 +49,4 @@ volumes:
   player_data_pmf:
   darko_data:
   team_pace_data:
+  player_season_avgs:

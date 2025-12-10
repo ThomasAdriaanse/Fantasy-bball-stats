@@ -36,5 +36,8 @@ def create_app():
     from .blueprints.streaming.routes import bp as streaming_bp
     app.register_blueprint(streaming_bp, url_prefix="/streaming")
 
+    from .blueprints.rankings.routes import bp as rankings_bp
+    app.register_blueprint(rankings_bp, url_prefix="/rankings")
+
     print(f"[boot] APP_ENV={env} DEBUG={app.debug} TESTING={app.testing}")
     return app

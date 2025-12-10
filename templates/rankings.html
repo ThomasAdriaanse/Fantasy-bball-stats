@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Player Rankings (DARKO){% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/compare_page.css') }}">
+<style>
+    /* Custom overrides for rankings page */
+    .ranking-meta {
+        text-align: right;
+        font-weight: bold;
+    }
+
+    .text-success {
+        color: #4ade80 !important;
+    }
+
+    .text-danger {
+        color: #f87171 !important;
+    }
+
+    .text-muted {
+        color: #888 !important;
+    }
+
+    /* Make the table container fill the card */
+    .table-container {
+        grid-template-columns: 1fr;
+        /* Single column layout unlike compare page */
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="body-container">
+    <div class="card">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 style="margin:0;">Player Rankings (DARKO Projections)</h2>
+        </div>
+
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table table-compact">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Player</th>
+                            <th>Team</th>
+                            <th title="Total DARKO Z-Score">Darko Z</th>
+                            <th title="Total 2025-26 Season Z-Score">Real Z</th>
+                            <th title="Darko Z - Real Z">Diff</th>
+
+                            <!-- Individual DARKO Z Scores -->
+                            <th>PTS</th>
+                            <th>3PM</th>
+                            <th>REB</th>
+                            <th>AST</th>
+                            <th>STL</th>
+                            <th>BLK</th>
+                            <th>TOV</th>
+                            <th>FG%</th>
+                            <th>FT%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in players %}
+                        <tr>
+                            <td>{{ p.rank }}</td>
+                            <td>
+                                <a href="{{ url_for('players.player_stats') }}?player_name={{ p.player_name }}">
+                                    {{ p.player_name }}
+                                </a>
+                            </td>
+                            <td>{{ p.team }}</td>
+
+                            <!-- Totals -->
+                            <td class="ranking-meta {{ 'text-success' if p.total_z_darko > 0 else 'text-danger' }}">
+                                {{ "%.2f"|format(p.total_z_darko) }}
+                            </td>
+
+                            <td
+                                class="ranking-meta {{ 'text-muted' if not p.has_real_data else ('text-success' if p.total_z_real > 0 else 'text-danger') }}">
+                                {% if p.has_real_data %}
+                                {{ "%.2f"|format(p.total_z_real) }}
+                                {% else %}
+                                N/A
+                                {% endif %}
+                            </td>
+
+                            <!-- Diff (Darko - Real) -->
+                            <!-- If Diff > 0, Darko is higher (Optimistic). If < 0, Darko is lower (Pessimistic). -->
+                            <td class="ranking-meta {{ 'text-success' if p.diff_z > 0 else 'text-danger' }}">
+                                {% if p.has_real_data %}
+                                {{ "%+.2f"|format(p.diff_z) }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+
+                            <!-- Individual Z Scores (DARKO) -->
+                            {% set z = p.Z_DARKO %}
+                            <td class="{{ 'text-success' if z.Z_PTS > 0 else 'text-danger' }}">{{
+                                "%.2f"|format(z.Z_PTS|float) }}</td>
+                            <td class="{{ 'text-success' if z.Z_FG3M > 0 else 'text-danger' }}">{{
+                                "%.2f"|format(z.Z_FG3M|float) }}</td>
+                            <td class="{{ 'text-success' if z.Z_REB > 0 else 'text-danger' }}">{{
+                                "%.2f"|format(z.Z_REB|float) }}</td>
+                            <td class="{{ 'text-success' if z.Z_AST > 0 else 'text-danger' }}">{{
+                                "%.2f"|format(z.Z_AST|float) }}</td>
+                            <td class="{{ 'text-success' if z.Z_STL > 0 else 'text-danger' }}">{{
+                                "%.2f"|format(z.Z_STL|float) }}</td>
+                            <td class="{{ 'text-success' if z.Z_BLK > 0 else 'text-danger' }}">{{
+                                "%.2f"|format(z.Z_BLK|float) }}</td>
+                            <!-- TOV is reversed in Z-score calc (Higher Z is good = fewer TO). 
+                                 So Z > 0 is good (green). Logic holds. -->
+                            <td class="{{ 'text-success' if z.Z_TOV > 0 else 'text-danger' }}">{{
+                                "%.2f"|format(z.Z_TOV|float) }}</td>
+                            <td class="{{ 'text-success' if z.Z_FG > 0 else 'text-danger' }}">{{
+                                "%.2f"|format(z.Z_FG|float) }}</td>
+                            <td class="{{ 'text-success' if z.Z_FT > 0 else 'text-danger' }}">{{
+                                "%.2f"|format(z.Z_FT|float) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

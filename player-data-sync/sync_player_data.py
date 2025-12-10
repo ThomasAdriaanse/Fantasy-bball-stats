@@ -93,6 +93,7 @@ S3_BUCKET = os.getenv("S3_BUCKET")
 S3_PREFIX = os.getenv("S3_PREFIX", "dev/players/")
 LOCAL_CACHE_DIR = os.getenv("PLAYER_DATA_CACHE_DIR", "/app/data/players")
 PMF_CACHE_DIR = os.getenv("PLAYER_PMF_CACHE_DIR", "/app/data/pmf")
+SEASON_AVGS_CACHE_DIR = os.getenv("SEASON_AVGS_CACHE_DIR", "/app/data/season_avgs")
 DARKO_CACHE_DIR = os.getenv("DARKO_CACHE_DIR", "/app/data/player_darko")
 TEAM_PACE_CACHE_DIR = os.getenv("TEAM_PACE_CACHE_DIR", "/app/data/team_pace")
 AWS_REGION = os.getenv("AWS_REGION", "ca-central-1")
@@ -446,6 +447,115 @@ def build_pmfs_from_local_cache() -> bool:
 
 
 # ============================================================
+#  D) SEASON AVERAGES
+# ============================================================
+
+def build_season_averages() -> bool:
+    """
+    Scans local JSON files for 2025-26 data, computes averages for key stats,
+    and saves to a single JSON fil 'season_averages.json'.
+    This allows quick lookup of MPG and other per-game stats without reloading 
+    every player file.
+    """
+    cache_path = Path(LOCAL_CACHE_DIR)
+    avgs_path = Path(SEASON_AVGS_CACHE_DIR)
+    
+    if not cache_path.exists():
+        print(f"[AVGS] Local cache dir {cache_path} does not exist")
+        return False
+        
+    avgs_path.mkdir(parents=True, exist_ok=True)
+    outfile = avgs_path / "season_averages.json"
+    
+    print(f"[AVGS] Building season averages from: {cache_path}")
+    print(f"       Output file: {outfile}")
+    
+    # Define stats to aggregate
+    KEYS_TO_AVG = ["MIN", "PTS", "REB", "AST", "STL", "BLK", "TOV", "FGM", "FGA", "FTM", "FTA", "FG3M"]
+    
+    target_season_ids = ["22025", "22026"] # typical NBA ID structure for 2025-26 reg season? 
+    # Or just filter by "SEASON" string "2025-26" like PMF code.
+    # PMF code checks startsWith("2025") or "2026". 
+    # Let's stick to the "SEASON" field string check for consistency with PMF logic.
+    allowed_prefixes = ("2025", "2026")
+    
+    averages_map = {}
+    
+    total_files = 0
+    processed_files = 0
+    
+    for json_file in cache_path.glob("*.json"):
+        total_files += 1
+        try:
+            with json_file.open("r") as f:
+                payload = json.load(f)
+                
+            rows = payload.get("rows")
+            if not isinstance(rows, list):
+                if isinstance(payload, list):
+                    rows = payload
+                else:
+                    continue
+            
+            # Filter rows
+            valid_rows = []
+            for row in rows:
+                if not isinstance(row, dict): continue
+                season = str(row.get("SEASON", "")).strip()
+                if not season: continue
+                if season.startswith(allowed_prefixes):
+                    valid_rows.append(row)
+            
+            if not valid_rows:
+                continue
+                
+            # Compute averages
+            # We want to sum up the stats and divide by count
+            count = len(valid_rows)
+            sums = {k: 0.0 for k in KEYS_TO_AVG}
+            
+            for row in valid_rows:
+                for k in KEYS_TO_AVG:
+                    val = row.get(k)
+                    try:
+                        sums[k] += float(val)
+                    except (ValueError, TypeError):
+                        pass
+            
+            # Calculate per-game avg
+            player_avgs = {}
+            for k, total_val in sums.items():
+                player_avgs[k] = total_val / count if count > 0 else 0.0
+            
+            # Also store Games Played
+            player_avgs["GP"] = count
+            
+            # Key by SAFE player name (filename stem usually) or full name? 
+            # Ideally standardizing on the stem (slug) is safest if we use the same slug function.
+            # But the file is named "slug.json". So json_file.stem IS the slug.
+            slug = json_file.stem
+            averages_map[slug] = player_avgs
+            processed_files += 1
+            
+        except Exception as e:
+            print(f"[AVGS] Error processing {json_file.name}: {e}")
+            
+    # Save to disk
+    try:
+        with outfile.open("w") as f:
+            json.dump({
+                "generated_at": datetime.utcnow().isoformat(),
+                "season": "2025-26",
+                "data": averages_map
+            }, f, indent=2)
+        print(f"[AVGS] Successfully saved averages for {processed_files} players.")
+        return True
+    except Exception as e:
+        print(f"[AVGS] Failed to write output file: {e}")
+        return False
+
+
+# ============================================================
 #  C) MAIN ENTRYPOINT WITH MODE SWITCH
 # ============================================================
 
@@ -457,13 +567,18 @@ if __name__ == "__main__":
 
     if SYNC_MODE == "sync":
         success = sync_s3_to_local()
+        if success:
+             build_season_averages()
 
     elif SYNC_MODE == "pmf":
+        build_season_averages()
         success = build_pmfs_from_local_cache()
 
     elif SYNC_MODE == "both":
         success = sync_s3_to_local()
         if success:
+            # Also run season avgs
+            build_season_averages() 
             success = build_pmfs_from_local_cache()
 
     else:
