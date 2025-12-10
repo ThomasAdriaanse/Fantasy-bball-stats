@@ -477,18 +477,21 @@
   }
 
   /* Toggle Switch */
-  .switch input { 
+  .switch input {
     opacity: 0;
     width: 0;
     height: 0;
   }
-  .switch input:checked + .slider {
+
+  .switch input:checked+.slider {
     background-color: #4ea4ff;
   }
-  .switch input:focus + .slider {
+
+  .switch input:focus+.slider {
     box-shadow: 0 0 1px #4ea4ff;
   }
-  .switch input:checked ~ .slider-knob {
+
+  .switch input:checked~.slider-knob {
     transform: translateX(16px);
   }
 </style>
@@ -625,15 +628,23 @@
           {% endfor %}
         </select>
       </div>
-      
+
       <div class="spacer"></div>
 
       <!-- Top 10 Toggle -->
       <div style="display:flex; flex-direction:column; margin-right: 20px;">
-          <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
-              <input type="checkbox" name="top_10_only" {% if request.form.get('top_10_only') == 'on' %}checked{% endif %}>
-              <span>Top 10 Players Only</span>
-          </label>
+        <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" name="top_10_only" {% if request.form.get('top_10_only')=='on' %}checked{% endif %}>
+          <span>Top 10 Players Only</span>
+        </label>
+      </div>
+
+      <!-- DARKO Z-Score Toggle -->
+      <div style="display:flex; flex-direction:column; margin-right: 20px;">
+        <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" name="use_darko_z" {% if request.form.get('use_darko_z')=='on' %}checked{% endif %}>
+          <span>Use DARKO Z-Scores</span>
+        </label>
       </div>
 
       <button class="btn" type="submit">Evaluate</button>
@@ -661,7 +672,8 @@
 
   <!-- PLAYER TABLES -->
   <div class="card" style="margin-top:12px;">
-    <div class="dz-title" style="text-align:center; margin-bottom:10px;">Difference in Team Z-Score by Category (Side A − Side B)</div>
+    <div class="dz-title" style="text-align:center; margin-bottom:10px;">Difference in Team Z-Score by Category (Side A
+      − Side B)</div>
     {% set stats_count = categories|length + 1 %} {# categories + Total col #}
     {% set total_units = 2 + stats_count %}
     {% set unit = 100 / total_units %}
@@ -734,9 +746,10 @@
 
   <!-- DIFFERENCE (A − B) and RADAR side-by-side -->
   <div class="card" style="margin-top:12px;">
-    <div class="dz-title" style="text-align:center; margin-bottom:10px;">Difference in Team Z-Score by Category (Side A − Side B)</div>
+    <div class="dz-title" style="text-align:center; margin-bottom:10px;">Difference in Team Z-Score by Category (Side A
+      − Side B)</div>
     <div style="display:flex; flex-wrap:wrap; gap:20px;">
-      
+
       <!-- Left: Difference Chart -->
       <div style="flex:3; min-width:500px;">
         <div id="dz-chart"></div>
@@ -750,15 +763,15 @@
       </div>
 
     </div>
-        {% set overall_diff = results.a_totals['_overall'] - results.b_totals['_overall'] %}
-        <div class="overall-wrap">
-          <div class="overall-pill">
-            <div>Overall Difference in Team Z-Score (Side A − Side B)</div>
-            <div class="overall-amt {{ 'amt-pos' if overall_diff>=0 else 'amt-neg' }}">
-              {{ '+' if overall_diff>=0 else '' }}{{ '%.2f' % overall_diff }}
-            </div>
-          </div>
+    {% set overall_diff = results.a_totals['_overall'] - results.b_totals['_overall'] %}
+    <div class="overall-wrap">
+      <div class="overall-pill">
+        <div>Overall Difference in Team Z-Score (Side A − Side B)</div>
+        <div class="overall-amt {{ 'amt-pos' if overall_diff>=0 else 'amt-neg' }}">
+          {{ '+' if overall_diff>=0 else '' }}{{ '%.2f' % overall_diff }}
         </div>
+      </div>
+    </div>
   </div>
 
   <!-- TRADE PMF / WIN% PANEL -->
@@ -768,12 +781,15 @@
 
     <!-- Toggle for Win% / Stats -->
     <div style="display:flex; justify-content:center; margin-bottom:10px;">
-      <div class="toggle-container" style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:20px; border:1px solid var(--border);">
+      <div class="toggle-container"
+        style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:20px; border:1px solid var(--border);">
         <span id="label-win" style="font-size:12px; font-weight:600; color:#fff; cursor:pointer;">Win %</span>
         <label class="switch" style="position:relative; display:inline-block; width:34px; height:18px;">
           <input type="checkbox" id="stats-toggle">
-          <span class="slider round" style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background-color:#4682b4; transition:.4s; border-radius:34px;"></span>
-          <span class="slider-knob" style="position:absolute; content:''; height:12px; width:12px; left:3px; bottom:3px; background-color:white; transition:.4s; border-radius:50%;"></span>
+          <span class="slider round"
+            style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background-color:#4682b4; transition:.4s; border-radius:34px;"></span>
+          <span class="slider-knob"
+            style="position:absolute; content:''; height:12px; width:12px; left:3px; bottom:3px; background-color:white; transition:.4s; border-radius:50%;"></span>
         </label>
         <span id="label-stats" style="font-size:12px; font-weight:600; color:var(--muted); cursor:pointer;">Stats</span>
       </div>
@@ -1189,16 +1205,16 @@
         const delta = aAfter - aBefore;
         aDeltaVals.push(delta);
         const sign = delta >= 0 ? "+" : "";
-        
+
         let txt = sign + delta.toFixed(1);
         if (!isStats || (cat === "FG%" || cat === "FT%")) txt += "%";
-        
+
         cellADelta.text(txt);
-        
+
         // Color logic
         let isGood = (delta >= 0);
         if (isStats && cat === "TO") isGood = (delta <= 0);
-        
+
         cellADelta.style("color", isGood ? "#4ade80" : "#f87171");
         cellADelta.style("font-weight", "600");
       }
@@ -1224,7 +1240,7 @@
         const delta = bAfter - bBefore;
         bDeltaVals.push(delta);
         const sign = delta >= 0 ? "+" : "";
-        
+
         let txt = sign + delta.toFixed(1);
         if (!isStats || (cat === "FG%" || cat === "FT%")) txt += "%";
 
@@ -1246,7 +1262,7 @@
     // Summary row (only for Win%, stats average doesn't make sense across different units)
     if (!isStats) {
       const totalRow = tbody.append("tr").attr("class", "pmf-summary-total");
-      
+
       const avg = (arr) => {
         const vals = arr.filter(v => v != null && !isNaN(v));
         if (!vals.length) return null;
@@ -1262,7 +1278,7 @@
 
       // A Before
       totalRow.append("td").text(aBeforeAvg != null ? aBeforeAvg.toFixed(1) + "%" : "—");
-      
+
       // A Delta
       const tdAD = totalRow.append("td");
       if (aDeltaAvg != null) {
@@ -1307,10 +1323,10 @@
     const labelStats = document.getElementById("label-stats");
 
     if (toggle) {
-      toggle.addEventListener("change", function() {
+      toggle.addEventListener("change", function () {
         const mode = this.checked ? 'stats' : 'win';
         renderSummaryTable(mode);
-        
+
         // Update label colors
         if (mode === 'stats') {
           labelStats.style.color = "#fff";
@@ -1320,7 +1336,7 @@
           labelStats.style.color = "var(--muted)";
         }
       });
-      
+
       // Click on labels to toggle
       labelWin.addEventListener("click", () => {
         if (toggle.checked) {

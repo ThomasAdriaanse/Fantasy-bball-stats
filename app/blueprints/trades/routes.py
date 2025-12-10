@@ -11,6 +11,7 @@ from espn_api.requests.espn_requests import ESPNUnknownError, ESPNAccessDenied, 
 
 import compare_page.compare_page_data as cpd
 from app.services.z_score_calculations import raw_to_zscore
+from app.services import darko_services
 
 bp = Blueprint("trades", __name__)
 
@@ -52,14 +53,69 @@ def _get_league_from_session():
         return None, None, None
 
 # --------------------------- data builders ---------------------------
-def _collect_league_players(league, year: int, stat_window: str) -> pd.DataFrame:
+def _collect_league_players(league, year: int, stat_window: str, use_darko_z: bool = False) -> pd.DataFrame:
     """
-    Pull every team’s player rows for the given ESPN window and return a
+    Pull every team's player rows for the given ESPN window and return a
     DataFrame with:
       - player_name
       - raw 9-cat stats (FG%, FT%, 3PM, REB, AST, STK, BLK, TO, PTS)
       - z_<cat> per category using raw_to_zscore (NBA-wide baselines).
+      
+    If use_darko_z is True, use DARKO Z-scores instead of season average Z-scores.
     """
+    # If using DARKO, get those Z-scores
+    if use_darko_z:
+        darko_data = darko_services.get_darko_z_scores()
+        # Convert to DataFrame format expected by rest of function
+        rows: List[Dict[str, Any]] = []
+        
+        cat_to_zkey = {
+            "FG%": "Z_FG",
+            "FT%": "Z_FT",
+            "3PM": "Z_FG3M",
+            "REB": "Z_REB",
+            "AST": "Z_AST",
+            "STL": "Z_STL",
+            "BLK": "Z_BLK",
+            "TO":  "Z_TOV",
+            "PTS": "Z_PTS",
+        }
+        
+        for p in darko_data:
+            zd = p.get("Z_DARKO", {})
+            raw_d = p.get("RAW_DARKO", {})
+            
+            # Calculate percentages from raw DARKO data
+            fgm = float(raw_d.get("FGM", 0))
+            fga = float(raw_d.get("FGA", 0))
+            ftm = float(raw_d.get("FTM", 0))
+            fta = float(raw_d.get("FTA", 0))
+            
+            fg_pct = (fgm / fga) if fga > 0 else 0.0
+            ft_pct = (ftm / fta) if fta > 0 else 0.0
+            
+            row: Dict[str, Any] = {
+                "player_name": p.get("player_name"),
+                "FG%": fg_pct,
+                "FT%": ft_pct,
+                "3PM": float(raw_d.get("FG3M", 0)),
+                "REB": float(raw_d.get("REB", 0)),
+                "AST": float(raw_d.get("AST", 0)),
+                "STL": float(raw_d.get("STL", 0)),
+                "BLK": float(raw_d.get("BLK", 0)),
+                "TO":  float(raw_d.get("TOV", 0)),
+                "PTS": float(raw_d.get("PTS", 0)),
+            }
+            
+            # Attach per-category z_<cat> columns from DARKO
+            for cat, key in cat_to_zkey.items():
+                row[f"z_{cat}"] = float(zd.get(key, 0.0))
+            
+            rows.append(row)
+        
+        return pd.DataFrame(rows)
+    
+    # Otherwise, use season average Z-scores (original logic)
     frames: List[pd.DataFrame] = []
     for team_idx, _ in enumerate(league.teams):
         df = cpd.get_team_player_data(
@@ -227,9 +283,12 @@ def trade_analyzer():
     stat_window = (request.values.get("window") or "total").strip().lower()
     if stat_window not in WINDOW_CHOICES:
         stat_window = "total"
+    
+    # Check if DARKO Z-scores should be used
+    use_darko_z = request.form.get("use_darko_z") == "on"
 
     # Build league pool for this window, including z_<cat> columns
-    league_df = _collect_league_players(league, year, stat_window)
+    league_df = _collect_league_players(league, year, stat_window, use_darko_z=use_darko_z)
     z_league = league_df if not league_df.empty else pd.DataFrame(
         columns=["player_name"] + CATEGORIES + [f"z_{c}" for c in CATEGORIES]
     )
