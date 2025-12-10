@@ -853,7 +853,7 @@
 
       const bar = item.querySelector('.odds-bar-v2');
       const left = item.querySelector('.odds-left-v2');
-      const mid = item.querySelector('.odds-mid-v2');
+      const middle = item.querySelector('.odds-middle-v2');
       const right = item.querySelector('.odds-right-v2');
 
       const tagL = item.querySelector('.odds-tag-v2.left');
@@ -865,21 +865,30 @@
       if (!bar || !left || !right || !tagL || !tagR || !statL || !statR) return;
 
       // === BAR LAYOUT ===
-      // Simple track:
-      //   - blue segment from 0 → p1Win%
-      //   - red segment from (100 - p2Win)% → 100%
-      //   - tie lives in the neutral background between them
+      // Three segments:
+      //   - left (blue): Team 1 win probability
+      //   - middle (gray): Tie probability  
+      //   - right (red): Team 2 win probability
+
+      // Left segment: from 0% to p1Win%
       left.style.left = '0%';
       left.style.width = `${p1Win}%`;
 
+      // Middle segment: from p1Win% to (p1Win + tiePct)%
+      // Only show if there's an actual tie percentage
+      if (middle) {
+        if (tiePct > 0.1) {
+          middle.style.display = 'block';
+          middle.style.left = `${p1Win}%`;
+          middle.style.width = `${tiePct}%`;
+        } else {
+          middle.style.display = 'none';
+        }
+      }
+
+      // Right segment: from (100 - p2Win)% to 100%
       right.style.right = '0%';
       right.style.width = `${p2Win}%`;
-
-      // Center line is *just* a thin marker at 50%, not a percentage bar
-      if (mid) {
-        mid.style.left = '50%';
-        mid.style.width = '1px';
-      }
 
       // Tooltip still shows tie %
       bar.title = `T1 win: ${p1Win.toFixed(1)}% · tie: ${tiePct.toFixed(1)}% · T2 win: ${p2Win.toFixed(1)}%`;

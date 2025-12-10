@@ -386,7 +386,6 @@ svg .tick line {
   position: relative;
   height: 26px;
   border-radius: 999px;
-  background: #3a3f4b;
   border: 1px solid rgba(255, 255, 255, 0.12);
   overflow: hidden;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
@@ -405,13 +404,19 @@ svg .tick line {
   background: rgba(70, 130, 180, 0.30);
 }
 
-/* steelblue, soft */
 .odds-right-v2 {
   right: 0;
   background: rgba(255, 72, 72, 0.30);
 }
 
-/* red, soft */
+.odds-middle-v2 {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(175, 175, 175, 0.4);
+  pointer-events: none;
+}
+
 
 /* Winner more intense; loser a bit more faded */
 .odds-bar-v2.winner-left .odds-left-v2 {
@@ -430,10 +435,13 @@ svg .tick line {
   background: rgba(70, 130, 180, 0.22);
 }
 
-/* Tie: small lift so both look equal and readable */
-.odds-bar-v2.is-tie .odds-left-v2,
+/* Tie: both sides use their "winning" intensity */
+.odds-bar-v2.is-tie .odds-left-v2 {
+  background: rgba(70, 130, 180, 0.66);
+}
+
 .odds-bar-v2.is-tie .odds-right-v2 {
-  filter: brightness(1.06);
+  background: rgba(255, 72, 72, 0.66);
 }
 
 /* Midpoint marker at exact 50% */
@@ -441,10 +449,12 @@ svg .tick line {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 1px;
+  width: 2px;
   left: 50%;
-  background: rgba(255, 255, 255, 0.14);
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.4);
   pointer-events: none;
+  z-index: 10;
 }
 
 /* Percent chips overlay the bar; don't shift layout */
