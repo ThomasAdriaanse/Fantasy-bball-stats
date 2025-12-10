@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Player Rankings (DARKO){% endblock %}
+{% block title %}Player Rankings{% endblock %}
 
 {% block head_extra %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/compare_page.css') }}">
@@ -28,6 +28,53 @@
         grid-template-columns: 1fr;
         /* Single column layout unlike compare page */
     }
+
+    .sortable {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .sortable:hover {
+        background-color: #1a202c;
+        /* slightly lighter dark */
+    }
+
+    /* Toggle buttons styles */
+    .view-toggles {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    .btn-toggle-view {
+        background: #1a202c;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #e8eefc;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        opacity: 0.7;
+        transition: all 0.2s;
+    }
+
+    .btn-toggle-view:hover {
+        opacity: 1;
+        background: #2d3748;
+    }
+
+    .btn-toggle-view.active {
+        opacity: 1;
+        background: #3182ce;
+        /* Blue */
+        border-color: #63b3ed;
+        font-weight: bold;
+    }
+
+    /* Header dynamic text */
+    .header-dynamic {
+        text-decoration: underline;
+        text-decoration-style: dotted;
+    }
 </style>
 {% endblock %}
 
@@ -35,38 +82,50 @@
 <div class="body-container">
     <div class="card">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2 style="margin:0;">Player Rankings (DARKO Projections)</h2>
+            <h2 style="margin:0;">Player Rankings <span id="pageSubtitle">(Projections)</span></h2>
+        </div>
+
+        <!-- View Toggles -->
+        <div class="view-toggles">
+            <button class="btn-toggle-view active" onclick="switchView('darko', this)">Darko (Projections)</button>
+            <button class="btn-toggle-view" onclick="switchView('real', this)">Real (2025-26)</button>
+            <button class="btn-toggle-view" onclick="switchView('diff', this)">Diff (Darko - Real)</button>
         </div>
 
         <div class="table-container">
             <div class="table-wrapper">
-                <table class="data-table table-compact">
+                <table class="data-table table-compact" id="rankingsTable">
                     <thead>
                         <tr>
-                            <th>Rank</th>
-                            <th>Player</th>
-                            <th>Team</th>
-                            <th title="Total DARKO Z-Score">Darko Z</th>
-                            <th title="Total 2025-26 Season Z-Score">Real Z</th>
-                            <th title="Darko Z - Real Z">Diff</th>
+                            <th class="sortable" onclick="sortTable(0, 'number')">Rank</th>
+                            <th class="sortable" onclick="sortTable(1, 'string')">Player</th>
+                            <th class="sortable" onclick="sortTable(2, 'string')">Team</th>
 
-                            <!-- Individual DARKO Z Scores -->
-                            <th>PTS</th>
-                            <th>3PM</th>
-                            <th>REB</th>
-                            <th>AST</th>
-                            <th>STL</th>
-                            <th>BLK</th>
-                            <th>TOV</th>
-                            <th>FG%</th>
-                            <th>FT%</th>
+                            <!-- Summary Columns -->
+                            <th class="sortable" title="Total DARKO Z-Score" onclick="sortTable(3, 'number')">Darko Z
+                            </th>
+                            <th class="sortable" title="Total 2025-26 Season Z-Score" onclick="sortTable(4, 'number')">
+                                Real Z</th>
+                            <th class="sortable" title="Darko - Real" onclick="sortTable(5, 'number')">Diff</th>
+
+                            <!-- Individual Z Scores (Dynamic) -->
+                            <!-- We use a common class 'dynamic-col' to update logic if needed, but mainly cell content changes -->
+                            <th class="sortable dynamic-header" onclick="sortTable(6, 'number')">PTS</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(7, 'number')">3PM</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(8, 'number')">REB</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(9, 'number')">AST</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(10, 'number')">STL</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(11, 'number')">BLK</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(12, 'number')">TOV</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(13, 'number')">FG%</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(14, 'number')">FT%</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for p in players %}
                         <tr>
                             <td>{{ p.rank }}</td>
-                            <td>
+                            <td data-val="{{ p.player_name }}">
                                 <a href="{{ url_for('players.player_stats') }}?player_name={{ p.player_name }}">
                                     {{ p.player_name }}
                                 </a>
@@ -78,8 +137,8 @@
                                 {{ "%.2f"|format(p.total_z_darko) }}
                             </td>
 
-                            <td
-                                class="ranking-meta {{ 'text-muted' if not p.has_real_data else ('text-success' if p.total_z_real > 0 else 'text-danger') }}">
+                            <td class="ranking-meta {{ 'text-muted' if not p.has_real_data else ('text-success' if p.total_z_real > 0 else 'text-danger') }}"
+                                data-val="{{ p.total_z_real if p.has_real_data else -9999 }}">
                                 {% if p.has_real_data %}
                                 {{ "%.2f"|format(p.total_z_real) }}
                                 {% else %}
@@ -87,9 +146,8 @@
                                 {% endif %}
                             </td>
 
-                            <!-- Diff (Darko - Real) -->
-                            <!-- If Diff > 0, Darko is higher (Optimistic). If < 0, Darko is lower (Pessimistic). -->
-                            <td class="ranking-meta {{ 'text-success' if p.diff_z > 0 else 'text-danger' }}">
+                            <td class="ranking-meta {{ 'text-success' if p.diff_z > 0 else 'text-danger' }}"
+                                data-val="{{ p.diff_z }}">
                                 {% if p.has_real_data %}
                                 {{ "%+.2f"|format(p.diff_z) }}
                                 {% else %}
@@ -97,28 +155,30 @@
                                 {% endif %}
                             </td>
 
-                            <!-- Individual Z Scores (DARKO) -->
-                            {% set z = p.Z_DARKO %}
-                            <td class="{{ 'text-success' if z.Z_PTS > 0 else 'text-danger' }}">{{
-                                "%.2f"|format(z.Z_PTS|float) }}</td>
-                            <td class="{{ 'text-success' if z.Z_FG3M > 0 else 'text-danger' }}">{{
-                                "%.2f"|format(z.Z_FG3M|float) }}</td>
-                            <td class="{{ 'text-success' if z.Z_REB > 0 else 'text-danger' }}">{{
-                                "%.2f"|format(z.Z_REB|float) }}</td>
-                            <td class="{{ 'text-success' if z.Z_AST > 0 else 'text-danger' }}">{{
-                                "%.2f"|format(z.Z_AST|float) }}</td>
-                            <td class="{{ 'text-success' if z.Z_STL > 0 else 'text-danger' }}">{{
-                                "%.2f"|format(z.Z_STL|float) }}</td>
-                            <td class="{{ 'text-success' if z.Z_BLK > 0 else 'text-danger' }}">{{
-                                "%.2f"|format(z.Z_BLK|float) }}</td>
-                            <!-- TOV is reversed in Z-score calc (Higher Z is good = fewer TO). 
-                                 So Z > 0 is good (green). Logic holds. -->
-                            <td class="{{ 'text-success' if z.Z_TOV > 0 else 'text-danger' }}">{{
-                                "%.2f"|format(z.Z_TOV|float) }}</td>
-                            <td class="{{ 'text-success' if z.Z_FG > 0 else 'text-danger' }}">{{
-                                "%.2f"|format(z.Z_FG|float) }}</td>
-                            <td class="{{ 'text-success' if z.Z_FT > 0 else 'text-danger' }}">{{
-                                "%.2f"|format(z.Z_FT|float) }}</td>
+                            <!-- Individual Z Scores -->
+                            <!-- We render ALL 3 values in data-attributes -->
+                            <!-- Default view is Darko. -->
+                            {% set zd = p.Z_DARKO %}
+                            {% set zr = p.Z_REAL %}
+                            {% set zdiff = p.Z_DIFF %}
+
+                            {% set cats = [
+                            ('PTS', 'Z_PTS'), ('FG3M', 'Z_FG3M'), ('REB', 'Z_REB'),
+                            ('AST', 'Z_AST'), ('STL', 'Z_STL'), ('BLK', 'Z_BLK'),
+                            ('TOV', 'Z_TOV'), ('FG', 'Z_FG'), ('FT', 'Z_FT')
+                            ] %}
+
+                            {% for _, key in cats %}
+                            {% set val_d = zd.get(key, 0.0)|float %}
+                            {% set val_r = zr.get(key, 0.0)|float %}
+                            {% set val_diff = zdiff.get(key, 0.0)|float %}
+
+                            <td class="dynamic-cell {{ 'text-success' if val_d > 0 else 'text-danger' }}"
+                                data-darko="{{ val_d }}" data-real="{{ val_r }}" data-diff="{{ val_diff }}"
+                                data-val="{{ val_d }}"> <!-- Initial sort value is darko -->
+                                {{ "%.2f"|format(val_d) }}
+                            </td>
+                            {% endfor %}
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -127,4 +187,98 @@
         </div>
     </div>
 </div>
+
+<script>
+    // Current active mode
+    let currentMode = 'darko';
+
+    function switchView(mode, btn) {
+        currentMode = mode;
+
+        // Update Buttons
+        document.querySelectorAll('.btn-toggle-view').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Update Subtitle
+        const subtitle = document.getElementById('pageSubtitle');
+        if (mode === 'darko') subtitle.textContent = "(Projections)";
+        if (mode === 'real') subtitle.textContent = "(2025-26 Season)";
+        if (mode === 'diff') subtitle.textContent = "(Difference: Darko - Real)";
+
+        // Update Table Cells
+        const cells = document.querySelectorAll('.dynamic-cell');
+        cells.forEach(cell => {
+            // Get value based on mode
+            let val = 0.0;
+            if (mode === 'darko') val = parseFloat(cell.getAttribute('data-darko'));
+            if (mode === 'real') val = parseFloat(cell.getAttribute('data-real'));
+            if (mode === 'diff') val = parseFloat(cell.getAttribute('data-diff'));
+
+            // Validate
+            if (isNaN(val)) val = 0.0;
+
+            // Update Text
+            // For Diff, show +/- sign
+            if (mode === 'diff') {
+                cell.innerText = (val > 0 ? "+" : "") + val.toFixed(2);
+            } else {
+                cell.innerText = val.toFixed(2);
+            }
+
+            // Update Color Class
+            cell.classList.remove('text-success', 'text-danger', 'text-muted');
+            if (val > 0) cell.classList.add('text-success');
+            else if (val < 0) cell.classList.add('text-danger');
+            // TOV is special? In Z-score, higher is better (fewer TO). 
+            // Calculated as (LeagueMean - Player) / StdDev.
+            // So if Player TO < Mean, term is positive. 
+            // So Positive Z is ALWAYS "Good" (Green). My logic holds.
+
+            // If real mode and value is effectively 0 because of missing data?
+            // backend passes z_real=0 if missing. 
+            // We can check if "has_real_data" on the ROW, but simpler to just show 0.00.
+
+            // Update data-val for sorting!
+            cell.setAttribute('data-val', val);
+        });
+    }
+
+    function sortTable(n, type) {
+        var table = document.getElementById("rankingsTable");
+        var rows = Array.from(table.rows).slice(1); // Skip header
+        var header = table.rows[0].getElementsByTagName("TH")[n];
+
+        // Determine sort direction
+        var currentDir = header.getAttribute("data-sort-dir");
+        var dir = (currentDir === "asc") ? "desc" : "asc";
+
+        // Reset other headers
+        var allHeaders = table.rows[0].getElementsByTagName("TH");
+        for (var i = 0; i < allHeaders.length; i++) {
+            allHeaders[i].removeAttribute("data-sort-dir");
+        }
+
+        // Set new direction
+        header.setAttribute("data-sort-dir", dir);
+
+        rows.sort(function (a, b) {
+            var x = a.getElementsByTagName("TD")[n];
+            var y = b.getElementsByTagName("TD")[n];
+
+            var xVal = x.getAttribute("data-val") || x.innerText;
+            var yVal = y.getAttribute("data-val") || y.innerText;
+
+            if (type === "number") {
+                return (parseFloat(xVal) - parseFloat(yVal)) * (dir === "asc" ? 1 : -1);
+            } else {
+                return xVal.toLowerCase().localeCompare(yVal.toLowerCase()) * (dir === "asc" ? 1 : -1);
+            }
+        });
+
+        var tbody = table.getElementsByTagName("TBODY")[0];
+        rows.forEach(function (row) {
+            tbody.appendChild(row);
+        });
+    }
+</script>
 {% endblock %}
