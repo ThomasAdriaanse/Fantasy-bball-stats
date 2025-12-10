@@ -19,6 +19,8 @@ services:
       - "${USERPROFILE}/.aws:/root/.aws:ro"
       - player_data:/app/data/players:ro
       - player_data_pmf:/app/data/pmf:ro
+      - darko_data:/app/data/player_darko:ro
+      - team_pace_data:/app/data/team_pace:ro
 
   sync:
     build: ./player-data-sync
@@ -34,6 +36,8 @@ services:
       - "${USERPROFILE}/.aws:/root/.aws:ro"
       - player_data:/app/data/players
       - player_data_pmf:/app/data/pmf
+      - darko_data:/app/data/player_darko
+      - team_pace_data:/app/data/team_pace
     command: python /app/sync_player_data.py
     profiles:
       - sync
@@ -41,3 +45,5 @@ services:
 volumes:
   player_data:
   player_data_pmf:
+  darko_data:
+  team_pace_data:

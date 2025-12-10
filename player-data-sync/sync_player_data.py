@@ -93,8 +93,12 @@ S3_BUCKET = os.getenv("S3_BUCKET")
 S3_PREFIX = os.getenv("S3_PREFIX", "dev/players/")
 LOCAL_CACHE_DIR = os.getenv("PLAYER_DATA_CACHE_DIR", "/app/data/players")
 PMF_CACHE_DIR = os.getenv("PLAYER_PMF_CACHE_DIR", "/app/data/pmf")
+DARKO_CACHE_DIR = os.getenv("DARKO_CACHE_DIR", "/app/data/player_darko")
+TEAM_PACE_CACHE_DIR = os.getenv("TEAM_PACE_CACHE_DIR", "/app/data/team_pace")
 AWS_REGION = os.getenv("AWS_REGION", "ca-central-1")
 SYNC_MODE = os.getenv("SYNC_MODE", "sync").lower()
+DARKO_PREFIX = os.getenv("DARKO_PREFIX", "dev/player_darko/")
+TEAM_PACE_PREFIX = os.getenv("TEAM_PACE_PREFIX", "dev/team_pace/")
 
 # 1D stats we build PMFs for (single-game distributions)
 PMF_1D_STATS = [
@@ -188,7 +192,7 @@ def sync_s3_to_local() -> bool:
                     failed_files += 1
 
         print(f"\n{'='*60}")
-        print(f"[SYNC] ✓ Sync completed at {datetime.now().isoformat()}")
+        print(f"[SYNC] [DONE] Player JSON Sync completed")
         print(f"{'='*60}")
         print(f"  Total files found:     {total_files}")
         print(f"  Downloaded (new):      {downloaded_files}")
@@ -196,6 +200,68 @@ def sync_s3_to_local() -> bool:
         print(f"  Failed:                {failed_files}")
         print(f"{'='*60}")
 
+        # =========================================================
+        #  NEW: Team Pace Sync
+        # =========================================================
+        print(f"\n[SYNC] Starting Team Pace sync...")
+        pace_cache = Path(TEAM_PACE_CACHE_DIR)
+        pace_cache.mkdir(parents=True, exist_ok=True)
+        
+        pace_key = f"{TEAM_PACE_PREFIX}team_pace.json"
+        local_pace_file = pace_cache / "team_pace.json"
+
+        try:
+             s3.download_file(S3_BUCKET, pace_key, str(local_pace_file))
+             print(f"[SYNC] [OK] Downloaded team_pace.json")
+        except ClientError as e:
+             if e.response['Error']['Code'] == "404":
+                 print(f"[SYNC] team_pace.json not found in S3 at {pace_key}")
+             else:
+                 print(f"[ERROR] Failed to download team_pace.json: {e}")
+
+        # =========================================================
+        #  NEW: DARKO Projections Sync
+        # =========================================================
+        print(f"\n[SYNC] Starting DARKO Projections sync...")
+        darko_cache = Path(DARKO_CACHE_DIR)
+        darko_cache.mkdir(parents=True, exist_ok=True)
+
+        # 1. List files in DARKO prefix
+        try:
+            darko_objs = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix=DARKO_PREFIX)
+            if 'Contents' in darko_objs:
+                for obj in darko_objs['Contents']:
+                    key = obj['Key']
+                    filename = os.path.basename(key)
+                    
+                    # We look for files like DARKO_player_talent_2025-12-09.csv
+                    if filename.startswith("DARKO_player_talent_") and filename.endswith(".csv"):
+                        # remove any existing DARKO files to ensure replacement
+                        # (The user requested "replace the old DARKO file if there is one")
+                        print(f"[SYNC] Found new DARKO file in S3: {filename}")
+                        
+                        # Clean up old local CSVs
+                        for existing in darko_cache.glob("DARKO_player_talent_*.csv"):
+                            try:
+                                existing.unlink()
+                                print(f"[SYNC] Removed old local file: {existing.name}")
+                            except Exception as del_err:
+                                print(f"[WARN] Failed to delete old file {existing.name}: {del_err}")
+
+                        # Download the new one
+                        local_darko = darko_cache / filename
+                        try:
+                            s3.download_file(S3_BUCKET, key, str(local_darko))
+                            print(f"[SYNC] [OK] Downloaded {filename}")
+                        except Exception as down_err:
+                            print(f"[ERROR] Failed to download DARKO file {key}: {down_err}")
+            else:
+                print(f"[SYNC] No DARKO files found in s3://{S3_BUCKET}/{DARKO_PREFIX}")
+
+        except Exception as e:
+            print(f"[ERROR] Error during DARKO sync: {e}")
+
+        print(f"\n[SYNC] All sync operations finished at {datetime.now().isoformat()}")
         return True
 
     except Exception as e:
