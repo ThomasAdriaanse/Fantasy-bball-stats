@@ -28,8 +28,7 @@ def _load_team_pace() -> Dict[str, float]:
         with path.open("r") as f:
             data = json.load(f)
         
-        # Structure is likely: { "data": [ { "TEAM_NAME": "Miami Heat", "PACE": 105.5 }, ... ] }
-        # Based on user's sample
+        # Structure is: { "data": [ { "TEAM_NAME": "Miami Heat", "PACE": 105.5 }, ... ] }
         rows = data.get("data", [])
         pace_map = {}
         for row in rows:
@@ -97,20 +96,20 @@ def get_raw_darko_stats() -> List[Dict[str, Any]]:
                     continue
                     
                 # Lookup Pace
-                # Handle edge cases if team names differ slighty (e.g. "L.A. Clippers" vs "LA Clippers")
-                # For now simple lookup.
+                # print log if missing
+                if team_name not in pace_map:
+                    print(f"[DARKO] Missing team pace for {team_name}")
                 team_pace = pace_map.get(team_name, 100.0) # Default to 100 if missing? Or skip?
                 
                 # Lookup MPG
+                # print log if missing
+                if player_name not in avgs_map:
+                    print(f"[DARKO] Missing player MPG for {player_name}")
                 slug = _safe_filename(player_name)
                 player_avg = avgs_map.get(slug, {})
                 mpg = player_avg.get("MIN", 0.0)
-                
-                # If MPG is 0 (no data or no minutes), stats will be 0.
-                
-                # Helper for conversion
+
                 # Formula: (Val_Per_100 / 100) * ( (Team_Pace * MPG) / 48 ) ?
-                # Wait. 
                 # Pace = Possessions per 48 minutes.
                 # Possessions per minute = Pace / 48.
                 # Total Possessions for player = (Pace / 48) * MPG.
@@ -120,13 +119,9 @@ def get_raw_darko_stats() -> List[Dict[str, Any]]:
                 
                 conversion_factor = (team_pace * mpg) / 4800.0
                 
-                # Extract Darko Columns (per 100)
-                # Columns from user sample: 
-                # PTS?, no... user pasted: "FGA/100", "FG2%", "FG3A/100", "FG3%", "RimFGA/100", "RimFG%", "FTA/100", "FT%", "REB/100", "AST/100", "BLK/100", "STL/100", "TOV/100"
-                # Wait, looking at headers:
+
                 # FGA/100, FG2%, FG3A/100, FG3%, FG3ARate%, RimFGA/100, RimFG%, FTA/100, FT%, FTARate%, USG%, REB/100, AST/100, AST%, BLK/100, BLK%, STL/100, STL%, TOV/100
-                # Where is POINTS (PTS)? DARKO usually provides efficient stats, maybe PTS needs to be derived?
-                # PTS = (FG2M * 2) + (FG3M * 3) + (FTM * 1)
+
                 
                 def get_float(k):
                     try:
@@ -149,11 +144,7 @@ def get_raw_darko_stats() -> List[Dict[str, Any]]:
                 fg3m_100 = fg3a_100 * fg3_pct
                 ftm_100 = fta_100 * ft_pct
                 
-                # FGM/100? 
-                # Row has FG2% (2pt pct) but not explicit FG2A?
-                # Wait, FGA/100 is total attempts?
-                # Usually FGA = FG2A + FG3A.
-                # So FG2A = FGA - FG3A.
+                # FG2A = FGA - FG3A.
                 # FG2M = FG2A * FG2_Pct.
                 # Total FGM = FG2M + FG3M.
                 
@@ -162,6 +153,8 @@ def get_raw_darko_stats() -> List[Dict[str, Any]]:
                 fg2m_100 = fg2a_100 * fg2_pct
                 fgm_100 = fg2m_100 + fg3m_100
                 
+                # deriving points from other stats
+                # PTS = (FG2M * 2) + (FG3M * 3) + (FTM * 1)
                 pts_100 = (fg2m_100 * 2) + (fg3m_100 * 3) + (ftm_100 * 1)
                 
                 # Convert to Per Game
@@ -210,23 +203,21 @@ def get_darko_z_scores() -> List[Dict[str, Any]]:
         z_darko = raw_to_zscore(darko_player)
         
         # 2. Real Z-Scores
-        # Match by player name? 
         # get_raw_darko_stats uses _safe_filename(player_name) to look up MPG.
         # We can do the same to find the season avg object.
         player_name = darko_player.get("player_name")
         slug = _safe_filename(player_name)
         real_stats = season_avgs.get(slug, {})
         
-        # Ensure we have the keys needed for z-score calc in real_stats
         # raw_to_zscore needs: PTS, FG3M, REB, AST, STL, BLK, TOV, FGM, FGA, FTM, FTA 
-        # season_averages has these (lowercase or uppercase? let's check sync_player_data)
-        # In sync_player_data: keys are uppercase: "PTS", "REB", ...
         
         if real_stats:
             z_real = raw_to_zscore(real_stats)
         else:
             # Empty Z-scores if no real data found
             z_real = {}
+            # log error
+            print(f"[DARKO] No real stats found for {player_name}")
 
         # Combine info
         combined = {

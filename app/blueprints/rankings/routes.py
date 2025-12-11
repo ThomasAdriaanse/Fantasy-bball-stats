@@ -44,7 +44,6 @@ def index():
         if has_real_data:
             p["diff_z"] = total_d - total_r
             # Calculate per-category diff using the keys from Z_DARKO
-            # Assuming Z_DARKO keys are standard (Z_PTS, etc.)
             for k, v in z_scores_d.items():
                 real_val = z_scores_r.get(k)
                 if real_val is not None:
@@ -53,20 +52,14 @@ def index():
                     except (ValueError, TypeError):
                         p["Z_DIFF"][k] = 0.0
                 else:
-                    # If real is missing this cat but present overall? Unlikely but possible.
-                    # Or if real is missing entirely, we don't enter this block if has_real_data is false.
                     p["Z_DIFF"][k] = 0.0
         else:
             p["diff_z"] = 0.0
-            # Empty Z_DIFF or zeros?
-            # If no real data, diff is essentially "undefined" or just projections.
-            # Let's fill with 0 so the table doesn't break, or handle in template.
             p["Z_DIFF"] = {k: 0.0 for k in z_scores_d.keys()}
 
         ranked_players.append(p)
 
     # Filter to top 250 by Real Z-score (for players with real data)
-    # Sort by real z first to get top 250
     players_with_real = [p for p in ranked_players if p.get("has_real_data", False)]
     players_without_real = [p for p in ranked_players if not p.get("has_real_data", False)]
     
