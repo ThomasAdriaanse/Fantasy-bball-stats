@@ -1,11 +1,31 @@
 
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, session
 from app.services import darko_services
+from espn_api.basketball import League
 
 bp = Blueprint('rankings', __name__)
 
 @bp.route('/rankings')
 def index():
+    # --- 1. Get League (for FA status) ---
+    league_details = session.get("league_details")
+    rostered_players = set()
+    
+    if league_details:
+        try:
+            league = League(
+                league_id=league_details["league_id"],
+                year=league_details["year"],
+                espn_s2=league_details.get("espn_s2"),
+                swid=league_details.get("swid")
+            )
+            # Efficient: Get all players currently on a roster
+            for team in league.teams:
+                for player in team.roster:
+                    rostered_players.add(player.name)
+        except Exception as e:
+            print(f"Error fetching league for FA status: {e}")
+
     # Get raw data with Z-scores
     darko_data = darko_services.get_darko_z_scores()
 
@@ -61,6 +81,12 @@ def index():
         # RAW_DARKO has 'mpg' (from darko_services)
         raw_d = p.get("RAW_DARKO", {})
         p["mpg"] = raw_d.get("mpg", 0.0)
+
+        # 5. FA Status
+        # Simple name check. Note: Names might slightly mismatch between DARKO and ESPN.
+        # Ideally we'd use a fuzzy match or slug, but exact match is a good start.
+        # darko_data has 'player_name'.
+        p["is_fa"] = p["player_name"] not in rostered_players
 
         ranked_players.append(p)
 

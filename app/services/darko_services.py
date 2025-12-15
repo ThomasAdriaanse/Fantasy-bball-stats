@@ -82,6 +82,11 @@ def get_raw_darko_stats() -> List[Dict[str, Any]]:
     pace_map = _load_team_pace()
     avgs_map = _load_season_averages()
     
+    # Team Name Normalization Map
+    TEAM_NAME_MAP = {
+        "Los Angeles Clippers": "LA Clippers",
+    }
+    
     results = []
     
     try:
@@ -91,6 +96,9 @@ def get_raw_darko_stats() -> List[Dict[str, Any]]:
             for row in reader:
                 player_name = row.get("Player", "").strip()
                 team_name = row.get("Team", "").strip()
+                
+                # Normalize Team Name
+                team_name = TEAM_NAME_MAP.get(team_name, team_name)
                 
                 if not player_name:
                     continue
@@ -119,7 +127,10 @@ def get_raw_darko_stats() -> List[Dict[str, Any]]:
                 #      = Stat_Per_100 * (Pace * MPG) / 4800
                 
                 conversion_factor = (team_pace * mpg) / 4800.0
-                
+                if player_name== "Cason Wallace":
+                    print(f"[DARKO] Conversion factor for {player_name}: {conversion_factor}")
+                    print(f"Team pace: {team_pace}")
+                    print(f"MPG: {mpg}")
 
                 # FGA/100, FG2%, FG3A/100, FG3%, FG3ARate%, RimFGA/100, RimFG%, FTA/100, FT%, FTARate%, USG%, REB/100, AST/100, AST%, BLK/100, BLK%, STL/100, STL%, TOV/100
 
@@ -211,18 +222,6 @@ def get_darko_z_scores() -> List[Dict[str, Any]]:
         player_name = darko_player.get("player_name")
         slug = _safe_filename(player_name)
         real_stats = season_avgs.get(slug, {})
-        
-        # Ensure real_stats has percentage keys if missing
-        if real_stats:
-            if "FG%" not in real_stats:
-                fgm = float(real_stats.get("FGM", 0))
-                fga = float(real_stats.get("FGA", 0))
-                real_stats["FG%"] = (fgm / fga) if fga > 0 else 0.0
-            
-            if "FT%" not in real_stats:
-                ftm = float(real_stats.get("FTM", 0))
-                fta = float(real_stats.get("FTA", 0))
-                real_stats["FT%"] = (ftm / fta) if fta > 0 else 0.0
         
         # raw_to_zscore needs: PTS, FG3M, REB, AST, STL, BLK, TOV, FGM, FGA, FTM, FTA 
         

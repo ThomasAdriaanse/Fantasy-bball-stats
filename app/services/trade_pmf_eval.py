@@ -60,7 +60,7 @@ def _build_team_players_from_rosters(
 
             # Filter if set is provided
             if allowed_player_names is not None and name not in allowed_player_names:
-                print("name error, skipping player: ", name)
+                print("player not in allowed list, skipping player: ", name)
                 continue
 
             # Simplified: Hardcode 3 games, assume ACTIVE

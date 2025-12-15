@@ -56,15 +56,15 @@
     }
 
     /* Summary columns - visual separation */
-    #rankingsTable th:nth-child(5),
-    /* Darko Z */
     #rankingsTable th:nth-child(6),
-    /* Real Z */
+    /* Darko Z */
     #rankingsTable th:nth-child(7),
+    /* Real Z */
+    #rankingsTable th:nth-child(8),
     /* Diff */
-    #rankingsTable td:nth-child(5),
     #rankingsTable td:nth-child(6),
-    #rankingsTable td:nth-child(7) {
+    #rankingsTable td:nth-child(7),
+    #rankingsTable td:nth-child(8) {
         width: 75px;
         min-width: 75px;
         border-left: 1px solid rgba(255, 255, 255, 0.1);
@@ -72,17 +72,17 @@
     }
 
     /* Stat columns - consistent width */
-    #rankingsTable th:nth-child(n+8):nth-child(-n+16),
-    #rankingsTable td:nth-child(n+8):nth-child(-n+16) {
+    #rankingsTable th:nth-child(n+9):nth-child(-n+17),
+    #rankingsTable td:nth-child(n+9):nth-child(-n+17) {
         width: 65px;
         min-width: 65px;
         text-align: center;
     }
 
     /* Total column - strong visual separation */
-    #rankingsTable th:nth-child(17),
+    #rankingsTable th:nth-child(18),
     /* Total */
-    #rankingsTable td:nth-child(17) {
+    #rankingsTable td:nth-child(18) {
         width: 75px;
         min-width: 75px;
         border-left: 2px solid rgba(255, 255, 255, 0.2);
@@ -111,6 +111,23 @@
         min-width: 60px;
         text-align: center;
         color: #ddd;
+    }
+
+    /* Status Column */
+    #rankingsTable th:nth-child(5),
+    #rankingsTable td:nth-child(5) {
+        width: 60px;
+        min-width: 60px;
+        text-align: center;
+    }
+
+    .fa-tag {
+        background: #2f855a;
+        color: #fff;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: bold;
     }
 
     /* Make the table container fill the card */
@@ -213,13 +230,14 @@
                             <th class="sortable" onclick="sortTable(1, 'string')">Player</th>
                             <th class="sortable" onclick="sortTable(2, 'string')">Team</th>
                             <th class="sortable" title="Minutes Per Game" onclick="sortTable(3, 'number')">MPG</th>
+                            <th class="sortable" title="Status" onclick="sortTable(4, 'string')">Status</th>
 
                             <!-- Summary Columns -->
-                            <th class="sortable" title="Total DARKO Z-Score" onclick="sortTable(4, 'number')">Darko Z
+                            <th class="sortable" title="Total DARKO Z-Score" onclick="sortTable(5, 'number')">Darko Z
                             </th>
-                            <th class="sortable" title="Total 2025-26 Season Z-Score" onclick="sortTable(5, 'number')">
+                            <th class="sortable" title="Total 2025-26 Season Z-Score" onclick="sortTable(6, 'number')">
                                 Real Z</th>
-                            <th class="sortable" title="Darko - Real" onclick="sortTable(6, 'number')">Diff</th>
+                            <th class="sortable" title="Darko - Real" onclick="sortTable(7, 'number')">Diff</th>
 
                             <!-- Individual Z Scores (Same order as compare page: FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS) -->
                             <th class="sortable dynamic-header" onclick="sortTable(7, 'number')">FG%</th>
@@ -245,6 +263,13 @@
                             </td>
                             <td>{{ p.team }}</td>
                             <td>{{ "%.1f"|format(p.mpg|float) }}</td>
+
+                            <!-- FA Status -->
+                            <td data-val="{{ 'FA' if p.is_fa else '' }}">
+                                {% if p.is_fa %}
+                                <span class="fa-tag">FA</span>
+                                {% endif %}
+                            </td>
 
                             <!-- Totals -->
                             <td class="ranking-meta">
