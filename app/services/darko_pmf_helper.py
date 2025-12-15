@@ -41,87 +41,167 @@ def _get_darko_lookup() -> Dict[str, Dict[str, Any]]:
 
 def _shift_pmf_1d(pmf: PMF1D, shift_amount: float) -> PMF1D:
     """
-    Shift a 1D PMF by an integer amount while preserving probability mass
-    and keeping the same length.
+    Shift a 1D PMF by a float amount.
+    distributes mass to neighboring integers to preserve the mean shift exacty.
+    
+    If shift is 1.5:
+      k=1, eps=0.5
+      p[i] goes to:
+        i+1 with mass 0.5
+        i+2 with mass 0.5
     """
-    if abs(shift_amount) < 0.01:
+    if abs(shift_amount) < 1e-9:
         return pmf.copy()
 
-    shift_int = int(round(shift_amount))
-    if shift_int == 0:
-        return pmf.copy()
-
-    old = pmf.p
-    n = len(old)
-
-    if shift_int > 0:
-        # shift right: pad left
-        new = np.concatenate([np.zeros(shift_int), old])
-        new = new[:n]   # trim back to original length
-    else:
-        # shift left: pad right
-        k = abs(shift_int)
-        new = np.concatenate([old[k:], np.zeros(k)])
-        new = new[:n]   # ensure same length
-
-    # No need to renormalize — pure axis shift preserves sum exactly
-    return PMF1D(new)
+    old_p = pmf.p
+    n = len(old_p)
+    
+    # Decompose shift
+    # shift = k + epsilon
+    # where k is integer, 0 <= epsilon < 1
+    # Example: shift = 1.5 -> k=1, eps=0.5
+    # Example: shift = -1.5 -> k=-2, eps=0.5  (-2 + 0.5 = -1.5)
+    
+    k = int(np.floor(shift_amount))
+    epsilon = shift_amount - k
+    
+    # We will accumulate into a new array. 
+    # The max index could shift right by (n + k + 1). Use a safe buffer then trim?
+    # Or just iterate. Vectorized is better.
+    
+    # new_p initialized to zeroes
+    # We need a size that covers the shift. 
+    # But PMF1D usually expects to start at 0.
+    # If we shift left, we might clip at 0. Logic needs to handle clipping or just wrap?
+    # Usually stats are non-negative. If we shift left past 0, generally we stack at 0.
+    
+    # Let's create a target array of same size N? 
+    # Or should we expand? If a player improves, they might exceed their old max score.
+    # Usually PMFs auto-expand in convolution, but here we are mutating the base.
+    # Let's expand if shifting right.
+    
+    new_len = n + abs(k) + 2 # generous buffer
+    new_p = np.zeros(new_len, dtype=float)
+    
+    indices = np.arange(n)
+    
+    # Target indices
+    idx_k = indices + k
+    idx_k_plus_1 = indices + k + 1
+    
+    # Mass parts
+    mass_k = old_p * (1.0 - epsilon)
+    mass_k_plus_1 = old_p * epsilon
+    
+    # Add to new_p
+    # mask for valid > 0 (assuming we don't handle negative stats)
+    
+    # We use np.add.at because multiple old indices might map to same new index 
+    # (though with constant shift they map 1-to-1, but clipping might overlap)
+    
+    # Handle idx_k
+    valid_mask = (idx_k >= 0) & (idx_k < new_len)
+    np.add.at(new_p, idx_k[valid_mask], mass_k[valid_mask])
+    
+    # Clip logic: if idx < 0, dump into 0?
+    # For fantasy stats, negative stats (except maybe +/-) are impossible.
+    # If we shift a bad game even lower, it stays 0.
+    clip_mask = (idx_k < 0)
+    if clip_mask.any():
+        new_p[0] += mass_k[clip_mask].sum()
+        
+    # Handle idx_k_plus_1
+    valid_mask_2 = (idx_k_plus_1 >= 0) & (idx_k_plus_1 < new_len)
+    np.add.at(new_p, idx_k_plus_1[valid_mask_2], mass_k_plus_1[valid_mask_2])
+    
+    clip_mask_2 = (idx_k_plus_1 < 0)
+    if clip_mask_2.any():
+        new_p[0] += mass_k_plus_1[clip_mask_2].sum()
+        
+    # Trim trailing zeros
+    # normalize just in case
+    s = new_p.sum()
+    if s > 0:
+        new_p /= s
+        
+    return PMF1D(new_p)
 
 
 def _scale_pmf_2d(pmf2d: PMF2D, makes_scale: float, attempts_scale: float) -> PMF2D:
     """
-    Scale a 2D PMF's axes by given factors.
-    
-    For percentage stats (FG%, FT%), we scale both the makes and attempts axes
-    to match DARKO projections while preserving the correlation structure.
-    
-    Args:
-        pmf2d: Original 2D PMF over (makes, attempts)
-        makes_scale: Factor to scale makes axis (darko_makes / pmf_mean_makes)
-        attempts_scale: Factor to scale attempts axis
-    
-    Returns:
-        New PMF2D with scaled axes
+    Scale a 2D PMF's axes by given factors using bilinear mass distribution.
+    This prevents aliasing and gaps by distributing probability from (m,a) 
+    to the 4 integer neighbors of the target (m*scale, a*scale).
     """
-    # If scales are very close to 1.0, no adjustment needed
+    # If scales are close to 1.0, return copy or skip
     if abs(makes_scale - 1.0) < 0.05 and abs(attempts_scale - 1.0) < 0.05:
         return pmf2d.copy()
     
-    # Clamp scales to reasonable range to avoid extreme distortions
+    # Clamp scales
     makes_scale = np.clip(makes_scale, 0.5, 2.0)
     attempts_scale = np.clip(attempts_scale, 0.5, 2.0)
     
-    # Get the original grid
     old_grid = pmf2d.p
     old_m_size, old_a_size = old_grid.shape
     
-    # Calculate new grid size
-    new_m_size = int(np.ceil(old_m_size * makes_scale))
-    new_a_size = int(np.ceil(old_a_size * attempts_scale))
+    # Determine new size
+    # Usually max index scales by approx factor.
+    new_m_size = int(np.ceil((old_m_size - 1) * makes_scale)) + 2
+    new_a_size = int(np.ceil((old_a_size - 1) * attempts_scale)) + 2
     
-    # Create new grid
     new_grid = np.zeros((new_m_size, new_a_size), dtype=float)
     
-    # Map old probabilities to new grid positions
-    for old_m in range(old_m_size):
-        for old_a in range(old_a_size):
-            prob = old_grid[old_m, old_a]
-            if prob < 1e-10:
-                continue
-            
-            # Scale indices
-            new_m = int(round(old_m * makes_scale))
-            new_a = int(round(old_a * attempts_scale))
-            
-            # Ensure within bounds
-            if 0 <= new_m < new_m_size and 0 <= new_a < new_a_size:
-                new_grid[new_m, new_a] += prob
+    # Get indices of non-zero probabilities
+    m_indices, a_indices = np.nonzero(old_grid)
+    if len(m_indices) == 0:
+        return PMF2D(np.zeros((1,1)))
+        
+    probs = old_grid[m_indices, a_indices]
+    
+    # Calculate target coordinates
+    target_m = m_indices * makes_scale
+    target_a = a_indices * attempts_scale
+    
+    # Integer floors and fractional parts
+    m_floor = np.floor(target_m).astype(int)
+    a_floor = np.floor(target_a).astype(int)
+    
+    delta_m = target_m - m_floor
+    delta_a = target_a - a_floor
+    
+    # 4 neighbors
+    # (m, a)     weight: (1-dm)*(1-da)
+    # (m+1, a)   weight: dm * (1-da)
+    # (m, a+1)   weight: (1-dm) * da
+    # (m+1, a+1) weight: dm * da
+    
+    w00 = (1.0 - delta_m) * (1.0 - delta_a)
+    w10 = delta_m * (1.0 - delta_a)
+    w01 = (1.0 - delta_m) * delta_a
+    w11 = delta_m * delta_a
+    
+    # Add to grid
+    # We must clip indices just in case, but sizing above should suffice.
+    # Actually, let's clamp to new_m_size-1
+    
+    def safe_add(m_idx, a_idx, mass):
+        # Clip to valid bounds
+        np.clip(m_idx, 0, new_m_size - 1, out=m_idx)
+        np.clip(a_idx, 0, new_a_size - 1, out=a_idx)
+        # Use simple flattening or just iterate? 
+        # add.at works with tuple indices for 2D
+        np.add.at(new_grid, (m_idx, a_idx), mass)
+
+    safe_add(m_floor,     a_floor,     probs * w00)
+    safe_add(m_floor + 1, a_floor,     probs * w10)
+    safe_add(m_floor,     a_floor + 1, probs * w01)
+    safe_add(m_floor + 1, a_floor + 1, probs * w11)
     
     # Normalize
     total = new_grid.sum()
     if total > 0:
-        new_grid = new_grid / total
-    
+        new_grid /= total
+        
     return PMF2D(new_grid)
 
 

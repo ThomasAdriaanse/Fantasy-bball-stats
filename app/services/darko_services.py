@@ -9,11 +9,14 @@ from typing import List, Dict, Optional, Any
 from app.services.z_score_calculations import raw_to_zscore
 from app.services.s3_service import _safe_filename
 
+from functools import lru_cache
+
 # Configuration from env vars (consistent with docker-compose/sync)
 DARKO_CACHE_DIR = os.getenv("DARKO_CACHE_DIR", "/app/data/player_darko")
 TEAM_PACE_CACHE_DIR = os.getenv("TEAM_PACE_CACHE_DIR", "/app/data/team_pace")
 SEASON_AVGS_CACHE_DIR = os.getenv("SEASON_AVGS_CACHE_DIR", "/app/data/season_avgs")
 
+@lru_cache(maxsize=1)
 def _load_team_pace() -> Dict[str, float]:
     """
     Loads team pace data from JSON.
@@ -41,6 +44,7 @@ def _load_team_pace() -> Dict[str, float]:
         print(f"[DARKO] Error loading team pace: {e}")
         return {}
 
+@lru_cache(maxsize=1)
 def _load_season_averages() -> Dict[str, Dict[str, float]]:
     """
     Loads pre-calculated season averages (MPG etc.) from JSON.
@@ -59,6 +63,7 @@ def _load_season_averages() -> Dict[str, Dict[str, float]]:
         print(f"[DARKO] Error loading season averages: {e}")
         return {}
 
+@lru_cache(maxsize=1)
 def get_raw_darko_stats() -> List[Dict[str, Any]]:
     """
     Returns a list of players with their raw computed per-game DARKO stats.
