@@ -170,7 +170,7 @@ def build_odds_rows(
 
     if week_data["selected_week"]>week_data["current_week"]:
         team1_current_stats = {cat: 0 for cat in categories}
-        team2_current_stats = {cat: 0 for cat in categories}
+        team2_current_stats = {cat: 0 for cat in categories} 
     #else:
     #    team1_current_stats = team1_current_stats or {}
     #    team2_current_stats = team2_current_stats or {}

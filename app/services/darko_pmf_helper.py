@@ -32,58 +32,40 @@ def _get_darko_lookup() -> Dict[str, Dict[str, Any]]:
         if name:
             lookup[name] = p
     
-    print(f"[DARKO-PMF] Loaded {len(lookup)} players from DARKO")
-    print(f"[DARKO-PMF] Sample names: {list(lookup.keys())[:10]}")
-    print(f"[DARKO-PMF] Names with 'wash': {[n for n in lookup.keys() if 'wash' in n.lower()]}")
+    #print(f"[DARKO-PMF] Loaded {len(lookup)} players from DARKO")
+    #print(f"[DARKO-PMF] Sample names: {list(lookup.keys())[:10]}")
+    #print(f"[DARKO-PMF] Names with 'wash': {[n for n in lookup.keys() if 'wash' in n.lower()]}")
     
     return lookup
 
 
 def _shift_pmf_1d(pmf: PMF1D, shift_amount: float) -> PMF1D:
     """
-    Shift a 1D PMF by a constant amount.
-    
-    This effectively moves the distribution left or right on the number line.
-    For example, if a player's PMF has mean 20 PTS but DARKO projects 22 PTS,
-    we shift by +2.
-    
-    Args:
-        pmf: Original PMF
-        shift_amount: Amount to shift (can be negative)
-    
-    Returns:
-        New PMF with shifted distribution
+    Shift a 1D PMF by an integer amount while preserving probability mass
+    and keeping the same length.
     """
-    if abs(shift_amount) < 0.01:  # No meaningful shift
+    if abs(shift_amount) < 0.01:
         return pmf.copy()
-    
-    # Round shift to nearest integer for discrete PMF
+
     shift_int = int(round(shift_amount))
-    
     if shift_int == 0:
         return pmf.copy()
-    
-    # Create new probability array
-    old_probs = pmf.p
-    old_len = len(old_probs)
-    
+
+    old = pmf.p
+    n = len(old)
+
     if shift_int > 0:
-        # Shift right: add zeros at the beginning
-        new_probs = np.concatenate([np.zeros(shift_int), old_probs])
+        # shift right: pad left
+        new = np.concatenate([np.zeros(shift_int), old])
+        new = new[:n]   # trim back to original length
     else:
-        # Shift left: remove from beginning or add to end
-        abs_shift = abs(shift_int)
-        if abs_shift >= old_len:
-            # Shift is larger than distribution, return delta at 0
-            return PMF1D(np.array([1.0]))
-        new_probs = old_probs[abs_shift:]
-    
-    # Normalize to ensure sum = 1.0
-    total = new_probs.sum()
-    if total > 0:
-        new_probs = new_probs / total
-    
-    return PMF1D(new_probs)
+        # shift left: pad right
+        k = abs(shift_int)
+        new = np.concatenate([old[k:], np.zeros(k)])
+        new = new[:n]   # ensure same length
+
+    # No need to renormalize — pure axis shift preserves sum exactly
+    return PMF1D(new)
 
 
 def _scale_pmf_2d(pmf2d: PMF2D, makes_scale: float, attempts_scale: float) -> PMF2D:
@@ -205,8 +187,9 @@ def build_team_pmf_counting_with_darko(
             continue
         if injury_status in skip_injury_status and not include_injured_players:
             continue
-        
-        print(f"[DARKO-PMF-1D] Processing {player_name} for {stat_col}, games={games_remaining}")
+
+        if stat_col == "STL":
+            print(f"[DARKO-PMF-1D] Processing {player_name} for {stat_col}, games={games_remaining}")
         
         # Load base PMF
         pmf_payload = load_player_pmfs(player_name)
@@ -238,7 +221,8 @@ def build_team_pmf_counting_with_darko(
                 continue
             base_pmf = PMF1D(probs)
         
-        print(f"[DARKO-PMF-1D] Base PMF mean for {player_name} {stat_col}: {base_pmf.mean():.2f}")
+        if stat_col == "STL" and player_name == "Cason Wallace":
+            print(f"[DARKO-PMF-1D] Base PMF mean for {player_name} {stat_col}: {base_pmf.mean():.2f}")
         
         # Get DARKO adjustment
         darko_data = darko_lookup.get(player_name)
@@ -250,12 +234,13 @@ def build_team_pmf_counting_with_darko(
                 # Calculate shift amount
                 pmf_mean = base_pmf.mean()
                 shift_amount = float(darko_value) - pmf_mean
-                
-                print(f"[DARKO-PMF-1D] {player_name} {stat_col}: DARKO={darko_value:.2f}, PMF={pmf_mean:.2f}, Shift={shift_amount:.2f}")
+                if stat_col == "STL" and player_name == "Cason Wallace":
+                    print(f"[DARKO-PMF-1D] {player_name} {stat_col}: DARKO={darko_value:.2f}, PMF={pmf_mean:.2f}, Shift={shift_amount:.2f}")
                 
                 # Apply shift
                 adjusted_pmf = _shift_pmf_1d(base_pmf, shift_amount)
-                print(f"[DARKO-PMF-1D] Adjusted PMF mean: {adjusted_pmf.mean():.2f}")
+                if stat_col == "STL" and player_name == "Cason Wallace":
+                    print(f"[DARKO-PMF-1D] Adjusted PMF mean: {adjusted_pmf.mean():.2f}")
             else:
                 print(f"[DARKO-PMF-1D] No DARKO value for {player_name} stat {darko_key}")
                 adjusted_pmf = base_pmf

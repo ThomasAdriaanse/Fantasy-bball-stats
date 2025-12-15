@@ -103,9 +103,10 @@ def get_raw_darko_stats() -> List[Dict[str, Any]]:
                 
                 # Lookup MPG
                 # print log if missing
-                if player_name not in avgs_map:
-                    print(f"[DARKO] Missing player MPG for {player_name}")
                 slug = _safe_filename(player_name)
+                # print log if missing
+                if slug not in avgs_map:
+                    print(f"[DARKO] Missing player MPG for {player_name}")
                 player_avg = avgs_map.get(slug, {})
                 mpg = player_avg.get("MIN", 0.0)
 
