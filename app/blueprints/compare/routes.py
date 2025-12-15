@@ -207,14 +207,15 @@ def compare_page():
             'FT%': {'t1': ft_t_exp, 't2': ft_o_exp},
         }
 
-        snapshot_rows = build_snapshot_rows(cur1, cur2)
+        snapshot_rows = build_snapshot_rows(cur1, cur2, week_data)
         odds_rows = build_odds_rows(
             win1.to_dict('records'),
             combined_dicts,
             team1_current_stats=cur1,
             team2_current_stats=cur2,
             data_team_players_1=t1.to_dict('records'),
-            data_team_players_2=t2.to_dict('records')
+            data_team_players_2=t2.to_dict('records'),
+            week_data=week_data
         )
 
         # ---------- per-player z-scores ONLY (no % of win) ----------

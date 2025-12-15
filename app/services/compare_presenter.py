@@ -49,7 +49,8 @@ CURRENT_SEASON = "2025-26"
 
 def build_snapshot_rows(
     team1_current_stats: Optional[Dict[str, Any]],
-    team2_current_stats: Optional[Dict[str, Any]]
+    team2_current_stats: Optional[Dict[str, Any]],
+    week_data: Optional[Dict[str, Any]]
 ) -> List[Dict[str, Any]]:
     categories = ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%', 'TO']
 
@@ -66,8 +67,13 @@ def build_snapshot_rows(
     }
 
     rows = []
-    t1 = team1_current_stats or {}
-    t2 = team2_current_stats or {}
+    #create a cat dict filled with 0s if past the current week
+    if week_data["selected_week"]>week_data["current_week"]:
+        t1 = {cat: 0 for cat in categories}
+        t2 = {  cat: 0 for cat in categories}
+    else:
+        t1 = team1_current_stats or {}
+        t2 = team2_current_stats or {}
 
     for cat in categories:
         stat1 = t1.get(cat, {})
@@ -151,6 +157,7 @@ def build_odds_rows(
     team2_current_stats: Optional[Dict[str, Any]] = None,
     data_team_players_1: Optional[List[Dict[str, Any]]] = None,
     data_team_players_2: Optional[List[Dict[str, Any]]] = None,
+    week_data: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Build odds rows showing win probabilities for each category using exact convolution.
@@ -160,6 +167,13 @@ def build_odds_rows(
       - compressed PMF data for the frontend graphs
     """
     categories = ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%', 'TO']
+
+    if week_data["selected_week"]>week_data["current_week"]:
+        team1_current_stats = {cat: 0 for cat in categories}
+        team2_current_stats = {cat: 0 for cat in categories}
+    #else:
+    #    team1_current_stats = team1_current_stats or {}
+    #    team2_current_stats = team2_current_stats or {}
 
     # Always print at least once so we know this function is being hit
     print(f"[build_odds_rows] called (debug={DEBUG_COMPARE_PRESENTER})")
