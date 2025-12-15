@@ -57,6 +57,11 @@ def index():
             p["diff_z"] = 0.0
             p["Z_DIFF"] = {k: 0.0 for k in z_scores_d.keys()}
 
+        # 4. MPG
+        # RAW_DARKO has 'mpg' (from darko_services)
+        raw_d = p.get("RAW_DARKO", {})
+        p["mpg"] = raw_d.get("mpg", 0.0)
+
         ranked_players.append(p)
 
     # Filter to top 250 by Real Z-score (for players with real data)

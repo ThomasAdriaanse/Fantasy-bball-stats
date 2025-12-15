@@ -171,6 +171,8 @@ def get_raw_darko_stats() -> List[Dict[str, Any]]:
                     "FGA": fga_100 * conversion_factor,
                     "FTM": ftm_100 * conversion_factor,
                     "FTA": fta_100 * conversion_factor,
+                    "FG%": (fgm_100 / fga_100) if fga_100 > 0 else 0.0,
+                    "FT%": (ftm_100 / fta_100) if fta_100 > 0 else 0.0,
                 }
                 
                 # Add Metadata
@@ -209,6 +211,18 @@ def get_darko_z_scores() -> List[Dict[str, Any]]:
         player_name = darko_player.get("player_name")
         slug = _safe_filename(player_name)
         real_stats = season_avgs.get(slug, {})
+        
+        # Ensure real_stats has percentage keys if missing
+        if real_stats:
+            if "FG%" not in real_stats:
+                fgm = float(real_stats.get("FGM", 0))
+                fga = float(real_stats.get("FGA", 0))
+                real_stats["FG%"] = (fgm / fga) if fga > 0 else 0.0
+            
+            if "FT%" not in real_stats:
+                ftm = float(real_stats.get("FTM", 0))
+                fta = float(real_stats.get("FTA", 0))
+                real_stats["FT%"] = (ftm / fta) if fta > 0 else 0.0
         
         # raw_to_zscore needs: PTS, FG3M, REB, AST, STL, BLK, TOV, FGM, FGA, FTM, FTA 
         

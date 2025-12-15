@@ -56,15 +56,15 @@
     }
 
     /* Summary columns - visual separation */
-    #rankingsTable th:nth-child(4),
-    /* Darko Z */
     #rankingsTable th:nth-child(5),
-    /* Real Z */
+    /* Darko Z */
     #rankingsTable th:nth-child(6),
+    /* Real Z */
+    #rankingsTable th:nth-child(7),
     /* Diff */
-    #rankingsTable td:nth-child(4),
     #rankingsTable td:nth-child(5),
-    #rankingsTable td:nth-child(6) {
+    #rankingsTable td:nth-child(6),
+    #rankingsTable td:nth-child(7) {
         width: 75px;
         min-width: 75px;
         border-left: 1px solid rgba(255, 255, 255, 0.1);
@@ -72,17 +72,17 @@
     }
 
     /* Stat columns - consistent width */
-    #rankingsTable th:nth-child(n+7):nth-child(-n+15),
-    #rankingsTable td:nth-child(n+7):nth-child(-n+15) {
+    #rankingsTable th:nth-child(n+8):nth-child(-n+16),
+    #rankingsTable td:nth-child(n+8):nth-child(-n+16) {
         width: 65px;
         min-width: 65px;
         text-align: center;
     }
 
     /* Total column - strong visual separation */
-    #rankingsTable th:nth-child(16),
+    #rankingsTable th:nth-child(17),
     /* Total */
-    #rankingsTable td:nth-child(16) {
+    #rankingsTable td:nth-child(17) {
         width: 75px;
         min-width: 75px;
         border-left: 2px solid rgba(255, 255, 255, 0.2);
@@ -102,6 +102,15 @@
     .ranking-meta {
         text-align: center;
         font-weight: 600;
+    }
+
+    /* MPG Column */
+    #rankingsTable th:nth-child(4),
+    #rankingsTable td:nth-child(4) {
+        width: 60px;
+        min-width: 60px;
+        text-align: center;
+        color: #ddd;
     }
 
     /* Make the table container fill the card */
@@ -191,6 +200,8 @@
             <button class="btn-toggle-view active" onclick="switchView('darko', this)">Darko (Projections)</button>
             <button class="btn-toggle-view" onclick="switchView('real', this)">Real (2025-26)</button>
             <button class="btn-toggle-view" onclick="switchView('diff', this)">Diff (Darko - Real)</button>
+            <button class="btn-toggle-view" onclick="switchView('raw-darko', this)">Raw Darko</button>
+            <button class="btn-toggle-view" onclick="switchView('raw-real', this)">Raw Real</button>
         </div>
 
         <div class="table-container">
@@ -201,25 +212,26 @@
                             <th class="sortable" onclick="sortTable(0, 'number')">Rank</th>
                             <th class="sortable" onclick="sortTable(1, 'string')">Player</th>
                             <th class="sortable" onclick="sortTable(2, 'string')">Team</th>
+                            <th class="sortable" title="Minutes Per Game" onclick="sortTable(3, 'number')">MPG</th>
 
                             <!-- Summary Columns -->
-                            <th class="sortable" title="Total DARKO Z-Score" onclick="sortTable(3, 'number')">Darko Z
+                            <th class="sortable" title="Total DARKO Z-Score" onclick="sortTable(4, 'number')">Darko Z
                             </th>
-                            <th class="sortable" title="Total 2025-26 Season Z-Score" onclick="sortTable(4, 'number')">
+                            <th class="sortable" title="Total 2025-26 Season Z-Score" onclick="sortTable(5, 'number')">
                                 Real Z</th>
-                            <th class="sortable" title="Darko - Real" onclick="sortTable(5, 'number')">Diff</th>
+                            <th class="sortable" title="Darko - Real" onclick="sortTable(6, 'number')">Diff</th>
 
                             <!-- Individual Z Scores (Same order as compare page: FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS) -->
-                            <th class="sortable dynamic-header" onclick="sortTable(6, 'number')">FG%</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(7, 'number')">FT%</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(8, 'number')">3PM</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(9, 'number')">REB</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(10, 'number')">AST</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(11, 'number')">STL</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(12, 'number')">BLK</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(13, 'number')">TO</th>
-                            <th class="sortable dynamic-header" onclick="sortTable(14, 'number')">PTS</th>
-                            <th class="sortable" onclick="sortTable(15, 'number')">Total</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(7, 'number')">FG%</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(8, 'number')">FT%</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(9, 'number')">3PM</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(10, 'number')">REB</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(11, 'number')">AST</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(12, 'number')">STL</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(13, 'number')">BLK</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(14, 'number')">TO</th>
+                            <th class="sortable dynamic-header" onclick="sortTable(15, 'number')">PTS</th>
+                            <th class="sortable" onclick="sortTable(16, 'number')">Total</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -232,6 +244,7 @@
                                 </a>
                             </td>
                             <td>{{ p.team }}</td>
+                            <td>{{ "%.1f"|format(p.mpg|float) }}</td>
 
                             <!-- Totals -->
                             <td class="ranking-meta">
@@ -259,20 +272,40 @@
                             {% set zr = p.Z_REAL %}
                             {% set zdiff = p.Z_DIFF %}
 
+                            <!-- Raw Data -->
+                            {% set rawd = p.RAW_DARKO %}
+                            {% set rawr = p.RAW_REAL or {} %}
+
                             <!-- Order: FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS -->
+                            <!-- Mapping for RAW keys: 
+                                 Z_FG -> FG%
+                                 Z_FT -> FT%
+                                 Z_FG3M -> FG3M
+                                 Z_REB -> REB
+                                 Z_AST -> AST
+                                 Z_STL -> STL
+                                 Z_BLK -> BLK
+                                 Z_TOV -> TOV
+                                 Z_PTS -> PTS
+                            -->
                             {% set cats = [
-                            ('FG', 'Z_FG'), ('FT', 'Z_FT'), ('FG3M', 'Z_FG3M'),
-                            ('REB', 'Z_REB'), ('AST', 'Z_AST'), ('STL', 'Z_STL'),
-                            ('BLK', 'Z_BLK'), ('TOV', 'Z_TOV'), ('PTS', 'Z_PTS')
+                            ('FG', 'Z_FG', 'FG%'), ('FT', 'Z_FT', 'FT%'), ('FG3M', 'Z_FG3M', 'FG3M'),
+                            ('REB', 'Z_REB', 'REB'), ('AST', 'Z_AST', 'AST'), ('STL', 'Z_STL', 'STL'),
+                            ('BLK', 'Z_BLK', 'BLK'), ('TOV', 'Z_TOV', 'TOV'), ('PTS', 'Z_PTS', 'PTS')
                             ] %}
 
-                            {% for _, key in cats %}
-                            {% set val_d = zd.get(key, 0.0)|float %}
-                            {% set val_r = zr.get(key, 0.0)|float %}
-                            {% set val_diff = zdiff.get(key, 0.0)|float %}
+                            {% for short_name, z_key, raw_key in cats %}
+                            {% set val_d = zd.get(z_key, 0.0)|float %}
+                            {% set val_r = zr.get(z_key, 0.0)|float %}
+                            {% set val_diff = zdiff.get(z_key, 0.0)|float %}
+
+                            {% set raw_val_d = rawd.get(raw_key, 0.0)|float %}
+                            {% set raw_val_r = rawr.get(raw_key, 0.0)|float %}
 
                             <td class="dynamic-cell stat-cell" data-darko="{{ val_d }}" data-real="{{ val_r }}"
-                                data-diff="{{ val_diff }}" data-val="{{ val_d }}">
+                                data-diff="{{ val_diff }}" data-raw-darko="{{ raw_val_d }}"
+                                data-raw-real="{{ raw_val_r }}" data-val="{{ val_d }}" data-cat="{{ short_name }}">
+                                <!-- Add cat for special formatting if needed -->
                                 {{ "%.2f"|format(val_d) }}
                             </td>
                             {% endfor %}
@@ -322,13 +355,17 @@
         if (mode === 'darko') subtitle.textContent = "(Projections)";
         if (mode === 'real') subtitle.textContent = "(2025-26 Season)";
         if (mode === 'diff') subtitle.textContent = "(Difference: Darko - Real)";
+        if (mode === 'raw-darko') subtitle.textContent = "(Raw Projectons Per Game)";
+        if (mode === 'raw-real') subtitle.textContent = "(Raw Season Averages)";
 
         // Update Table Cells
         const cells = document.querySelectorAll('.dynamic-cell');
         cells.forEach(cell => {
-            // Get value based on mode
             let val = 0.0;
-            let zForColor = 0.0; // Z-score to use for coloring
+            let zForColor = 0.0;
+            let isRaw = false;
+
+            const cat = cell.getAttribute('data-cat');
 
             if (mode === 'darko') {
                 val = parseFloat(cell.getAttribute('data-darko'));
@@ -338,8 +375,17 @@
                 zForColor = val;
             } else if (mode === 'diff') {
                 val = parseFloat(cell.getAttribute('data-diff'));
-                // For diff mode, color based on the diff value itself
                 zForColor = val;
+            } else if (mode === 'raw-darko') {
+                val = parseFloat(cell.getAttribute('data-raw-darko'));
+                // Use DARKO Z-score for coloring
+                zForColor = parseFloat(cell.getAttribute('data-darko'));
+                isRaw = true;
+            } else if (mode === 'raw-real') {
+                val = parseFloat(cell.getAttribute('data-raw-real'));
+                // Use REAL Z-score for coloring
+                zForColor = parseFloat(cell.getAttribute('data-real'));
+                isRaw = true;
             }
 
             // Validate
@@ -349,10 +395,17 @@
             if (mode === 'diff') {
                 cell.innerText = (val > 0 ? "+" : "") + val.toFixed(2);
             } else {
-                cell.innerText = val.toFixed(2);
+                // Formatting for raw stats
+                if (isRaw && (cat === 'FG' || cat === 'FT')) {
+                    cell.innerText = val.toFixed(3);
+                } else if (isRaw) {
+                    cell.innerText = val.toFixed(1);
+                } else {
+                    cell.innerText = val.toFixed(2);
+                }
             }
 
-            // Apply background color based on z-score (matching compare page)
+            // Apply background color
             cell.style.backgroundColor = colorFromZ(zForColor);
 
             // Update data-val for sorting
@@ -369,14 +422,21 @@
             const totalCell = row.querySelector('.stat-total');
             const statCells = row.querySelectorAll('.dynamic-cell');
 
-            let sum = 0;
-            statCells.forEach(cell => {
-                const val = parseFloat(cell.getAttribute('data-val'));
-                if (!isNaN(val)) sum += val;
-            });
-
-            totalCell.textContent = sum.toFixed(2);
-            totalCell.setAttribute('data-val', sum);
+            if (mode.startsWith('raw-')) {
+                // For raw modes, maybe just show N/A or empty as summing raw stats is weird (FG% + PTS)
+                // But user might want sum of counting stats?
+                // Let's just blank it out to avoid confusion
+                totalCell.textContent = "-";
+                totalCell.setAttribute('data-val', -9999);
+            } else {
+                let sum = 0;
+                statCells.forEach(cell => {
+                    const val = parseFloat(cell.getAttribute('data-val'));
+                    if (!isNaN(val)) sum += val;
+                });
+                totalCell.textContent = sum.toFixed(2);
+                totalCell.setAttribute('data-val', sum);
+            }
         });
     }
 
