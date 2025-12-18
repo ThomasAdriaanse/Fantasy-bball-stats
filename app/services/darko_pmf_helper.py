@@ -268,23 +268,23 @@ def build_team_pmf_counting_with_darko(
         if injury_status in skip_injury_status and not include_injured_players:
             continue
 
-        if stat_col == "STL":
-            print(f"[DARKO-PMF-1D] Processing {player_name} for {stat_col}, games={games_remaining}")
+        #if stat_col == "STL":
+            #print(f"[DARKO-PMF-1D] Processing {player_name} for {stat_col}, games={games_remaining}")
         
         # Load base PMF
         pmf_payload = load_player_pmfs(player_name)
         if not pmf_payload or not isinstance(pmf_payload, dict):
-            print(f"[DARKO-PMF-1D] No PMF payload for {player_name}")
+            #print(f"[DARKO-PMF-1D] No PMF payload for {player_name}")
             continue
         
         pmf_1d_block = pmf_payload.get("1d")
         if not isinstance(pmf_1d_block, dict):
-            print(f"[DARKO-PMF-1D] No 1D block for {player_name}")
+            #print(f"[DARKO-PMF-1D] No 1D block for {player_name}")
             continue
         
         stat_entry = pmf_1d_block.get(stat_col)
         if stat_entry is None:
-            print(f"[DARKO-PMF-1D] No {stat_col} entry for {player_name}")
+            #print(f"[DARKO-PMF-1D] No {stat_col} entry for {player_name}")
             continue
         
         # Convert to PMF1D
@@ -301,8 +301,8 @@ def build_team_pmf_counting_with_darko(
                 continue
             base_pmf = PMF1D(probs)
         
-        if stat_col == "STL" and player_name == "Cason Wallace":
-            print(f"[DARKO-PMF-1D] Base PMF mean for {player_name} {stat_col}: {base_pmf.mean():.2f}")
+        #if stat_col == "STL" and player_name == "Cason Wallace":
+            #print(f"[DARKO-PMF-1D] Base PMF mean for {player_name} {stat_col}: {base_pmf.mean():.2f}")
         
         # Get DARKO adjustment
         darko_data = darko_lookup.get(player_name)

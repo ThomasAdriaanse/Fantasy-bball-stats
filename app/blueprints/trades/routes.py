@@ -1,6 +1,7 @@
 # app/blueprints/trades/routes.py
 from __future__ import annotations
 from typing import Dict, Any, List
+import time
 from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
 import numpy as np
 import pandas as pd
@@ -17,7 +18,7 @@ from app.services.player_name_mapper import get_canonical_name
 bp = Blueprint("trades", __name__)
 
 CATEGORIES: List[str] = ["FG%", "FT%", "3PM", "REB", "AST", "STL", "BLK", "TO", "PTS"]
-WINDOW_CHOICES: List[str] = ["projected", "total", "last_30", "last_15", "last_7"]
+WINDOW_CHOICES: List[str] = ["total"]
 
 # ----------------------- color helper -----------------------
 def _z_to_hsl_bg(z: float, zmin: float = -1.6, zmax: float = 1.7) -> str:
@@ -54,126 +55,21 @@ def _get_league_from_session():
         return None, None, None
 
 # --------------------------- data builders ---------------------------
-def _collect_league_players(league, year: int, stat_window: str, use_darko_z: bool = False) -> pd.DataFrame:
+def _collect_league_players(use_darko_z: bool = False) -> pd.DataFrame:
     """
-    Pull every team's player rows for the given ESPN window and return a
-    DataFrame with:
+    Pull player data from cached volumes (season averages / DARKO).
+    Returns DataFrame with:
       - player_name
-      - raw 9-cat stats (FG%, FT%, 3PM, REB, AST, STK, BLK, TO, PTS)
-      - z_<cat> per category using raw_to_zscore (NBA-wide baselines).
-      
-    If use_darko_z is True, use DARKO Z-scores instead of season average Z-scores.
+      - team
+      - raw stats
+      - z_<cat> (either from Real Avgs or DARKO Projections)
     """
-    # If using DARKO, get those Z-scores
-    if use_darko_z:
-        darko_data = darko_services.get_darko_z_scores()
-        # Convert to DataFrame format expected by rest of function
-        rows: List[Dict[str, Any]] = []
-        
-        cat_to_zkey = {
-            "FG%": "Z_FG",
-            "FT%": "Z_FT",
-            "3PM": "Z_FG3M",
-            "REB": "Z_REB",
-            "AST": "Z_AST",
-            "STL": "Z_STL",
-            "BLK": "Z_BLK",
-            "TO":  "Z_TOV",
-            "PTS": "Z_PTS",
-        }
-        
-        for p in darko_data:
-            zd = p.get("Z_DARKO", {})
-            raw_d = p.get("RAW_DARKO", {})
-            
-            # Calculate percentages from raw DARKO data
-            fgm = float(raw_d.get("FGM", 0))
-            fga = float(raw_d.get("FGA", 0))
-            ftm = float(raw_d.get("FTM", 0))
-            fta = float(raw_d.get("FTA", 0))
-            
-            fg_pct = (fgm / fga) if fga > 0 else 0.0
-            ft_pct = (ftm / fta) if fta > 0 else 0.0
-            
-            row: Dict[str, Any] = {
-                "player_name": p.get("player_name"),
-                "FG%": fg_pct,
-                "FT%": ft_pct,
-                "3PM": float(raw_d.get("FG3M", 0)),
-                "REB": float(raw_d.get("REB", 0)),
-                "AST": float(raw_d.get("AST", 0)),
-                "STL": float(raw_d.get("STL", 0)),
-                "BLK": float(raw_d.get("BLK", 0)),
-                "TO":  float(raw_d.get("TOV", 0)),
-                "PTS": float(raw_d.get("PTS", 0)),
-            }
-            
-            # Attach per-category z_<cat> columns from DARKO
-            for cat, key in cat_to_zkey.items():
-                row[f"z_{cat}"] = float(zd.get(key, 0.0))
-            
-            rows.append(row)
-        
-        return pd.DataFrame(rows)
-    
-    # Otherwise, use season average Z-scores (original logic)
-    frames: List[pd.DataFrame] = []
-    for team_idx, _ in enumerate(league.teams):
-        df = cpd.get_team_player_data(
-            league=league,
-            team_num=team_idx,
-            columns=[
-                "player_name","min","fgm","fga","fg%","ftm","fta","ft%","threeptm",
-                "reb","ast","stl","blk","turno","pts","inj","fpts","games"
-            ],
-            year=year,
-            league_scoring_rules={  # neutralize fantasy scoring; just want raw stats
-                "fgm":0,"fga":0,"ftm":0,"fta":0,"threeptm":0,
-                "reb":0,"ast":0,"stl":0,"blk":0,"turno":0,"pts":0
-            },
-            week_data=None,
-            stat_window=stat_window
-        )
-        if df is not None and len(df):
-            frames.append(df)
-
-    if not frames:
-        cols = ["player_name"] + CATEGORIES + [f"z_{c}" for c in CATEGORIES]
-        return pd.DataFrame(columns=cols)
-
-    df_all = pd.concat(frames, ignore_index=True)
-
-    # numeric coercion for the base stats we use
-    for c in ["fgm","fga","ftm","fta","threeptm","reb","ast","stl","blk","turno","pts"]:
-        df_all[c] = pd.to_numeric(df_all[c], errors="coerce").fillna(0.0)
-
-    # Raw per-game frame in the shape raw_to_zscore expects
-    df_raw = pd.DataFrame({
-        "player_name": df_all["player_name"],
-        "FGM": df_all["fgm"],
-        "FGA": df_all["fga"],
-        "FTM": df_all["ftm"],
-        "FTA": df_all["fta"],
-        "FG3M": df_all["threeptm"],
-        "REB": df_all["reb"],
-        "AST": df_all["ast"],
-        "STL": df_all["stl"],
-        "BLK": df_all["blk"],
-        "TOV": df_all["turno"],
-        "PTS": df_all["pts"],
-    })
-
-    # De-duplicate by player; keep row with highest PTS as a reasonable proxy
-    df_raw = (
-        df_raw
-        .sort_values(["player_name", "PTS"], ascending=[True, False])
-        .drop_duplicates("player_name", keep="first")
-        .reset_index(drop=True)
-    )
+    # 1. Get the unified data (Real + DARKO keys)
+    # This comes from cached JSON/CSV and does NOT engage the ESPN API/League object
+    data_list = darko_services.get_darko_z_scores()
 
     rows: List[Dict[str, Any]] = []
-
-    # Map z-score keys -> 9-cat names
+    
     cat_to_zkey = {
         "FG%": "Z_FG",
         "FT%": "Z_FT",
@@ -185,51 +81,49 @@ def _collect_league_players(league, year: int, stat_window: str, use_darko_z: bo
         "TO":  "Z_TOV",
         "PTS": "Z_PTS",
     }
+    
+    for p in data_list:
+        # Decide which source to use
+        if use_darko_z:
+            raw_d = p.get("RAW_DARKO", {})
+            zd = p.get("Z_DARKO", {})
+        else:
+            raw_d = p.get("RAW_REAL", {}) or {}
+            zd = p.get("Z_REAL", {}) or {}
 
-    for _, r in df_raw.iterrows():
-        # Raw 9-cat values
-        fgm = float(r["FGM"])
-        fga = float(r["FGA"])
-        ftm = float(r["FTM"])
-        fta = float(r["FTA"])
-
+        # Safe extraction
+        def val(d, k): return float(d.get(k, 0.0))
+        
+        # Calculate percentages
+        fgm, fga = val(raw_d, "FGM"), val(raw_d, "FGA")
+        ftm, fta = val(raw_d, "FTM"), val(raw_d, "FTA")
         fg_pct = (fgm / fga) if fga > 0 else 0.0
         ft_pct = (ftm / fta) if fta > 0 else 0.0
 
-        raw_for_z = {
-            "PTS":  float(r["PTS"]),
-            "FG3M": float(r["FG3M"]),
-            "REB":  float(r["REB"]),
-            "AST":  float(r["AST"]),
-            "STL":  float(r["STL"]),
-            "BLK":  float(r["BLK"]),
-            "TOV":  float(r["TOV"]),
-            "FGM":  fgm,
-            "FGA":  fga,
-            "FTM":  ftm,
-            "FTA":  fta,
-        }
-
-        zmap = raw_to_zscore(raw_for_z)
-
+        # Construct row
         row: Dict[str, Any] = {
-            "player_name": r["player_name"],
+            "player_name": p.get("player_name"),
+            "team": p.get("team"), # NBA team
             "FG%": fg_pct,
             "FT%": ft_pct,
-            "3PM": float(r["FG3M"]),
-            "REB": float(r["REB"]),
-            "AST": float(r["AST"]),
-            "STL": float(r["STL"]),
-            "BLK": float(r["BLK"]),
-            "TO":  float(r["TOV"]),
-            "PTS": float(r["PTS"]),
+            "3PM": val(raw_d, "FG3M"),
+            "REB": val(raw_d, "REB"),
+            "AST": val(raw_d, "AST"),
+            "STL": val(raw_d, "STL"),
+            "BLK": val(raw_d, "BLK"),
+            "TO":  val(raw_d, "TOV"),
+            "PTS": val(raw_d, "PTS"),
         }
-
-        # Attach per-category z_<cat> columns
+        
+        # Attach Z-scores
         for cat, key in cat_to_zkey.items():
-            row[f"z_{cat}"] = float(zmap.get(key, 0.0))
+            row[f"z_{cat}"] = float(zd.get(key, 0.0))
 
         rows.append(row)
+    
+    if not rows:
+        cols = ["player_name", "team"] + CATEGORIES + [f"z_{c}" for c in CATEGORIES]
+        return pd.DataFrame(columns=cols)
 
     return pd.DataFrame(rows)
 
@@ -253,54 +147,30 @@ def _sum_side_z(zdf: pd.DataFrame, names: List[str]) -> Dict[str, float]:
 def _build_player_rows(z_league: pd.DataFrame, names: List[str]) -> List[Dict[str, Any]]:
     """
     Build per-player rows preserving selection order.
-    Each row: {'player_name': str, 'cells': [{'cat': c, 'z': float, 'raw': float, 'bg': str}, ...]}
     """
     rows: List[Dict[str, Any]] = []
     
-    # Debug: print all available names
-    print(f"[DEBUG] Total players in z_league: {len(z_league)}")
-    print(f"[DEBUG] Sample player names: {list(z_league['player_name'].head(10))}")
-    
     for name in [n for n in names if n]:
-        print(f"\n[DEBUG] Looking for player: '{name}' (type: {type(name)})")
-        
         # Try to find player with name normalization
         canonical_name = get_canonical_name(name)
-        print(f"[DEBUG] Canonical name: '{canonical_name}'")
         
-        # Try exact match first
+        # Match using various strategies
         rec = z_league[z_league["player_name"] == name]
-        print(f"[DEBUG] Exact match found: {not rec.empty}")
-        
-        # Try canonical name
         if rec.empty and canonical_name != name:
             rec = z_league[z_league["player_name"] == canonical_name]
-            print(f"[DEBUG] Canonical match found: {not rec.empty}")
         
-        # Try case-insensitive match
         if rec.empty:
+            # lower case attempt
             rec = z_league[z_league["player_name"].str.lower() == name.lower()]
-            print(f"[DEBUG] Case-insensitive match found: {not rec.empty}")
-        
-        # Try normalized version of all names in database
+            
         if rec.empty:
-            for db_name in z_league["player_name"].unique():
-                if get_canonical_name(db_name) == canonical_name:
-                    print(f"[DEBUG] Found via normalization: '{db_name}'")
-                    rec = z_league[z_league["player_name"] == db_name]
-                    break
-        
-        if rec.empty:
-            print(f"[TRADES] WARNING: Player '{name}' not found in data. Canonical: '{canonical_name}'")
-            print(f"[DEBUG] Names containing 'wash': {[n for n in z_league['player_name'].unique() if 'wash' in n.lower()]}")
             cells = [{"cat": c, "z": 0.0, "raw": 0.0, "bg": _z_to_hsl_bg(0.0)} for c in CATEGORIES]
         else:
-            print(f"[DEBUG] Successfully found player!")
             r = rec.iloc[0]
             cells = []
             for c in CATEGORIES:
                 z = float(r.get(f"z_{c}", 0.0))
-                raw = float(r.get(c, 0.0))  # Get raw value
+                raw = float(r.get(c, 0.0))
                 cells.append({"cat": c, "z": z, "raw": raw, "bg": _z_to_hsl_bg(z)})
         rows.append({"player_name": name, "cells": cells})
     return rows
@@ -308,168 +178,132 @@ def _build_player_rows(z_league: pd.DataFrame, names: List[str]) -> List[Dict[st
 # ----------------------------- routes ------------------------------
 @bp.route("/trade", methods=["GET", "POST"])
 def trade_analyzer():
-    league, league_id, year = _get_league_from_session()
-    if league is None:
+    t0 = time.time()
+    
+    details = session.get("league_details") or {}
+    league_id = details.get("league_id")
+    year = details.get("year")
+    
+    if not league_id or not year:
         return redirect(url_for("main.entry_page", error_message="Enter your league first."))
 
-    # Debug: show mapping of enumerate index -> team_id -> name
-    print("[TRADES] League teams (idx -> team_id -> name):")
-    for idx, t in enumerate(league.teams):
-        print(f"  idx={idx}  team_id={getattr(t, 'team_id', None)}  name={t.team_name}")
-
-    stat_window = (request.values.get("window") or "total").strip().lower()
-    if stat_window not in WINDOW_CHOICES:
-        stat_window = "total"
-    
-    # Check if DARKO Z-scores should be used
+    stat_window = "total"
     use_darko_z = request.form.get("use_darko_z") == "on"
 
-    # Build league pool for this window, including z_<cat> columns
-    league_df = _collect_league_players(league, year, stat_window, use_darko_z=use_darko_z)
+    t1 = time.time()
+    print(f"[TIMING] Session check: {t1 - t0:.4f}s")
+
+    # 1. Load League - Directly from session (No Cache)
+    league, _, _ = _get_league_from_session()
+    if not league:
+        return redirect(url_for("main.entry_page", error_message="Could not load league from ESPN."))
+
+    t_league = time.time()
+    print(f"[TIMING] League Load (ESPN API): {t_league - t1:.4f}s")
+
+    # 2. Load Stats (Cached Disk)
+    league_df = _collect_league_players(use_darko_z=use_darko_z)
     z_league = league_df if not league_df.empty else pd.DataFrame(
         columns=["player_name"] + CATEGORIES + [f"z_{c}" for c in CATEGORIES]
     )
+    
+    t2 = time.time()
+    print(f"[TIMING] _collect_league_players (Stats): {t2 - t_league:.4f}s")
+    
+    # 3. Map Players to Fantasy Teams (Enrich DataFrame)
+    player_team_map = {}
+    if league:
+        for team in league.teams:
+            tid = getattr(team, 'team_id', 0)
+            for p in team.roster:
+                 player_team_map[p.name] = tid
+                 
+    # Add fantasy_team_id column
+    if not league_df.empty:
+         league_df["fantasy_team_id"] = league_df["player_name"].map(player_team_map).fillna(0).astype(int)
 
-    # selections (up to 4 each side)
+    # selections
     side_a = [request.values.get(k, "") for k in ("a1", "a2", "a3", "a4")]
     side_b = [request.values.get(k, "") for k in ("b1", "b2", "b3", "b4")]
 
-    # team selectors from UI (use team_id as canonical)
     raw_team_a_id = request.values.get("team_a_idx")
     raw_team_b_id = request.values.get("team_b_idx")
 
     team_a_id = int(raw_team_a_id) if raw_team_a_id not in (None, "", "None") else None
     team_b_id = int(raw_team_b_id) if raw_team_b_id not in (None, "", "None") else None
 
-    # ---------- Build team options for the dropdowns ----------
-    # Use team.team_id as the ID exposed to the UI
-    team_options: List[Dict[str, Any]] = [
-        {"idx": getattr(t, "team_id", idx), "name": t.team_name}
-        for idx, t in enumerate(league.teams)
-    ]
-    print("[TRADES] team_options (team_id, name):", [(t["idx"], t["name"]) for t in team_options])
-
-    # dropdown options for players
+    # Dropdowns: FANTASY TEAMS
+    if league:
+        team_options: List[Dict[str, Any]] = [
+            {"idx": getattr(t, "team_id", idx), "name": t.team_name}
+            for idx, t in enumerate(league.teams)
+        ]
+    else:
+        team_options = []
+    
     player_names = (
         sorted(league_df["player_name"].dropna().unique().tolist())
         if not league_df.empty else []
     )
+    
+    t3 = time.time()
+    print(f"[TIMING] Dropdown building & Mapping: {t3 - t2:.4f}s")
 
     results = None
     pmf_result = None
 
     if request.method == "POST":
-        print(
-            f"[TRADES] POST /trade "
-            f"team_a_id={team_a_id} team_b_id={team_b_id} "
-            f"side_a={side_a} side_b={side_b} window={stat_window}"
-        )
-
-        # ----- Z-score based trade table -----
-        a_tot = _sum_side_z(z_league, side_a)
-        b_tot = _sum_side_z(z_league, side_b)
-        diff = round(a_tot["_overall"] - b_tot["_overall"], 3)
-
-        a_rows = _build_player_rows(z_league, side_a)
-        b_rows = _build_player_rows(z_league, side_b)
-
-        delta_cells = []
-        for c in CATEGORIES:
-            z = round(float(a_tot.get(c, 0.0) - b_tot.get(c, 0.0)), 2)
-            delta_cells.append({"cat": c, "z": z, "bg": _z_to_hsl_bg(z)})
-        delta_overall = round(a_tot["_overall"] - b_tot["_overall"], 2)
-        delta_overall_bg = _z_to_hsl_bg(delta_overall)
-
-        results = {
-            "window": stat_window,
-            "a_totals": a_tot,
-            "b_totals": b_tot,
-            "a_players_rows": a_rows,
-            "b_players_rows": b_rows,
-            "delta_cells": delta_cells,
-            "delta_overall": delta_overall,
-            "delta_overall_bg": delta_overall_bg,
-            "diff": diff,
-        }
-
-        # ----- Top 10 Filter Logic -----
-        top_10_only = request.form.get("top_10_only") == "on"
-        allowed_player_names = None
-
-        if top_10_only:
-            # We need z-scores for ALL players to determine top 10 per team.
-            # _collect_league_players returns a DF with "z_<cat>" columns.
-            # We can sum them to get "Total Z".
-            
-            # Calculate total Z for ranking
-            z_cols = [f"z_{c}" for c in CATEGORIES]
-            # Ensure columns exist (fill 0 if missing)
-            for zc in z_cols:
-                if zc not in league_df.columns:
-                    league_df[zc] = 0.0
-                    print("error adding column: ", zc)
-            
-            league_df["_total_z"] = league_df[z_cols].sum(axis=1)
-            
-            # We need to map players to teams to filter per-team.
-            # league_df doesn't explicitly have team_id, but we can infer or re-fetch.
-            # Actually, _collect_league_players iterates teams. Let's just re-iterate league.teams
-            # and match names, or better yet, just use the fact that we have the roster objects.
-            
-            allowed_player_names = set()
-            
-            # Iterate through all teams to find their top 10
-            for team in league.teams:
-                team_player_names = [p.name for p in team.roster]
-                # Filter DF for this team
-                team_df = league_df[league_df["player_name"].isin(team_player_names)]
-                
-                if not team_df.empty:
-                    # Sort by Total Z descending
-                    top_10 = team_df.sort_values("_total_z", ascending=False).head(10)
-                    allowed_player_names.update(top_10["player_name"].tolist())
-            
-            print(f"[TRADES] Top 10 filter active. Allowed {len(allowed_player_names)} players.")
-
-        # ----- PMF-based trade evaluation (before/after, all teams) -----
-        # We now pass team_id values into evaluate_trade_with_pmfs
-        pmf_result = evaluate_trade_with_pmfs(
-            league=league,
-            year=year,
-            stat_window=stat_window,
-            side_a=side_a,
-            side_b=side_b,
-            team_a_idx=team_a_id,   # interpreted as team_id on the PMF side
-            team_b_idx=team_b_id,
-            allowed_player_names=allowed_player_names,
-            use_darko_z=use_darko_z,  # Pass DARKO flag
-        )
+        t_post_start = time.time()
         
-        if pmf_result:
-            #print("\n[TRADES] --- Trade Evaluation Results ---")
-            tt = pmf_result.get("trading_teams", {})
-            ta_id = tt.get("team_a_idx")
-            tb_id = tt.get("team_b_idx")
-            ta_name = tt.get("team_a_name")
-            tb_name = tt.get("team_b_name")
-            
-            #print(f"Trade between: {ta_name} (ID: {ta_id}) and {tb_name} (ID: {tb_id})")
-            
-            before_avg = pmf_result.get("before", {}).get("avg_win_pct", {})
-            after_avg = pmf_result.get("after", {}).get("avg_win_pct", {})
-            
-            #print(f"\n{ta_name} Average Win %:")
-            #print(f"  Before: {before_avg.get(ta_id)}")
-            #print(f"  After:  {after_avg.get(ta_id)}")
-            
-            #print(f"\n{tb_name} Average Win %:")
-            #print(f"  Before: {before_avg.get(tb_id)}")
-            #print(f"  After:  {after_avg.get(tb_id)}")
-            #print("---------------------------------------\n")
-        else:
-            print(" ")
-            #print("[TRADES] PMF result is None (could not simulate trade).")
+        if league:
+            # ----- Z-scores -----
+            a_tot = _sum_side_z(z_league, side_a)
+            b_tot = _sum_side_z(z_league, side_b)
+            diff = round(a_tot["_overall"] - b_tot["_overall"], 3)
+            a_rows = _build_player_rows(z_league, side_a)
+            b_rows = _build_player_rows(z_league, side_b)
 
+            delta_cells = []
+            for c in CATEGORIES:
+                z = round(float(a_tot.get(c, 0.0) - b_tot.get(c, 0.0)), 2)
+                delta_cells.append({"cat": c, "z": z, "bg": _z_to_hsl_bg(z)})
+            delta_overall = round(a_tot["_overall"] - b_tot["_overall"], 2)
+            delta_overall_bg = _z_to_hsl_bg(delta_overall)
+
+            results = {
+                "window": stat_window,
+                "a_totals": a_tot,
+                "b_totals": b_tot,
+                "a_players_rows": a_rows,
+                "b_players_rows": b_rows,
+                "delta_cells": delta_cells,
+                "delta_overall": delta_overall,
+                "delta_overall_bg": delta_overall_bg,
+                "diff": diff,
+            }
+            
+            t_z_calcs = time.time()
+            print(f"[TIMING] Z-Score Calcs: {t_z_calcs - t_post_start:.4f}s")
+
+            # ----- PMF Eval -----
+            pmf_result = evaluate_trade_with_pmfs(
+                league=league,
+                year=year,
+                stat_window=stat_window,
+                side_a=side_a,
+                side_b=side_b,
+                team_a_idx=team_a_id, 
+                team_b_idx=team_b_id,
+                allowed_player_names=None, 
+                use_darko_z=use_darko_z,
+            )
+            
+            t_pmf = time.time()
+            print(f"[TIMING] PMF Evaluation: {t_pmf - t_z_calcs:.4f}s")
+
+    t_final = time.time()
+    print(f"[TIMING] Total Route Time: {t_final - t0:.4f}s")
+    
     return render_template(
         "trade_value.html",
         league_id=league_id,
@@ -484,6 +318,6 @@ def trade_analyzer():
         pmf_result=pmf_result,
         team_a_idx=team_a_id,
         team_b_idx=team_b_id,
-        team_options=team_options,   # for dropdowns
-        teams=team_options,          # alias, in case template still references `teams`
+        team_options=team_options,
+        teams=team_options,
     )

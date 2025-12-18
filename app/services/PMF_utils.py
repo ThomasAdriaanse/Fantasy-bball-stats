@@ -451,7 +451,7 @@ def load_player_pmfs(player_name: str) -> Optional[Dict[str, Dict[str, Any]]]:
 
     fpath = Path(PMF_CACHE_DIR) / f"{stem}_pmf.json"
     
-    print(f"[PMF-LOAD] Looking for PMF: player='{player_name}' -> stem='{stem}' -> file='{fpath.name}'")
+    #print(f"[PMF-LOAD] Looking for PMF: player='{player_name}' -> stem='{stem}' -> file='{fpath.name}'")
 
     if not fpath.exists():
         print(f"[PMF-LOAD] File not found: {fpath}")

@@ -45,7 +45,7 @@ def _load_team_pace() -> Dict[str, float]:
         return {}
 
 @lru_cache(maxsize=1)
-def _load_season_averages() -> Dict[str, Dict[str, float]]:
+def get_season_averages() -> Dict[str, Dict[str, float]]:
     """
     Loads pre-calculated season averages (MPG etc.) from JSON.
     Returns dict: { "player_slug": { "MIN": 32.5, ... }, ... }
@@ -85,7 +85,7 @@ def get_raw_darko_stats() -> List[Dict[str, Any]]:
     
     # 2. Load lookups
     pace_map = _load_team_pace()
-    avgs_map = _load_season_averages()
+    avgs_map = get_season_averages()
     
     # Team Name Normalization Map
     TEAM_NAME_MAP = {
@@ -212,7 +212,7 @@ def get_darko_z_scores() -> List[Dict[str, Any]]:
     """
     # 1. Get DARKO raw stats (which already loads season avgs internally, but we need them again)
     # Refactor idea: optimize later. For now just load again to be safe/simple.
-    season_avgs = _load_season_averages()
+    season_avgs = get_season_averages()
     darko_raw_data = get_raw_darko_stats()
     
     results = []
@@ -236,7 +236,7 @@ def get_darko_z_scores() -> List[Dict[str, Any]]:
             # Empty Z-scores if no real data found
             z_real = {}
             # log error
-            print(f"[DARKO] No real stats found for {player_name}")
+            #print(f"[DARKO] No real stats found for {player_name}")
 
         # Combine info
         combined = {
